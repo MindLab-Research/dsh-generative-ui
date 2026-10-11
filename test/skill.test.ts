@@ -68,3 +68,13 @@ test("the progressive entrypoint hands durable requests to the first canvas writ
   expect(lifetime).toContain("same id and path");
   expect(lifetime).toContain("usePersistedState");
 });
+
+test("the progressive entrypoint keeps the inline fence and reference-read contracts", () => {
+  const entry = skillEntry("types.json", "standalone.json", true);
+  expect(entry).toContain("exactly four backticks followed by `ui4a/tsx`");
+  expect(entry).toContain("on its own line");
+  expect(entry).toContain("required `file_path` argument");
+  expect(entry).toContain("never issue an empty read call");
+  expect(entry).toContain("when the card or canvas uses the concern it covers");
+  expect(entry).toContain("initialize every value that is visible on the first render");
+});

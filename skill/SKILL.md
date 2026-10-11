@@ -113,9 +113,19 @@ Both short. Two or three sentences total. Don't narrate tooling ("now I'll write
 
 **Write the card in the language they wrote to you in — every label, every button, every helper line.** This is not a preference, it is whether they can use it: a Spanish speaker handed a card labelled 日常休闲 / 户外运动 got no answer at all. It is easy to miss because the card is a separate act of writing from the reply, and the reply is usually right; measured, a card for `Suggest an outfit that matches the occasion and weather` came back entirely in Chinese. The corpus is **en 39% / es 31% / fr 12% / it 9% / pt 5%, and Chinese 0.2%** — so Chinese is the wrong default in almost every turn, and if you find yourself typing a CJK label, check what language the question was in.
 
+## Emit the inline block with the exact fence
+
+When you choose an inline card, put the short introduction on its own line, then open the block on a new line with **exactly four backticks followed by `ui4a/tsx`**. Close it with exactly four backticks on its own line. Do not use three backticks, put prose on the opener line, or use `tsx` as the info string. The card renderer and the reader both depend on this shape.
+
 ## Read the relevant reference before writing TSX
 
-The instructions below live beside this file in `references/`. Resolve these paths against this skill's base directory. For every card or canvas, read the layout and accessibility references before coding; read the other files when their feature applies. The entrypoint alone is not the complete authoring guide.
+The instructions below live beside this file in `references/`. Resolve these paths against this skill's base directory. Read a reference before coding when the card or canvas uses the concern it covers; use the entrypoint rules directly for a small card that does not need a topic-specific guide. The entrypoint is not the complete authoring guide.
+
+Use the file-reading tool with its required `file_path` argument set to the resolved absolute path of the reference (for example, `<skill base>/references/layout.md`). Make one read with that path; never issue an empty read call. The skill resource base above is the package directory, so these files are not in the user's workspace.
+
+When two fields are linked, initialize every value that is visible on the first render. If one field
+starts with a value such as `98°F`, compute and show its paired value such as `36.7°C` immediately;
+do not leave a displayed derived field blank until the user edits something.
 
 - For state, a submit/preview flow, undo, or a canvas that survives edits: [lifetime.md](references/lifetime.md).
 - For framing, spacing, scrolling, responsiveness, and theme tokens: [layout.md](references/layout.md).

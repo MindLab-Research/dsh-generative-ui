@@ -97,6 +97,7 @@ const SECTIONS = [
   "Inline or canvas",
   "Ask with an interface when the request is underspecified",
   "Say something before it and something after",
+  "Emit the inline block with the exact fence",
   "Read the relevant reference before writing TSX",
   "Checker import maps",
   "Framing",

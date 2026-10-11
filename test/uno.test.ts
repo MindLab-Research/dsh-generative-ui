@@ -100,6 +100,8 @@ test("the border reset is restored inside the scope, and not outside it", async 
   // The utility half was always there, and on its own paints nothing.
   expect(css).toContain("border-width:1px");
   expect(css).toMatch(/\.ui4a-root[^{]*\*[^{]*\{[^}]*border:\s*0\s*solid/);
+  // At zero specificity, so a card's own element rule (`td { border-bottom: … }`) still wins.
+  expect(css).toMatch(/:where\(\.ui4a-root \*[^{]*\{\s*border:\s*0 solid/);
   expect(css).not.toMatch(/(^|[};])\s*\*[^{]*\{[^}]*border:\s*0\s*solid/m);
 });
 

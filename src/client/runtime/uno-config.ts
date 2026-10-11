@@ -65,8 +65,11 @@ export const unoConfig = (scope: string): UserConfig => ({
       // that looks right in dark hid it for so long.
       //
       // It has to be the shorthand. `border-style: solid` alone would leave the UA's initial
-      // `border-width: medium` in place, i.e. a 3px border on every element inside the scope.
-      getCSS: () => `${scope} *, ${scope} *::before, ${scope} *::after { box-sizing: border-box; border: 0 solid; }
+      // `border-width: medium` in place, i.e. a 3px border on every element inside the scope. And it
+      // sits in `:where()` at (0,0,0): at (0,1,0) it would beat a card's own `td { border-bottom: … }`
+      // whatever the order, and the table's rules would vanish.
+      getCSS: () => `${scope} *, ${scope} *::before, ${scope} *::after { box-sizing: border-box; }
+      :where(${scope} *, ${scope} *::before, ${scope} *::after) { border: 0 solid; }
       ${scope} ul, ${scope} ol { list-style: none; margin: 0; padding: 0; }
       ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6,
       ${scope} p, ${scope} blockquote, ${scope} figure, ${scope} figcaption,

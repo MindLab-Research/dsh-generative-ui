@@ -49,7 +49,14 @@ export const unoConfig = (scope: string): UserConfig => ({
       // then fight whatever `gap-*` the layout uses. `important: scope` makes every utility
       // `.ui4a-root :is(.mt-4)` at (0,2,0), which outranks these (0,1,1) rules — so a card that
       // asks for a margin still gets one, and only the browser's uninvited ones go.
+      //
+      // Borders are the same omission once more: Wind4's `border`/`border-2`/`border-l-4` set only a
+      // width and leave the style to the reset's `border: 0 solid`, so without it every one of them
+      // computed `border-style: none` — measured on a live card, the number discs, the callout's
+      // left rule and the map frame all invisible. `:where()` keeps this at (0,0,0), so a card's own
+      // `<style>` rule still wins over it, which a (0,1,0) `${scope} *` here would not.
       getCSS: () => `${scope} *, ${scope} *::before, ${scope} *::after { box-sizing: border-box; }
+      :where(${scope} *, ${scope} *::before, ${scope} *::after) { border: 0 solid; }
       ${scope} ul, ${scope} ol { list-style: none; margin: 0; padding: 0; }
       ${scope} h1, ${scope} h2, ${scope} h3, ${scope} h4, ${scope} h5, ${scope} h6,
       ${scope} p, ${scope} blockquote, ${scope} figure, ${scope} figcaption,

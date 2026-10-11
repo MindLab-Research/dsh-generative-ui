@@ -244,3 +244,10 @@ test("every class in a code example generates a rule", async () => {
   }
   expect(unmatched.toSorted()).toEqual([]);
 });
+
+// Wind4's `border` is `border-width: 1px` and nothing else; the style came from the reset we drop.
+// Without a scoped `border: 0 solid` every bordered element computed `border-style: none`.
+test("a bare `border` has a style to draw with, at zero specificity", async () => {
+  const { css } = await generate(["border"]);
+  expect(css).toMatch(/:where\(\.ui4a-root \*[^{]*\{\s*border:\s*0 solid/);
+});

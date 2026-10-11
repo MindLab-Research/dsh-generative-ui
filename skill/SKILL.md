@@ -1,9 +1,21 @@
 ---
 name: generative-ui
-description: How to decide between an inline ui4a/tsx block, a canvas file, and plain prose — and how to lay one out so it reads. Load it **before you decide**, not after — including when your first instinct is that prose is enough. Most of the questions that should have been an interface do not ask for one.
+description: How to decide between an inline ui4a/tsx block, a canvas file, and plain prose — especially for adjustable calculations, recommendations, and option requests — and how to lay one out so it reads. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. After it is loaded, do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.
 ---
 
 # Building a generative UI
+
+This skill is already loaded for the current turn. Do not call the `generative-ui` skill again with the same name; continue the task using these instructions. If a topic guide applies, read its linked `references/*.md` file with the file-reading tool instead of reloading this skill.
+
+## Trigger gate
+
+Before the prose test, apply this gate:
+
+- A calculation with values the user may change is an inline card, including loan or mortgage calculations, BMI thresholds or calculators, and unit conversions. This remains true when phrased as a question or “calculate”; do not answer with prose-only arithmetic.
+- A request for several candidates, recommendations, or options is an inline card, even when it asks for only a few names.
+- Before writing a candidate or recommendation card, read `references/lifetime.md`; each choice must either send the choice and persist it, or be a preview with a separate persisted submit. Do not promise a control that the card does not render.
+- Fixed factual lookups such as the meaning of an HTTP status remain prose.
+- Once this gate selects inline, put the short introduction on its own line, open the exact four-backtick `ui4a/tsx` fence on the next line, and close it on its own line; never append the opener to the introduction on one line; do not reload this skill.
 
 ## Is this a UI at all
 

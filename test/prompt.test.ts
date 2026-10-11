@@ -93,6 +93,7 @@ for (const [name, phrase] of SKILL_RULES) {
 }
 
 const SECTIONS = [
+  "Trigger gate",
   "Is this a UI at all",
   "Inline or canvas",
   "Ask with an interface when the request is underspecified",

@@ -50,6 +50,7 @@ describe("mapNotes", () => {
 
 test("the packaged entrypoint and reference base agree with the registration", () => {
   const source = readFileSync(skillPath, "utf8");
+  expect(SKILL_DESCRIPTION).toContain("adjustable calculations, recommendations, and option requests");
   expect(source).toContain(`name: ${SKILL_NAME}`);
   expect(source).toContain(`description: ${SKILL_DESCRIPTION}`);
   expect(readFileSync(join(skillResourceBase.path, "references/checking.md"), "utf8")).toContain(CLI_URL);
@@ -72,6 +73,19 @@ test("the progressive entrypoint hands durable requests to the first canvas writ
 test("the progressive entrypoint keeps the inline fence and reference-read contracts", () => {
   const entry = skillEntry("types.json", "standalone.json", true);
   expect(entry).toContain("exactly four backticks followed by `ui4a/tsx`");
+  expect(entry).toContain("Do not call the `generative-ui` skill again with the same name");
+  expect(entry).toContain("loan or mortgage calculations");
+  expect(entry).toContain("BMI thresholds or calculators");
+  expect(entry).toContain("unit conversions");
+  expect(entry).toContain("several candidates, recommendations, or options");
+  expect(entry).toContain("Before writing a candidate or recommendation card, read `references/lifetime.md`");
+  expect(entry).toContain("each choice must either send the choice and persist it, or be a preview with a separate persisted submit");
+  expect(entry).toContain("Do not promise a control that the card does not render");
+  expect(entry).toContain("Fixed factual lookups");
+  expect(entry).toContain("put the short introduction on its own line");
+  expect(entry).toContain("open the exact four-backtick `ui4a/tsx` fence on the next line");
+  expect(entry).toContain("never append the opener to the introduction on one line");
+  expect(entry).toContain("do not reload this skill");
   expect(entry).toContain("on its own line");
   expect(entry).toContain("required `file_path` argument");
   expect(entry).toContain("never issue an empty read call");

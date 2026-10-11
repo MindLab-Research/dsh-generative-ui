@@ -41,6 +41,13 @@ behalf, and it needs their say-so:
 - The thing genuinely has more than one screen, or holds state the next turn needs. → **canvas**,
   and say in one line that you opened it.
 
+When the user explicitly asks to save, reuse, or edit the result later, the request is already
+specific enough to build. Load this skill, choose sensible defaults, and immediately write the
+first usable file to `.dsh/ui4a/canvases/<id>.ui4a.tsx`; do not replace the write with a prose plan,
+a temporary `.tsx`, or another design/planning skill. Read the relevant references while building
+if needed, then keep the canvas visible and editable. The write is the action that creates the
+canvas, so it must happen in the first turn that accepts the durable request.
+
 Measured: on `cron-read` — *"`*/17 3-5 * * 2` 这个 cron 到底几点跑？"*, a lookup with one right
 answer — models opened a canvas **5 times in one round and 6 in the next**, and one opened a canvas
 for *"什么是闭包？"*. Nobody asked for a file in any of them.

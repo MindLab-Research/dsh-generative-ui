@@ -77,6 +77,13 @@ Two things follow from the lifetime difference:
   in a label and the user's half-typed row goes with it. Persist what they typed, not just what
   they saved.
 
+  **First write and later edits are one lifecycle.** For a durable request, the deliverable is the
+  canvas file: write the first usable version directly to a stable
+  `.dsh/ui4a/canvases/<id>.ui4a.tsx` path, then read and edit that same id and path when the user
+  asks to reuse or change it. Keep the user's entries, selections, and drafts in `usePersistedState`
+  instead of replacing them with new initial data. Say the canvas is open only after the write
+  succeeds.
+
   **An inline card is clickable before you have finished writing it, and that is where this bites
   hardest.** The reader sees the first controls while the rest of the card is still arriving, and
   **every chunk that adds JSX remounts every component the card defines itself** — so a choice they

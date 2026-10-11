@@ -58,3 +58,13 @@ test("the packaged entrypoint and reference base agree with the registration", (
   expect(rendered).toContain("references/layout.md");
   expect(rendered).not.toContain("## Layout");
 });
+
+test("the progressive entrypoint hands durable requests to the first canvas write", () => {
+  const entry = skillEntry("types.json", "standalone.json", true);
+  expect(entry).toContain("immediately write the");
+  expect(entry).toContain("first usable file to `.dsh/ui4a/canvases/<id>.ui4a.tsx`");
+  expect(entry).toContain("another design/planning skill");
+  const lifetime = readFileSync(join(skillResourceBase.path, "references/lifetime.md"), "utf8");
+  expect(lifetime).toContain("same id and path");
+  expect(lifetime).toContain("usePersistedState");
+});

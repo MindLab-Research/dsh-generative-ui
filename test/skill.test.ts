@@ -77,9 +77,13 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("loan or mortgage calculations");
   expect(entry).toContain("BMI thresholds or calculators");
   expect(entry).toContain("unit conversions");
+  expect(entry).toContain("Any unit conversion is still an inline card when the user gives only one input");
   expect(entry).toContain("several candidates, recommendations, or options");
   expect(entry).toContain("Before writing a candidate or recommendation card, read `references/lifetime.md`");
-  expect(entry).toContain("each choice must either send the choice and persist it, or be a preview with a separate persisted submit");
+  expect(entry).toContain("Source-check the card before sending");
+  expect(entry).toContain("guard against a second send after the persisted answer");
+  expect(entry).toContain("must not claim that the user already chose one");
+  expect(entry).toContain("it must contain both `sendMessage` and `usePersistedState`");
   expect(entry).toContain("Do not promise a control that the card does not render");
   expect(entry).toContain("Fixed factual lookups");
   expect(entry).toContain("put the short introduction on its own line");
@@ -88,7 +92,8 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("do not reload this skill");
   expect(entry).toContain("on its own line");
   expect(entry).toContain("required `file_path` argument");
-  expect(entry).toContain("never issue an empty read call");
+  expect(entry).toContain("`file_path` is the only valid argument");
+  expect(entry).toContain("or an empty read call");
   expect(entry).toContain("when the card or canvas uses the concern it covers");
   expect(entry).toContain("initialize every value that is visible on the first render");
 });

@@ -1,21 +1,21 @@
 ---
 name: generative-ui
-description: How to decide between an inline ui4a/tsx block, a canvas file, and plain prose — especially for adjustable calculations, recommendations, and option requests — and how to lay one out so it reads. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. After it is loaded, do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.
+description: How to decide between an inline ui4a/tsx block, a canvas file, and plain prose — especially for adjustable calculations, recommendations, and option requests — and how to lay one out so it reads. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. Once the result returns, the skill step is complete: read a specific reference, write the requested canvas, or answer, including emitting the inline card; do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.
 ---
 
 # Building a generative UI
 
-This skill is already loaded for the current turn. Do not call the `generative-ui` skill again with the same name; continue the task using these instructions. If a topic guide applies, read its linked `references/*.md` file with the file-reading tool instead of reloading this skill.
+This skill is already loaded for the current turn. Once the skill tool returns this result, the skill step is complete: the next action may only read a specific reference, write the requested canvas, or answer. Do not call the `generative-ui` skill again with the same name, even if you switch between prose and a card. If a topic guide applies, read its linked `references/*.md` file with the file-reading tool instead of reloading this skill.
 
 ## Trigger gate
 
 Before the prose test, apply this gate:
 
-- A calculation with values the user may change is an inline card, including loan or mortgage calculations, BMI thresholds or calculators, and unit conversions. This remains true when phrased as a question or “calculate”; do not answer with prose-only arithmetic.
+- A calculation with values the user may change is an inline card, including loan or mortgage calculations, BMI thresholds or calculators, and unit conversions. **Any unit conversion is still an inline card when the user gives only one input and asks “how much”** — for example, `98°F 是多少摄氏度`. Pre-fill that input and its derived value in two linked fields; do not answer with prose-only arithmetic.
 - A request for several candidates, recommendations, or options is an inline card, even when it asks for only a few names.
-- Before writing a candidate or recommendation card, read `references/lifetime.md`; each choice must either send the choice and persist it, or be a preview with a separate persisted submit. Do not promise a control that the card does not render.
+- Before writing a candidate or recommendation card, read `references/lifetime.md` and do not emit TSX until that read returns. **Source-check the card before sending:** it must contain both `sendMessage` and `usePersistedState`; an instant choice sets and sends in the same handler, while a preview has a separately rendered, persisted Submit. Both forms must guard against a second send after the persisted answer (disable the control or return before sending). The initial card may say that options are available, but must not claim that the user already chose one. Do not promise a control that the card does not render.
 - Fixed factual lookups such as the meaning of an HTTP status remain prose.
-- Once this gate selects inline, put the short introduction on its own line, open the exact four-backtick `ui4a/tsx` fence on the next line, and close it on its own line; never append the opener to the introduction on one line; do not reload this skill.
+- Once this gate selects inline, perform a final protocol pass: put the short introduction on its own line, open the exact four-backtick `ui4a/tsx` fence on the next line, and close it on its own line; never append the opener to the introduction on one line; do not reload this skill.
 
 ## Is this a UI at all
 
@@ -133,11 +133,11 @@ When you choose an inline card, put the short introduction on its own line, then
 
 The instructions below live beside this file in `references/`. Resolve these paths against this skill's base directory. Read a reference before coding when the card or canvas uses the concern it covers; use the entrypoint rules directly for a small card that does not need a topic-specific guide. The entrypoint is not the complete authoring guide.
 
-Use the file-reading tool with its required `file_path` argument set to the resolved absolute path of the reference (for example, `<skill base>/references/layout.md`). Make one read with that path; never issue an empty read call. The skill resource base above is the package directory, so these files are not in the user's workspace.
+Use the file-reading tool with its required `file_path` argument set to the resolved absolute path of the reference (for example, `<skill base>/references/layout.md`). `file_path` is the only valid argument: make one read with that path, never issue `{}` or an empty read call, and do not make speculative parallel reads. The skill resource base above is the package directory, so these files are not in the user's workspace.
 
 When two fields are linked, initialize every value that is visible on the first render. If one field
 starts with a value such as `98°F`, compute and show its paired value such as `36.7°C` immediately;
-do not leave a displayed derived field blank until the user edits something.
+do not initialize the derived field to `""` and wait for an effect or the first edit.
 
 - For state, a submit/preview flow, undo, or a canvas that survives edits: [lifetime.md](references/lifetime.md).
 - For framing, spacing, scrolling, responsiveness, and theme tokens: [layout.md](references/layout.md).

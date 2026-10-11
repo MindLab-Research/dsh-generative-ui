@@ -22,7 +22,7 @@ const RUN_CLI = `BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache" bunx --yes genui@${CL
 
 export const SKILL_NAME = "generative-ui";
 
-export const SKILL_DESCRIPTION = `How to decide between an inline ${FENCE_LANG} block, a canvas file, and plain prose — especially for adjustable calculations, recommendations, and option requests — and how to lay one out so it reads. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. After it is loaded, do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.`;
+export const SKILL_DESCRIPTION = `How to decide between an inline ${FENCE_LANG} block, a canvas file, and plain prose — especially for adjustable calculations, recommendations, and option requests — and how to lay one out so it reads. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. Once the result returns, the skill step is complete: read a specific reference, write the requested canvas, or answer, including emitting the inline card; do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.`;
 
 /**
  * Checker map notes added to the entrypoint at runtime.

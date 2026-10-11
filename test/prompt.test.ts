@@ -27,6 +27,12 @@ import { join } from "node:path";
  */
 const RULES = [
   ["the fence language", `\`${FENCE_LANG}\`, never \`tsx\``],
+  ["the final fence protocol pass", "Do a protocol pass before sending"],
+  ["the choice-card ending", "A choice card has one honest ending"],
+  ["the uncommitted choice state", "A choice card starts uncommitted"],
+  ["the linked-field first paint", "A linked field is never blank on first paint"],
+  ["the single-value conversion", "A single unit conversion is still a card"],
+  ["the once-per-turn skill call", "The skill call is once per turn"],
   ["export named after an import", "Never name it after something you imported"],
   ["useState vs useMemo", "holds state"],
   ["Fragment must be imported", "Import every name you write"],
@@ -76,6 +82,12 @@ test("the prompt is whole", () => {
  * the code block back to prose fails rather than quietly undoing the measurement.
  */
 const SKILL_RULES = [
+  ["the one-value conversion gate", "when the user gives only one input"],
+  ["the candidate source check", "Source-check the card before sending"],
+  ["the choice resend guard", "guard against a second send"],
+  ["the initial choice state", "must not claim that the user already chose one"],
+  ["the linked-field initialization", "do not initialize the derived field to `\"\"`"],
+  ["the reference read arguments", "`file_path` is the only valid argument"],
   ["abort the previous streamText", "const ctrl = (running.current = new AbortController())"],
   ["abort the previous bash when polling", "ctrl.abort(); clearInterval(timer)"],
   ["honour prefers-reduced-motion (transition)", "motion-reduce:transition-none"],
@@ -221,6 +233,11 @@ const UNSCREENABLE = [
   "Four backticks",
   "The info string is",
   "Write the React import before you write the data",
+  "Do a protocol pass before sending",
+  "A choice card has one honest ending",
+  "A choice card starts uncommitted",
+  "A linked field is never blank on first paint",
+  "A single unit conversion is still a card",
 
   "A question does not have to say",
   "A conversion is never asked once",

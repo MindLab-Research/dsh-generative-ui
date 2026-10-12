@@ -34,7 +34,13 @@ there. npm reports this as `EPERM mkdtemp` **and a message about root-owned file
 you looking for a permissions problem in your home directory that is not there. `$TMPDIR` is
 writable, so pointing each cache at it is the whole fix.
 
-`check` includes TypeScript diagnostics; `lint` is the faster syntax-only pass.
+`check` includes TypeScript diagnostics; `lint` is the faster syntax-only pass. Treat a non-zero
+exit, command-not-found, timeout, missing import map, or missing report as **unchecked**. Inspect
+the exit code and output, fix the current Canvas source, and run the checker again after each edit;
+only a fresh zero result for that exact file supports saying it was checked. If the checker is not
+available, say the static check was not run and verify the live panel instead. Do not prepend a
+platform-specific `timeout` command when the host does not provide it; invoke the checker directly
+or use the host's available process deadline.
 
 Either way, the way to see your work actually run is to write the canvas and look at the panel.
 

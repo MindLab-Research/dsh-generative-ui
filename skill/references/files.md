@@ -8,6 +8,16 @@ session's own access mode — the same fence the file tools run behind. So a rea
 refuses the write, and the card should say so rather than looking broken: catch it and tell
 the user the session is read-only.
 
+`$dsh/fs` is host-backed: it runs in a live dsh web session with a bound workspace. Standalone
+compile, paint, and surface previews have no host and may show `no host bound` when a call executes;
+classify that as a preview limitation, not a production filesystem failure. Keep live workspace
+reads in the card for production, inline or Canvas. If a self-contained preview is required,
+snapshot via the model-side file tools first instead of importing `$dsh/fs`.
+
+`readdir` already returns the metadata needed for a listing. Map its result directly, for example
+`const entries = await readdir(path); entries.map(({ name, type, size }) => …)`. There is no `stat`
+export; do not probe each entry with an invented capability.
+
 **Anything that is not text goes through `readBytes`.** `readFile` decodes as UTF-8, so a png, a wav
 or a `.mid` read that way comes back with every byte above 0x7f replaced by U+FFFD — corrupt, and
 silently so. And there is **no HTTP route that serves workspace files**: `<img src={`/${path}`}>`

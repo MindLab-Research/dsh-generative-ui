@@ -47,6 +47,8 @@ const RULES = [
   ["px inside a style object", "is JavaScript, not CSS"],
   ["an arrow after &&", "chain into an arrow function"],
   ["empty is not undefined", "not a guard against empty"],
+  ["workspace capability shape", "`stat` export"],
+  ["expression surface choice", "Expression questions are inline-only"],
   ["no literal colours", "**Never write a literal colour**"],
   ["a non-zero exit resolves", "do not catch it"],
   // Shown as code, not described. The adherence count found rules stated in prose landing at
@@ -102,7 +104,7 @@ const SKILL_RULES = [
   ["abort the previous bash when polling", "ctrl.abort(); clearInterval(timer)"],
   ["honour prefers-reduced-motion (transition)", "motion-reduce:transition-none"],
   ["honour prefers-reduced-motion (keyframes)", "motion-reduce:animate-none"],
-  ["keyboard-reachable controls", '<button aria-label="复制" onClick={copy}>'],
+  ["keyboard-reachable controls", '<button type="button" aria-label="复制" onClick={copy}>'],
   ["a superseded async run returns", "if (id !== runId.current) return"],
   ["the shared cause behind the control rules", "treating its controls as decoration"],
   ["the checker leads back to the live panel", "write the canvas and look at the panel"],
@@ -240,6 +242,7 @@ const RULE_FOR_SCREEN: Record<string, string | string[]> = {
  * as unscreenable; the point is that dropping one in requires saying so.
  */
 const UNSCREENABLE = [
+  "Routing gate:",
   "Four backticks",
   "The info string is",
   "Write the React import before you write the data",
@@ -252,6 +255,8 @@ const UNSCREENABLE = [
   "A choice card starts uncommitted",
   "A linked field is never blank on first paint",
   "A single unit conversion is still a card",
+  "Workspace capability shape",
+  "Expression questions are inline-only",
 
   "A question does not have to say",
   "A conversion is never asked once",

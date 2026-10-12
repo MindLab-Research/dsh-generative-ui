@@ -23,10 +23,16 @@
   carry no `aria-label`**, so a screen reader announces "button" and nothing else. Both are one
   word to fix and invisible to you, since a mouse works either way:
 
-      <button aria-label="复制" onClick={copy}><Copy size={14} /></button>
+      <button type="button" aria-label="复制" onClick={copy}><Copy size={14} /></button>
 
   If it does something when clicked, it is a `<button type="button">`. A `div` with an
   `onClick` is a div.
+
+  The same rule applies to click-to-edit headings, labels, and rows. Do not put `onClick` on an
+  `<h1>`, `<span>`, or other static element and leave keyboard users without a way to enter edit
+  mode. Use a real `<button type="button">` with a visible focus style, or render the `<input>`
+  directly; if a custom element is unavoidable, give it `role="button"`, `tabIndex={0}`, and Enter
+  and Space handlers together.
 
   **A clickable row is the case that survives this rule** — 13 of the 17 are a list row, a table
   cell, or a card, where wrapping each one in a `<button>` feels wrong. It is not: a `<button>`
@@ -47,6 +53,8 @@
 - **Hover-only controls must also appear on keyboard focus.** A delete or edit action styled with
   `opacity-0 group-hover:opacity-100` is effectively hidden from a keyboard user. Pair the hover
   variant with `focus-visible:opacity-100` (and keep a focus ring), or keep the action visible.
+  The visibility variant must be `focus-visible`, not only `focus`, so a mouse click does not leave
+  a transient action stuck open and keyboard users still get the same affordance.
 
   Almost every one of them HAS a visible name: **38 of 54 put it in a `<span>` directly above
   the control**, which looks labelled and announces as nothing. A `<span>` is not a label, and
@@ -128,7 +136,7 @@
   ```tsx
   <div role="radiogroup" aria-label="选择场次">
     {SESSIONS.map((s) => (
-      <button key={s.id} role="radio" aria-checked={s.id === picked} onClick={() => pick(s.id)}
+      <button type="button" key={s.id} role="radio" aria-checked={s.id === picked} onClick={() => pick(s.id)}
         className={s.id === picked ? "picked" : ""}>{s.label}</button>
     ))}
   </div>
@@ -142,7 +150,7 @@
   as much — moving the ternary into a string changes nothing about what is announced:
 
   ```tsx
-  <button className={`btn${picked === x ? " active" : ""}`} aria-pressed={picked === x}>
+  <button type="button" className={`btn${picked === x ? " active" : ""}`} aria-pressed={picked === x}>
   ```
 
   **A disabled control should say why, in its own label.** Two wave-2 cards gate the same form.

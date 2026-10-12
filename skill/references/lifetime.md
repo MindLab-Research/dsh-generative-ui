@@ -48,13 +48,23 @@ Two things follow from the lifetime difference:
   the result area is where the card earns its existence. **Start `pick` at `null`: a default first
   option is already a choice, so the first render must ask the reader to select one.**
 
+  The option control must visibly write the draft: `aria-pressed={pick === o.id}` goes with
+  `onClick={() => setPick(o.id)}` (or a handler that calls `setPick`). A persisted value that is
+  only read (`pickedId`, `active`) is not wired selection. If the same row opens details, keep
+  `openId`/`aria-expanded` as a second state; its disclosure handler must not be the only handler.
+  In a preview flow persist both draft `pick` and submitted `sent`: option click sets `pick` only;
+  Submit is disabled when `pick === null || sent !== null` and its guarded handler does
+  `setSent(pick); sendMessage(...)`. After submission, keep the displayed selection tied to `sent`
+  and disable or no-op further option changes. Use one persisted answer only for instant-choice
+  buttons that set and send together.
+
       const [sent, setSent] = usePersistedState<string | null>("migration-plan-choice", null)
       const [pick, setPick] = usePersistedState<string | null>("migration-plan-draft", null)
       const active = sent ?? pick
       …
       <div className="flex flex-wrap gap-2">…one button per option, aria-pressed={active === o.id}…</div>
       <div className="mt-3">{active === null ? "请选择一个方案" : OPTIONS.find((o) => o.id === active)?.preview}</div>
-      <button disabled={pick === null || sent !== null} onClick={() => { if (pick === null) return; setSent(pick); sendMessage(…) }}>…</button>
+      <button type="button" disabled={pick === null || sent !== null} onClick={() => { if (pick === null) return; setSent(pick); sendMessage(…) }}>…</button>
 
   `preview` is whatever actually shows the difference: a mermaid graph of the two migration paths,
   the formula rendered by katex, an SVG of the layout, a working miniature of the thing, a 3D view,
@@ -105,6 +115,33 @@ Two things follow from the lifetime difference:
   numeric result at all; let the card own the single live number instead of creating a second
   rounding path.
 
+  For a small editable calculation, keep the source shape this direct so the persistence and live
+  text checks are visible in one place:
+
+      import { usePersistedState } from "$dsh/state"
+      const [miles, setMiles] = usePersistedState("miles-to-km:miles", "5")
+      const [kmText, setKmText] = usePersistedState("miles-to-km:km", "8.04672")
+      const setMilesLive = (value: string) => {
+        setMiles(value)
+        setKmText(Number.isFinite(Number(value)) ? (Number(value) * 1.609344).toFixed(5) : "")
+      }
+      const setKmLive = (value: string) => {
+        setKmText(value)
+        setMiles(Number.isFinite(Number(value)) ? (Number(value) / 1.609344).toFixed(5) : "")
+      }
+      <input value={miles} onChange={(event) => setMilesLive(event.target.value)} />
+      <input value={kmText} onChange={(event) => setKmLive(event.target.value)} />
+      <p>{miles} 英里 = {kmText} 公里</p>
+
+  Apply the same shape to every editable calculator field. A mortgage with principal, years,
+  rate, and repayment method has four persisted values; its labels and helper text must derive
+  from those values rather than repeating the initial sample. A choice or select that starts with
+  a submitted choice/select representing a user decision that starts non-null is already claiming
+  a user decision, even when the card also renders a Submit button. A calculator mode or standard
+  may start at a sensible default, but it is still
+  editable state: persist it and make the selected mode drive the formula, thresholds, result
+  classification, and explanatory labels together. Check one boundary sample for each mode.
+
   **If you write `setRows(prev => prev.filter(r => r.id !== id))` behind a button, keep the row.**
   Persisting is what makes that line permanent — before it, a mistaken delete came back on reload.
   Hold the removed row and offer it back:
@@ -115,7 +152,7 @@ Two things follow from the lifetime difference:
     setUndo(rows.find((r) => r.id === id) ?? null)
     setRows((prev) => prev.filter((r) => r.id !== id))
   }
-  { undo && <button onClick={() => { setRows((p) => [...p, undo]); setUndo(null) }}>Undo delete</button> }
+  { undo && <button type="button" onClick={() => { setRows((p) => [...p, undo]); setUndo(null) }}>Undo delete</button> }
   ```
 
   A confirm step does the same job — but not the browser's own `confirm()`, which is a modal
@@ -147,10 +184,34 @@ Two things follow from the lifetime difference:
         })),
       }))
 
-  Keep every existing id, edited title, owner, and added item. Do not use
+  Keep every existing id, edited title, template-owned field, and added item. Clear an `owner`,
+  `note`, or similar field only when the UI explicitly treats it as per-person/transient data. Do not use
   `setBoard(cloneFresh(DEFAULT_BOARD))` or `setBoard(DEFAULT_BOARD)` for this action: replacing the
   whole persisted object silently deletes the user's template edits. A separately labelled
   “restore default template” control may replace it, but must not share the next-person handler.
+
+  For split state such as `days` plus a `done` map, “next person” leaves the current `days` value
+  untouched and clears only per-person fields and completion (`setDone({})`), or maps the current
+  value without replacing its items. Do not emit `setDays(SEED)`, `setDays(DEFAULT_...)`, or
+  `setBoard(cloneFresh(...))` from a handler labelled or described as next-person reset. Call the
+  action “下一位新人” / “清空本次进度”; reserve “恢复默认模板” for a separate destructive,
+  confirmed action.
+
+  If the canvas reports or submits its state, include every user-editable field in the payload. A
+  dirty marker based only on an aggregate count (`done/total`) misses title, owner, note, and edits
+  that return to the same count. Compare the complete persisted snapshot, or clear the submitted
+  marker on every edit, before allowing a changed report to be sent again.
+
+  When several independent periods or sections each have a “start”, “sent”, “submitted”, or similar
+  status, persist a map or set keyed by the stable period/section id. A single `sentWeek` or
+  `submitted` scalar lets one row overwrite another and makes an already-completed row appear open
+  again. The same keying rule applies to per-day completion, per-item notes, and any action that can
+  be taken independently more than once.
+
+  Derive progress from the current persisted item collection. When an item is deleted, remove its id
+  from completion, notes, and other per-item maps in the same update; stale ids must not inflate the
+  total or remain in a future report. A template reset may clear transient progress, but it must not
+  restore a default item list over the current persisted one.
 
   Anything the user cannot type back in under five seconds needs a way back.
 

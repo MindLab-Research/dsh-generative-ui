@@ -50,13 +50,17 @@ describe("mapNotes", () => {
 
 test("the packaged entrypoint and reference base agree with the registration", () => {
   const source = readFileSync(skillPath, "utf8");
-  expect(SKILL_DESCRIPTION).toContain("adjustable calculations");
-  expect(SKILL_DESCRIPTION).toContain("recommendations, and option requests");
+  expect(SKILL_DESCRIPTION).toContain("adjustable calculation");
+  expect(SKILL_DESCRIPTION).toContain("Always load this skill first");
+  expect(SKILL_DESCRIPTION).toContain("learning plan or checklist");
+  expect(SKILL_DESCRIPTION).toContain("recommendations or option requests");
   expect(SKILL_DESCRIPTION).toContain("saved checklists, reusable templates");
   expect(SKILL_DESCRIPTION).toContain("之后每次复用");
   expect(SKILL_DESCRIPTION).toContain("改改再用");
-  expect(SKILL_DESCRIPTION).toContain("one-input unit conversions such as “98°F 是多少摄氏度”");
-  expect(SKILL_DESCRIPTION).toContain("even when they ask for one number or prose");
+  expect(SKILL_DESCRIPTION).toContain("unit conversion");
+  expect(SKILL_DESCRIPTION).toContain("98°F 是多少摄氏度");
+  expect(SKILL_DESCRIPTION).toContain("cron, glob, regex, chmod");
+  expect(SKILL_DESCRIPTION).toContain("even when the user asks for one number or expects prose");
   expect(source).toContain(`name: ${SKILL_NAME}`);
   expect(source).toContain(`description: ${SKILL_DESCRIPTION}`);
   expect(readFileSync(join(skillResourceBase.path, "references/checking.md"), "utf8")).toContain(CLI_URL);
@@ -84,8 +88,19 @@ test("the progressive entrypoint hands durable requests to the first canvas writ
   expect(lifetime).not.toContain("useState(OPTIONS[0].id)");
   expect(lifetime).toContain("Start `pick` at `null`");
   expect(lifetime).toContain('usePersistedState<string | null>("migration-plan-draft", null)');
-  expect(lifetime).toContain("Keep every existing id, edited title, owner, and added item");
+  expect(lifetime).toContain('usePersistedState("miles-to-km:miles", "5")');
+  expect(lifetime).toContain('usePersistedState("miles-to-km:km", "8.04672")');
+  expect(lifetime).toContain("{miles} 英里 = {kmText} 公里");
+  expect(lifetime).toContain("A mortgage with principal, years,");
+  expect(lifetime).toContain("rate, and repayment method has four persisted values");
+  expect(lifetime).toContain("Keep every existing id, edited title, template-owned field, and added item");
+  expect(lifetime).toContain("template-owned field");
+  expect(lifetime).toContain("include every user-editable field in the payload");
   expect(lifetime).toContain("must not share the next-person handler");
+  expect(lifetime).toContain("option control must visibly write the draft");
+  expect(lifetime).toContain("disclosure handler must not be the only handler");
+  expect(lifetime).toContain("sent !== null");
+  expect(lifetime).toContain("setDays(SEED)");
 });
 
 test("the progressive entrypoint keeps the inline fence and reference-read contracts", () => {
@@ -97,20 +112,29 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("unit conversions");
   expect(entry).toContain("Any unit conversion is still an inline card when the user gives only one input");
   expect(entry).toContain("several candidates, recommendations, or options");
-  expect(entry).toContain("Before writing a candidate or recommendation card, read `references/lifetime.md`");
+  expect(entry).toContain("Before writing **any interactive card**");
+  expect(entry).toContain("mortgage must persist principal, years, rate, and method separately");
   expect(entry).toContain("Source-check the card before sending");
   expect(entry).toContain("guard against a second send after the persisted answer");
   expect(entry).toContain("must not claim that the user already chose one");
-  expect(entry).toContain("it must contain both `sendMessage` and `usePersistedState`");
-  expect(entry).toContain("Persist every value the reader can edit in an inline card");
+  expect(entry).toContain("calculator mode or standard may use a sensible **persisted** default");
+  expect(entry).toContain("a choice card must contain both `sendMessage` and `usePersistedState`");
+  expect(entry).toContain("Persist every card-owned value the reader can edit in an inline card");
   expect(entry).toContain("Keep displayed values live");
+  expect(entry).toContain("never `5 miles = {format(km)}`");
   expect(entry).toContain("Keep units and formulas on the same scale");
-  expect(entry).toContain("must not include a computed numeric result");
+  expect(entry).toContain("do not output its computed answer or numeric summary anywhere outside the fence");
   expect(entry).toContain("Keep status text readable in both themes");
   expect(entry).toContain("A hover-only action must remain visible");
+  expect(entry).toContain("Run this source gate immediately before sending or writing");
+  expect(entry).toContain("reset-for-next-person or reset-progress action transforms the current persisted object");
+  expect(entry).toContain("bg-accent text-white");
+  expect(entry).toContain('Every `<button>` has `type="button"`');
+  expect(entry).toContain("Copy must match behavior");
   expect(entry).toContain("Never import `usePersistedState` from `react`");
   expect(entry).toContain("use tools needed to build or check the card");
-  expect(entry).toContain("Do not promise a control that the card does not render");
+  expect(entry).toContain("Do not promise a control that the card does not render or trigger");
+  expect(entry).toContain("do not promise an automatic reply that it does not trigger");
   expect(entry).toContain("Fixed factual lookups");
   expect(entry).toContain("put the short introduction on its own line");
   expect(entry).toContain("start the exact four-backtick `ui4a/tsx` opener at the beginning of the next line");

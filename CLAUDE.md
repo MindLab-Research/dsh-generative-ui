@@ -170,6 +170,20 @@ Five things about that setup are load-bearing, each measured rather than assumed
   ::after { margin: 0; border: 0 solid }` aimed at the HOST's DOM. The `theme` layer survives it
   and is the half we need: `--spacing` is defined there and every `gap-*` / `h-*` / `p-*` resolves
   against it. Dropping preflights entirely makes those rules generate and compute to nothing.
+- **The `theme` layer is on demand AND it is a preflight — so the streaming path has to ask for it
+  on purpose, and then not re-append it.** Two halves, both measured, and they pull against each
+  other. The empty-token preflight pass emits no variables at all (`trackedTheme` is empty, and
+  Wind4's theme preflight returns early on that), and an incremental pass with `preflights: false`
+  emits `padding: calc(var(--spacing) * 3)` against a sheet where `--spacing` was never defined —
+  so `p-3` / `gap-2` / `rounded-2xl` compute to `0px` / `normal` / `0px` for the whole stream and
+  jump when the settled pass rewrites the sheet. Measured in Chromium through the real
+  `GenUISurface`, mid-stream vs settle. But the layer is **cumulative**: `trackedTheme` is a
+  module-level set inside presetWind4, cleared only on `configResolved`, so `getLayer("theme")`
+  returns the union of every variable the GENERATOR has ever been asked about. Appending that per
+  frame wrote **96 `:root, :host` blocks and 16KB of a 42KB sheet** on one card streamed in 40-byte
+  chunks — while only 8 of 103 generating frames had actually changed the layer. So: generate with
+  preflights on, take `getLayers(undefined, ["preflights", "base", "theme"])` for the per-call
+  utilities, and append the theme layer only when it differs from what is already in the sheet.
 - **Form controls need their own scoped reset.** With the vendor reset gone, a `<button>` keeps the
   UA's `buttonface`, which is not theme-aware: measured in dark mode, two unselected buttons
   rendered as light grey blocks with black text while the rest of the card was dark.

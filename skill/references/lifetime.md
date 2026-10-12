@@ -45,14 +45,16 @@ Two things follow from the lifetime difference:
     comparing three options should be able to look at all three first.
 
   The preview form is a selector, a result area, and one submit — that is the whole structure, and
-  the result area is where the card earns its existence:
+  the result area is where the card earns its existence. **Start `pick` at `null`: a default first
+  option is already a choice, so the first render must ask the reader to select one.**
 
-      const [pick, setPick] = useState(OPTIONS[0].id)
       const [sent, setSent] = usePersistedState<string | null>("migration-plan-choice", null)
+      const [pick, setPick] = usePersistedState<string | null>("migration-plan-draft", null)
+      const active = sent ?? pick
       …
-      <div className="flex flex-wrap gap-2">…one button per option, aria-pressed={pick === o.id}…</div>
-      <div className="mt-3">{OPTIONS.find((o) => o.id === pick)!.preview}</div>
-      <button disabled={sent !== null} onClick={() => { setSent(pick); sendMessage(…) }}>…</button>
+      <div className="flex flex-wrap gap-2">…one button per option, aria-pressed={active === o.id}…</div>
+      <div className="mt-3">{active === null ? "请选择一个方案" : OPTIONS.find((o) => o.id === active)?.preview}</div>
+      <button disabled={pick === null || sent !== null} onClick={() => { if (pick === null) return; setSent(pick); sendMessage(…) }}>…</button>
 
   `preview` is whatever actually shows the difference: a mermaid graph of the two migration paths,
   the formula rendered by katex, an SVG of the layout, a working miniature of the thing, a 3D view,
@@ -97,6 +99,12 @@ Two things follow from the lifetime difference:
   `<Disclosure defaultOpen>` reverts to `defaultOpen` on every remount, and the only way to keep
   what the reader did is to control it yourself from persisted state.
 
+  **A displayed explanation is state too.** If a sentence repeats an input or a derived result,
+  render it from that same state or formatter: `{miles} 英里 = {format(km)} 公里`, not `5 英里 =
+  {format(km)}`. A prose line before or after a calculation card should not contain a computed
+  numeric result at all; let the card own the single live number instead of creating a second
+  rounding path.
+
   **If you write `setRows(prev => prev.filter(r => r.id !== id))` behind a button, keep the row.**
   Persisting is what makes that line permanent — before it, a mistaken delete came back on reload.
   Hold the removed row and offer it back:
@@ -126,6 +134,23 @@ Two things follow from the lifetime difference:
     are the user's; clearing a queue you generated is not a delete
   - setting a quantity or a count to 0 where the row disappears at 0
   - replacing a whole persisted object — `setPlan(freshPlan)` drops whatever the user edited
+
+  For a reusable checklist or template, separate “next person” from “restore defaults”. The former
+  must transform the current persisted value and preserve its structure:
+
+      const resetForNext = () => setBoard((current) => ({
+        ...current,
+        person: emptyPerson,
+        phases: current.phases.map((phase) => ({
+          ...phase,
+          items: phase.items.map((item) => ({ ...item, done: false })),
+        })),
+      }))
+
+  Keep every existing id, edited title, owner, and added item. Do not use
+  `setBoard(cloneFresh(DEFAULT_BOARD))` or `setBoard(DEFAULT_BOARD)` for this action: replacing the
+  whole persisted object silently deletes the user's template edits. A separately labelled
+  “restore default template” control may replace it, but must not share the next-person handler.
 
   Anything the user cannot type back in under five seconds needs a way back.
 

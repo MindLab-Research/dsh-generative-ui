@@ -44,6 +44,10 @@
   the corpus carry no label of any kind, and unlike a text field there is no placeholder and
   nothing inside the control to read — a screen reader announces "slider, 40" and stops.
 
+- **Hover-only controls must also appear on keyboard focus.** A delete or edit action styled with
+  `opacity-0 group-hover:opacity-100` is effectively hidden from a keyboard user. Pair the hover
+  variant with `focus-visible:opacity-100` (and keep a focus ring), or keep the action visible.
+
   Almost every one of them HAS a visible name: **38 of 54 put it in a `<span>` directly above
   the control**, which looks labelled and announces as nothing. A `<span>` is not a label, and
   neither is the number beside it — both are separate elements, connected to nothing:
@@ -164,7 +168,7 @@
   clean sweep on a defect that is everywhere.)
 
   **Write the state and the style it produces as one token, and this whole class of bug stops
-  existing.** `aria-checked:bg-accent` is a single string: there is no second place for it to
+  existing.** `aria-checked:bg-[var(--dsw-alias-button-primary-fill)]` is a single string: there is no second place for it to
   disagree with. Measured on a card written before that was possible — the CSS said
   `.sev-btn[aria-pressed="true"]`, the JSX twenty lines below wrote `aria-checked={o.id ===
   severity}`, both correct on their own, and they simply never met. All three buttons rendered
@@ -177,6 +181,18 @@
 
   So: a state variant (`aria-checked:`, `data-[open=true]:`, `hover:`, `focus-visible:`) rather
   than a selector that has to go and find the element.
+
+  **Contrast is part of the selected state.** The light theme's accent is `#4176e6`; white text
+  on it is only 4.23:1, and the dark theme drops to 2.66:1 for small text. Do not write
+  `bg-accent text-white` for a filled control. Use the host's opposing pair instead:
+
+      className="bg-[var(--dsw-alias-button-primary-fill)] text-[var(--dsw-alias-label-primary-foreground)]"
+
+  For a selected chip, an unfilled `border-[var(--dsw-alias-state-business-primary)]` plus
+  `text-label` and `font-medium` is safer than a bright fill. Likewise, `text-success` and
+  `text-warn` are status hues, not guaranteed body-text foregrounds on `bg-page`; use `text-label`
+  with a semantic icon/word, or a tested foreground/background pair. Check the actual font size,
+  because a pair that passes for a heading can fail for a 10px badge.
 
   This is about state that *persists* after the interaction. A key that lights while held, a row that highlights on hover — those are momentary feedback and want nothing announced; a state that is over before it is read is worse than none.
 - **Every visual change is continuous.** No jump cuts: enter from where the element is, and let exits finish.

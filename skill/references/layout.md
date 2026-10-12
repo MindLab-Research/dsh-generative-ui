@@ -106,9 +106,9 @@ Either way, don't restage the header. The panel already names the canvas, so a h
   it took `background: state-business-primary` for its own checked state — the same token, so the
   box vanished into the row and left a white tick floating on blue with nothing around it. The
   same happens to a chip, a count, an icon tile: any child that had a background of its own is now
-  sitting on a background that matches it. On a filled row the children want the fill's foreground
-  (`#fff` here) as their colour and no background at all, or a white outline if the shape itself
-  has to stay readable.
+  sitting on a background that matches it. On a filled row the children want the fill's opposing
+  foreground (`var(--dsw-alias-label-primary-foreground)`) as their colour and no background at all,
+  or a theme-safe outline if the shape itself has to stay readable.
 - **Keep nesting shallow.** A bordered box inside a bordered box is almost always wrong; a divider line does the job.
 - **You are a component on someone else's page.** Your root is a normal node inside the chat column or the panel — nothing isolates you until you do it yourself. No `position: fixed`, no viewport UNITS (`vh`/`vw`, at any number — the window is not your box, so `78vh` is wrong for the same reason `100vh` is), no portals into `document.body`, no global listeners you don't remove. Overlays go in a `relative` wrapper you own with `absolute inset-0`. Effect libraries default to the wrong thing here and have to be pointed at your own element — `canvas-confetti` attaches a fullscreen canvas to `document.body` unless you pass one, so `confetti.create(ref.current, { resize: true, useWorker: true })` with that `<canvas>` absolutely positioned inside your container. Same for anything that says "mounts to body" or "fullscreen".
 - **A title or a control sitting above a long list is a `sticky` header. Not "could be" — is.**
@@ -207,14 +207,14 @@ Either way, don't restage the header. The panel already names the canvas, so a h
   Add the pressed-and-hovered pair. It is `(0,3,0)`, so it wins on specificity and does not care
   where it lands in the sheet:
 
-      hover:bg-hover aria-pressed:bg-accent aria-pressed:hover:bg-accent
+      hover:bg-hover aria-pressed:bg-[var(--dsw-alias-button-primary-fill)] aria-pressed:hover:bg-[var(--dsw-alias-button-primary-fill)]
 
   **Whichever attribute you marked the selection with, qualify that one** — the trick is the extra
   variant, not the word `aria-pressed`. Of those 308 collisions, only 163 are on `aria-pressed`;
   the rest are `data-[state=active]` (74), `checked` (43) and `aria-selected` (28), and each has
   the same fix, verified against this generator:
 
-      data-[state=active]:hover:bg-accent    checked:hover:bg-accent    aria-selected:hover:bg-accent
+      data-[state=active]:hover:bg-[var(--dsw-alias-button-primary-fill)]    checked:hover:bg-[var(--dsw-alias-button-primary-fill)]    aria-selected:hover:bg-[var(--dsw-alias-button-primary-fill)]
 
   **Do not reach for `not-`.** `not-aria-pressed:hover:bg-hover` and
   `hover:not-aria-pressed:bg-hover` are the intuitive fix and this generator matches **neither** —

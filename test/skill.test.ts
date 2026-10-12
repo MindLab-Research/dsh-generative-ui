@@ -50,7 +50,13 @@ describe("mapNotes", () => {
 
 test("the packaged entrypoint and reference base agree with the registration", () => {
   const source = readFileSync(skillPath, "utf8");
-  expect(SKILL_DESCRIPTION).toContain("adjustable calculations, recommendations, and option requests");
+  expect(SKILL_DESCRIPTION).toContain("adjustable calculations");
+  expect(SKILL_DESCRIPTION).toContain("recommendations, and option requests");
+  expect(SKILL_DESCRIPTION).toContain("saved checklists, reusable templates");
+  expect(SKILL_DESCRIPTION).toContain("之后每次复用");
+  expect(SKILL_DESCRIPTION).toContain("改改再用");
+  expect(SKILL_DESCRIPTION).toContain("one-input unit conversions such as “98°F 是多少摄氏度”");
+  expect(SKILL_DESCRIPTION).toContain("even when they ask for one number or prose");
   expect(source).toContain(`name: ${SKILL_NAME}`);
   expect(source).toContain(`description: ${SKILL_DESCRIPTION}`);
   expect(readFileSync(join(skillResourceBase.path, "references/checking.md"), "utf8")).toContain(CLI_URL);
@@ -65,9 +71,21 @@ test("the progressive entrypoint hands durable requests to the first canvas writ
   expect(entry).toContain("immediately write the");
   expect(entry).toContain("first usable file to `.dsh/ui4a/canvases/<id>.ui4a.tsx`");
   expect(entry).toContain("another design/planning skill");
+  expect(entry).toContain("每来一个新人都改改再用");
+  expect(entry).toContain("An empty workspace does not change this");
+  expect(entry).toContain("There is no `references/canvas.md`");
+  expect(entry).toContain("must preserve edited titles, added items, and saved content");
+  expect(entry).toContain("setBoard(cloneFresh(DEFAULT_BOARD))");
+  expect(entry).toContain("behavior for a separately labelled");
+  expect(entry).toContain("do not\nalso emit an inline `ui4a/tsx` fence");
   const lifetime = readFileSync(join(skillResourceBase.path, "references/lifetime.md"), "utf8");
   expect(lifetime).toContain("same id and path");
   expect(lifetime).toContain("usePersistedState");
+  expect(lifetime).not.toContain("useState(OPTIONS[0].id)");
+  expect(lifetime).toContain("Start `pick` at `null`");
+  expect(lifetime).toContain('usePersistedState<string | null>("migration-plan-draft", null)');
+  expect(lifetime).toContain("Keep every existing id, edited title, owner, and added item");
+  expect(lifetime).toContain("must not share the next-person handler");
 });
 
 test("the progressive entrypoint keeps the inline fence and reference-read contracts", () => {
@@ -84,16 +102,29 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("guard against a second send after the persisted answer");
   expect(entry).toContain("must not claim that the user already chose one");
   expect(entry).toContain("it must contain both `sendMessage` and `usePersistedState`");
+  expect(entry).toContain("Persist every value the reader can edit in an inline card");
+  expect(entry).toContain("Keep displayed values live");
+  expect(entry).toContain("Keep units and formulas on the same scale");
+  expect(entry).toContain("must not include a computed numeric result");
+  expect(entry).toContain("Keep status text readable in both themes");
+  expect(entry).toContain("A hover-only action must remain visible");
+  expect(entry).toContain("Never import `usePersistedState` from `react`");
+  expect(entry).toContain("use tools needed to build or check the card");
   expect(entry).toContain("Do not promise a control that the card does not render");
   expect(entry).toContain("Fixed factual lookups");
   expect(entry).toContain("put the short introduction on its own line");
-  expect(entry).toContain("open the exact four-backtick `ui4a/tsx` fence on the next line");
-  expect(entry).toContain("never append the opener to the introduction on one line");
-  expect(entry).toContain("do not reload this skill");
+  expect(entry).toContain("start the exact four-backtick `ui4a/tsx` opener at the beginning of the next line");
+  expect(entry).toContain("Never emit `。````ui4a/tsx`");
+  expect(entry).toContain("leave one blank line");
+  expect(entry).toContain("Do not call the `generative-ui` skill again with the same name");
   expect(entry).toContain("on its own line");
   expect(entry).toContain("required `file_path` argument");
   expect(entry).toContain("`file_path` is the only valid argument");
   expect(entry).toContain("or an empty read call");
   expect(entry).toContain("when the card or canvas uses the concern it covers");
   expect(entry).toContain("initialize every value that is visible on the first render");
+  const accessibility = readFileSync(join(skillResourceBase.path, "references/accessibility.md"), "utf8");
+  expect(accessibility).toContain("Contrast is part of the selected state");
+  expect(accessibility).toContain("dsw-alias-label-primary-foreground");
+  expect(accessibility).toContain("focus-visible:opacity-100");
 });

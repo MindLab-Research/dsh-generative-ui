@@ -1,7 +1,7 @@
 /**
  * Runtime registration for the packaged skill entrypoint and its references.
  *
- * `dsh-base` mounts `dsh-skill` + `dsh-tool-skill` by default, so a runtime registration here
+ * `dsh-base` mounts the `dsh-skill` tooling by default, so a runtime registration here
  * shows up in the model's `<available_skills>` catalog and its body is fetched only when the
  * model calls `skill({ name })`. The entrypoint then routes to packaged references, which are
  * read only when the card needs them. The resident prompt stays short for pure-prose turns.
@@ -22,7 +22,7 @@ const RUN_CLI = `BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache" bunx --yes genui@${CL
 
 export const SKILL_NAME = "generative-ui";
 
-export const SKILL_DESCRIPTION = `How to decide between an inline ${FENCE_LANG} block, a canvas file, and plain prose — especially for adjustable calculations, recommendations, and option requests — and how to lay one out so it reads. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. Once the result returns, the skill step is complete: read a specific reference, write the requested canvas, or answer, including emitting the inline card; do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.`;
+export const SKILL_DESCRIPTION = `How to decide between an inline ${FENCE_LANG} block, a canvas file, and plain prose — especially for adjustable calculations, one-input unit conversions such as “98°F 是多少摄氏度”, BMI or mortgage calculators, recommendations, and option requests, and durable artifacts such as saved checklists, reusable templates, dashboards, reports, or tools. Use this whenever the answer has a value the reader may change, even when they ask for one number or prose, or asks to save, reuse, or edit later, including natural phrases such as “存下来”, “之后每次复用”, and “改改再用”, even when they do not say “canvas”. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. Once the result returns, the skill step is complete; read a specific reference, write the requested canvas, or answer, including emitting the inline card; do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.`;
 
 /**
  * Checker map notes added to the entrypoint at runtime.

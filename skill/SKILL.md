@@ -1,11 +1,11 @@
 ---
 name: generative-ui
-description: How to decide between an inline ui4a/tsx block, a canvas file, and plain prose — especially for adjustable calculations, recommendations, and option requests — and how to lay one out so it reads. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. Once the result returns, the skill step is complete: read a specific reference, write the requested canvas, or answer, including emitting the inline card; do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.
+description: How to decide between an inline ui4a/tsx block, a canvas file, and plain prose — especially for adjustable calculations, one-input unit conversions such as “98°F 是多少摄氏度”, BMI or mortgage calculators, recommendations, and option requests, and durable artifacts such as saved checklists, reusable templates, dashboards, reports, or tools. Use this whenever the answer has a value the reader may change, even when they ask for one number or prose, or asks to save, reuse, or edit later, including natural phrases such as “存下来”, “之后每次复用”, and “改改再用”, even when they do not say “canvas”. Load it **once before you decide**, not after — including when your first instinct is that prose is enough. Once the result returns, the skill step is complete; read a specific reference, write the requested canvas, or answer, including emitting the inline card; do not call this skill again in the same turn. Most of the questions that should have been an interface do not ask for one.
 ---
 
 # Building a generative UI
 
-This skill is already loaded for the current turn. Once the skill tool returns this result, the skill step is complete: the next action may only read a specific reference, write the requested canvas, or answer. Do not call the `generative-ui` skill again with the same name, even if you switch between prose and a card. If a topic guide applies, read its linked `references/*.md` file with the file-reading tool instead of reloading this skill.
+This skill is already loaded for the current turn. Once the skill tool returns this result, continue with the task: read the relevant references, use tools needed to build or check the card, and deliver the answer or canvas. Do not call the `generative-ui` skill again with the same name, even if you switch between prose and a card. If a topic guide applies, read its linked `references/*.md` file with the file-reading tool instead of reloading this skill.
 
 ## Trigger gate
 
@@ -13,9 +13,14 @@ Before the prose test, apply this gate:
 
 - A calculation with values the user may change is an inline card, including loan or mortgage calculations, BMI thresholds or calculators, and unit conversions. **Any unit conversion is still an inline card when the user gives only one input and asks “how much”** — for example, `98°F 是多少摄氏度`. Pre-fill that input and its derived value in two linked fields; do not answer with prose-only arithmetic.
 - A request for several candidates, recommendations, or options is an inline card, even when it asks for only a few names.
-- Before writing a candidate or recommendation card, read `references/lifetime.md` and do not emit TSX until that read returns. **Source-check the card before sending:** it must contain both `sendMessage` and `usePersistedState`; an instant choice sets and sends in the same handler, while a preview has a separately rendered, persisted Submit. Both forms must guard against a second send after the persisted answer (disable the control or return before sending). The initial card may say that options are available, but must not claim that the user already chose one. Do not promise a control that the card does not render.
+- Before writing a candidate or recommendation card, read `references/lifetime.md` and do not emit TSX until that read returns. **Source-check the card before sending:** it must contain both `sendMessage` and `usePersistedState`; an instant choice sets and sends in the same handler, while a preview has a separately rendered, persisted Submit. Both forms must guard against a second send after the persisted answer (disable the control or return before sending). Start the uncommitted choice as `null`: the first render must show no option as chosen, and must not claim that the user already chose one. Do not promise a control that the card does not render.
+- **Persist every value the reader can edit in an inline card.** This includes calculator and conversion inputs, sliders, toggles, and draft text, not only a submitted choice. Use `usePersistedState` from `$dsh/state` for those values; `useState` is only for transient UI or derived display. Never import `usePersistedState` from `react` — React does not export it.
+- **Keep displayed values live.** Every explanatory sentence inside a card that contains an editable or derived number must interpolate the same state or formatter that drives the value; never repeat the initial literal (for example, `5 miles = {km}` after the miles field can change). The prose before or after a calculation card must frame the interaction or formula and must not include a computed numeric result; let the card own the single live value.
+- **Keep units and formulas on the same scale.** The input label, conversion formula, and output formatter must agree: if a field is labelled `万元`, normalize that value exactly once before the loan formula and format the result in the unit you show. Run one known sample through the displayed formula before sending; never label yuan as ten-thousands or apply the scale twice.
+- **Keep status text readable in both themes.** Do not pair `bg-accent` or a bright success/warning fill with `text-white` or a bright semantic text token, and do not use `text-success` or `text-warn` as small body text directly on `bg-page`. For a filled control use `var(--dsw-alias-button-primary-fill)` with `var(--dsw-alias-label-primary-foreground)`; for a status on a neutral surface use `text-label` plus a semantic icon/word, or a tested foreground/background pair. Check small text at the actual rendered size.
+- **A hover-only action must remain visible to keyboard users.** If an edit or delete button uses `opacity-0 group-hover:opacity-100`, add `focus-visible:opacity-100` and keep a focus ring, or leave the action visible.
 - Fixed factual lookups such as the meaning of an HTTP status remain prose.
-- Once this gate selects inline, perform a final protocol pass: put the short introduction on its own line, open the exact four-backtick `ui4a/tsx` fence on the next line, and close it on its own line; never append the opener to the introduction on one line; do not reload this skill.
+- Once this gate selects inline, perform a final protocol pass on the complete reply: put the short introduction on its own line, leave a blank line, then start the exact four-backtick `ui4a/tsx` opener at the beginning of the next line, and close it on its own line. Never emit `。````ui4a/tsx`, put any prose on the opener line, or rely on a streaming fragment that will be fixed later; rewrite the final text if the opener is attached. Do not reload this skill.
 
 ## Is this a UI at all
 
@@ -60,6 +65,23 @@ a temporary `.tsx`, or another design/planning skill. Read the relevant referenc
 if needed, then keep the canvas visible and editable. The write is the action that creates the
 canvas, so it must happen in the first turn that accepts the durable request.
 
+Natural phrases count as an explicit durable request even when the user never says “canvas”:
+“存下来/保存起来”, “以后还要用”, “之后每次复用”, “每来一个新人都改改再用”, and “留着以后
+修改” all require the first write to that canvas path. An empty workspace does not change this
+decision — it means create the first canvas, not fall back to an inline fence or localStorage-only
+card. The same rule applies to checklists, templates, plans, and other artifacts the user says they
+will reuse. For a reusable checklist or template, a “reset for the next person” action may clear
+completion or other transient state only; it must preserve edited titles, added items, and saved content instead of replacing the persisted object with fresh defaults. Do not promise to preserve edits unless the reset handler actually does so.
+Implement that reset as a transform of the current persisted value: clear only per-person fields and
+map the existing phases/items to `{ ...item, done: false }`, preserving every id, edited title, owner,
+and added item. `setBoard(cloneFresh(DEFAULT_BOARD))`, `setBoard(DEFAULT_BOARD)`, or any reset that
+replaces the whole object from an initial constant is wrong for the “next person” action; reserve that
+behavior for a separately labelled “restore default template” control.
+After creating a durable Canvas, keep the reply as a short description of the opened file; do not
+also emit an inline `ui4a/tsx` fence or an export/re-export fence for that file. The Canvas write is
+the deliverable, and a second fence creates a duplicate surface or renders source instead of the
+saved panel.
+
 Measured: on `cron-read` — *"`*/17 3-5 * * 2` 这个 cron 到底几点跑？"*, a lookup with one right
 answer — models opened a canvas **5 times in one round and 6 in the next**, and one opened a canvas
 for *"什么是闭包？"*. Nobody asked for a file in any of them.
@@ -95,8 +117,8 @@ weightier than it is. Same `choose`, same key, one row:
   {OPTIONS.map((o) => (
     <button key={o.id} onClick={() => choose(o.id)} aria-pressed={picked === o.id}
       className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-hover
-                 aria-pressed:bg-accent aria-pressed:text-white aria-pressed:border-transparent
-                 aria-pressed:hover:bg-accent">                    {/* or the selection vanishes under the pointer */}
+                 aria-pressed:bg-[var(--dsw-alias-button-primary-fill)] aria-pressed:text-[var(--dsw-alias-label-primary-foreground)] aria-pressed:border-transparent
+                 aria-pressed:hover:bg-[var(--dsw-alias-button-primary-fill)]">                    {/* or the selection vanishes under the pointer */}
       {o.label}
     </button>
   ))}
@@ -127,19 +149,19 @@ Both short. Two or three sentences total. Don't narrate tooling ("now I'll write
 
 ## Emit the inline block with the exact fence
 
-When you choose an inline card, put the short introduction on its own line, then open the block on a new line with **exactly four backticks followed by `ui4a/tsx`**. Close it with exactly four backticks on its own line. Do not use three backticks, put prose on the opener line, or use `tsx` as the info string. The card renderer and the reader both depend on this shape.
+When you choose an inline card, put the short introduction on its own line, leave one blank line, then start the block at the beginning of a new line with **exactly four backticks followed by `ui4a/tsx`**. Close it with exactly four backticks on its own line. Do not use three backticks, put prose on the opener line, attach the opener to the introduction, or use `tsx` as the info string. The card renderer and the reader both depend on this shape.
 
 ## Read the relevant reference before writing TSX
 
 The instructions below live beside this file in `references/`. Resolve these paths against this skill's base directory. Read a reference before coding when the card or canvas uses the concern it covers; use the entrypoint rules directly for a small card that does not need a topic-specific guide. The entrypoint is not the complete authoring guide.
 
-Use the file-reading tool with its required `file_path` argument set to the resolved absolute path of the reference (for example, `<skill base>/references/layout.md`). `file_path` is the only valid argument: make one read with that path, never issue `{}` or an empty read call, and do not make speculative parallel reads. The skill resource base above is the package directory, so these files are not in the user's workspace.
+Use the file-reading tool with its required `file_path` argument set to the resolved absolute path of the reference (for example, `<skill base>/references/layout.md`). `file_path` is the only valid argument: make one read with that path, never issue `{}` or an empty read call, and do not make speculative parallel reads. `sendMessage` is a capability imported inside the TSX card, not a host tool call. The skill resource base above is the package directory, so these files are not in the user's workspace.
 
 When two fields are linked, initialize every value that is visible on the first render. If one field
 starts with a value such as `98°F`, compute and show its paired value such as `36.7°C` immediately;
 do not initialize the derived field to `""` and wait for an effect or the first edit.
 
-- For state, a submit/preview flow, undo, or a canvas that survives edits: [lifetime.md](references/lifetime.md).
+- For state, a submit/preview flow, undo, or a canvas that survives edits: [lifetime.md](references/lifetime.md). There is no `references/canvas.md`; do not try to read it.
 - For framing, spacing, scrolling, responsiveness, and theme tokens: [layout.md](references/layout.md).
 - For controls, keyboard and screen-reader access, selected state, and motion: [accessibility.md](references/accessibility.md).
 - For audio or waveform UI: [sound.md](references/sound.md).

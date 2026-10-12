@@ -261,3 +261,61 @@ test("every class in a code example generates a rule", async () => {
   }
   expect(unmatched.toSorted()).toEqual([]);
 });
+
+/**
+ * A utility that references a variable the sheet never defined is not "unstyled until later" — it
+ * computes to NOTHING and the layout is wrong while the reader watches.
+ *
+ * Two halves, and they pull in opposite directions:
+ *
+ * 1. The variables have to reach the sheet DURING the stream. Wind4's `theme` layer is on demand,
+ *    and it is a PREFLIGHT — so the empty-token first frame carries none of it, and a later frame
+ *    generating with `preflights: false` emits `padding: calc(var(--spacing) * 3)` against a sheet
+ *    where `--spacing` does not exist. Every `p-3`/`gap-2`/`rounded-2xl` computes to nothing until
+ *    the settled pass rewrites the sheet.
+ * 2. But the layer must not be appended per frame. `trackedTheme` is a module-level set inside
+ *    presetWind4, cleared only on `configResolved`, so `getLayer("theme")` returns the union of
+ *    every variable this generator has EVER seen — not a per-call delta. Measured on
+ *    `test/cards/utility-classes` streamed in 40-byte chunks: 96 `:root, :host` blocks and 16KB of
+ *    a 42KB sheet, while only 8 of the 103 generating frames had actually changed the layer.
+ *    That is the same "repeated block grows without bound" shape the box-sizing assertion above
+ *    exists to stop.
+ */
+test("streaming frames define the theme variables, and do not re-append the theme layer", async () => {
+  const style = { attrs: {} as Record<string, string>, textContent: "", setAttribute(k: string, v: string) { this.attrs[k] = v; }, remove() {} };
+  const previous = (globalThis as { document?: unknown }).document;
+  (globalThis as { document?: unknown }).document = { createElement: () => style, head: { appendChild: (n: unknown) => n } };
+  const roots = () => (style.textContent.match(/:root,\s*:host\s*\{/g) ?? []).length;
+  try {
+    const uno = await import("../src/client/runtime/uno.ts");
+    uno.disposeUnoStyles();
+
+    // Half 1: the definition must land in the SAME frame as the utility that needs it. Assert on
+    // the DEFINITION and not on `var(--spacing)` — the broken path emitted the reference happily,
+    // which is exactly what made it look styled.
+    await uno.ensureUnoStyles(`<div className="p-3 gap-2 rounded-2xl" />`, true);
+    expect(style.textContent).toMatch(/--spacing\s*:/);
+    expect(style.textContent).toMatch(/--radius-2xl\s*:/);
+
+    // Half 2: many more frames, each introducing tokens. If the theme layer is appended per frame
+    // this grows with the frame count; it may only grow when the layer itself changed.
+    const before = roots();
+    expect(before).toBe(1);
+    for (let i = 0; i < 20; i++) await uno.ensureUnoStyles(`<div className="mt-${i + 1} p-${i + 1}" />`, true);
+    expect(roots()).toBe(before);
+
+    // The gate must not be "write once": a genuinely NEW variable still has to get out. `rounded-lg`
+    // is the probe — `rounded-full` is not, it computes to `calc(infinity * 1px)` and tracks no
+    // theme key at all (found by running this assertion).
+    await uno.ensureUnoStyles(`<div className="rounded-lg" />`, true);
+    expect(style.textContent).toMatch(/--radius-lg\s*:/);
+    expect(roots()).toBe(before + 1);
+
+    // …and the settled pass collapses back to exactly one, since it replaces rather than appends.
+    await uno.ensureUnoStyles(`<div className="p-3 gap-2 rounded-2xl rounded-full" />`, false);
+    expect(roots()).toBe(1);
+    uno.disposeUnoStyles();
+  } finally {
+    (globalThis as { document?: unknown }).document = previous;
+  }
+});

@@ -28,6 +28,14 @@ const tokens = new Set<string>();
 let sheet: HTMLStyleElement | null = null;
 /** Whether the sheet already carries the preflight block. Reset with the sheet, not with the tokens. */
 let preflighted = false;
+/**
+ * The theme layer as last written into the sheet. Reset with the sheet.
+ *
+ * `trackedTheme` is a module-level set inside presetWind4, cleared only on `configResolved` — so
+ * the theme layer is the union of every variable the GENERATOR has ever been asked about, not a
+ * per-call delta. Appending it per frame is therefore a repeat of a growing block.
+ */
+let themeWritten = "";
 
 /**
  * Per frame this does the two cheap things only: EXTRACT the class names out of the code
@@ -68,13 +76,25 @@ export async function ensureUnoStyles(code: string, streaming = false): Promise<
       sheet.textContent += splitVendorRules(css);
     }
     if (fresh.length === 0) return;
-    const { css } = await uno.generate(fresh, { preflights: false });
-    sheet.textContent += splitVendorRules(css);
+    // The `theme` layer is on demand AND it lives in the preflights: with `preflights: false` the
+    // utilities come out as `padding: calc(var(--spacing) * 3)` against a sheet that never defined
+    // `--spacing`, so every `p-3`/`gap-2`/`rounded-2xl` computed to nothing until the stream
+    // settled. Generate with them on so the variables land — but do NOT take `css`: that re-appends
+    // the preflight block frame 1 already wrote. `theme` is excluded from the bulk append below for
+    // the same reason it is appended separately: it is the one layer that is NOT per-call.
+    const generated = await uno.generate(fresh, { preflights: true });
+    sheet.textContent += splitVendorRules(generated.getLayers(undefined, ["preflights", "base", "theme"]));
+    const theme = generated.getLayer("theme") ?? "";
+    if (theme && theme !== themeWritten) {
+      themeWritten = theme;
+      sheet.textContent += splitVendorRules(theme);
+    }
     return;
   }
   preflighted = true;
-  const { css } = await uno.generate(tokens, { preflights: true });
+  const { css, getLayer } = await uno.generate(tokens, { preflights: true });
   sheet.textContent = splitVendorRules(css);
+  themeWritten = getLayer("theme") ?? "";
 }
 
 /**
@@ -120,5 +140,6 @@ export function disposeUnoStyles(): void {
   sheet = null;
   generator = null;
   preflighted = false;
+  themeWritten = "";
   tokens.clear();
 }

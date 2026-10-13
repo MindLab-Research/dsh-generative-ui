@@ -63,6 +63,23 @@ describe("createBrowserTsxCompiler", () => {
     expect(code).toContain("jsx");
   });
 
+  test("a plain generic arrow in a type declaration does not create a JSX closing tag", async () => {
+    const source = `type Persisted = <T>(key: string, initial: T | (() => T)) => [T, (next: T) => void]
+export default function C() { return <div /> }`;
+    const result = await compile(source);
+    expect(result.source).toContain("<T,>(key: string");
+    expect(result.source).not.toMatch(/<\/T>\s*$/);
+    expect(result.code).toContain("jsx");
+  });
+
+  test("a JSX element with a similar text shape stays unchanged", async () => {
+    const source = `const node = <T>(value) => value</T>
+export default function C() { return <div>{node}</div> }`;
+    const result = await compile(source);
+    expect(result.source).toContain("const node = <T>(value) => value</T>");
+    expect(result.source).not.toContain("<T,>");
+  });
+
   test("changed is false when the output matches previousCode", async () => {
     const first = await compile("export default function A() { return <div /> }");
     const again = await compile("export default function A() { return <div /> }", { previousCode: first.code });

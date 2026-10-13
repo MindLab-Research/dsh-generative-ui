@@ -1,7 +1,7 @@
 import initTsx, { transform as transformTsx } from "@esm.sh/tsx";
-import { normalizeGeneratedTsx } from "partial-tsx";
 import { rewriteImportMetaResolveSpecifiers, type RendererImportMap } from "partial-react/import-map";
 import { WASM_PATH } from "../../contract-assets.ts";
+import { normalizeGeneratedTsxCompat } from "./normalize.ts";
 
 // Structurally equivalent to `partial-react/compiler`'s three types. Deliberately not
 // imported from there: that module has a Vite-only `...tsx_bg.wasm?url` at the top level
@@ -76,15 +76,15 @@ export function createBrowserTsxCompiler(): TsxCompiler {
       // `)` and `}` before writing the fence, so compiling the raw source renders every
       // streaming frame fine and then throws `Expected ',', got '<eof>'` at the very moment
       // the block completes — measured on exactly that shape.
-      if (options.partial === true) return build(normalizeGeneratedTsx(code, { mode: "streaming" }));
+      if (options.partial === true) return build(normalizeGeneratedTsxCompat(code, { mode: "streaming" }));
       try {
-        return build(normalizeGeneratedTsx(code, { mode: "final" }));
+        return build(normalizeGeneratedTsxCompat(code, { mode: "final" }));
       } catch (error) {
         // **The final compile must never be more fragile than a streaming frame.** The only
         // difference between the modes is that `streaming` first cuts back the still-being-typed
         // tail, and some damage (an unterminated string, typically) is only recoverable by
         // cutting. Losing the last half-sentence beats going blank on the last frame.
-        const cut = normalizeGeneratedTsx(code, { mode: "streaming" });
+        const cut = normalizeGeneratedTsxCompat(code, { mode: "streaming" });
         // **But only if anything is left to render.** The cut is bounded by the FIRST thing it
         // cannot parse, so a card that puts its data above its component — the common shape when
         // the data is long — loses the component too, and what comes back is a module of imports

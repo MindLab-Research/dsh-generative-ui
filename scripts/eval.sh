@@ -149,19 +149,26 @@ out=$(mktemp)
 # appeared at 22:58 and its `session.jsonl.zstd` landed at 23:06 — eight minutes later, the moment
 # dsh exited. A lookup right after the process returns therefore finds a directory with nothing in
 # it, and every earlier version of this reported `crash/nosession` on runs whose reply was a
-# complete ui4a card. So: find the directory (it is there from the start), then wait for the file.
-# 30s is generous for a flush that normally takes under a second, and a run that never reached a
-# model has no directory at all and falls through immediately.
-sess=$(ls -td "${DSH_HOME:-$HOME/.dsh}/sessions/"*"$(basename "$d")--"/session-* 2>/dev/null | head -1)
+# complete ui4a card. So: wait for the directory, then wait for the file.
+# The flush is independent of the model request timeout and has reached 37s in a real run; allow
+# 120s before calling a completed reply an unfinished/no-session run.
+sess=""
+transcript=""
+for _ in $(seq 480); do
+  sess=$(ls -td "${DSH_HOME:-$HOME/.dsh}/sessions/"*"$(basename "$d")--"/session-* 2>/dev/null | head -1 || true)
+  [ -n "$sess" ] && break
+  sleep 0.25
+done
 if [ -n "$sess" ]; then
-  for _ in $(seq 120); do
-    [ -s "$sess/session.jsonl.zstd" ] && break
+  for _ in $(seq 480); do
+    if [ -s "$sess/session.v4.jsonl.zstd" ]; then transcript="$sess/session.v4.jsonl.zstd"; break; fi
+    if [ -s "$sess/session.jsonl.zstd" ]; then transcript="$sess/session.jsonl.zstd"; break; fi
     sleep 0.25
   done
-  [ -s "$sess/session.jsonl.zstd" ] || sess=""
+  [ -n "$transcript" ] || sess=""
 fi
 # `name` sits inside `data`, well past the first `}` — grep the whole record, take the last name.
-calls=$(zstd -dc "$sess/session.jsonl.zstd" 2>/dev/null \
+calls=$(zstd -dc "$transcript" 2>/dev/null \
   | grep -o '"type":"tool/call".*' | grep -o '"name":"[a-z_]*"' | cut -d\" -f4 \
   | sort | uniq -c | awk '{print $2"x"$1}' | tr '\n' ' ')
 
@@ -179,7 +186,7 @@ if [ ! -s "$out" ] || [ -z "$sess" ]; then
 fi
 # Matched loosely on purpose: `"kind": "completed"` with or without spaces, so the check does
 # not turn on dsh's JSON formatting.
-if ! zstd -dc "$sess/session.jsonl.zstd" 2>/dev/null | grep -qE '"kind" *: *"completed"'; then
+if ! zstd -dc "$transcript" 2>/dev/null | grep -qE '"kind" *: *"completed"'; then
   echo "crash/unfinished  $(tr '\n' ' ' < "$out" | cut -c1-100)  $d  reply=$out  session=$sess"
   exit 2
 fi
@@ -200,4 +207,5 @@ if [ -d "$d/.dsh/ui4a/canvases" ]; then cp -R "$d/.dsh/ui4a/canvases" "$out.canv
 # to build one". Measured once in wave 8 — a complete 150-line routine written to `rutina.tsx` in
 # the workspace root. Rare, but it is the one failure that looks exactly like the model declining.
 stray=$(find "$d" -name '*.tsx' -not -path "$d/.dsh/*" 2>/dev/null | sort | grep -vxF "$seeded" 2>/dev/null | head -3 | tr '\n' ',')
-echo "skill=$skill fence=$(grep -c '```ui4a' "$out") canvas=$(ls "$d"/.dsh/ui4a/canvases/ 2>/dev/null | wc -l | tr -d ' ') bytes=$(wc -c < "$out" | tr -d ' ')  tools=[${calls% }]  $d  reply=$out canvases=$out.canvases${stray:+  stray=${stray%,}}"
+fences=$(awk '{ sub(/\r$/, ""); if ($0 == "````ui4a/tsx") { open = 1; next } if ($0 == "````" && open) { count++; open = 0 } } END { print count + 0 }' "$out")
+echo "skill=$skill fence=$fences canvas=$(ls "$d"/.dsh/ui4a/canvases/ 2>/dev/null | wc -l | tr -d ' ') bytes=$(wc -c < "$out" | tr -d ' ')  tools=[${calls% }]  $d  reply=$out canvases=$out.canvases${stray:+  stray=${stray%,}}"

@@ -100,6 +100,8 @@ test("the progressive entrypoint hands durable requests to the first canvas writ
   expect(lifetime).toContain("option control must visibly write the draft");
   expect(lifetime).toContain("disclosure handler must not be the only handler");
   expect(lifetime).toContain("sent !== null");
+  expect(lifetime).toContain("draft` and `committed` as separate persisted values");
+  expect(lifetime).toContain("serialized snapshot of the complete persisted object");
   expect(lifetime).toContain("setDays(SEED)");
 });
 
@@ -135,6 +137,22 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("use tools needed to build or check the card");
   expect(entry).toContain("Do not promise a control that the card does not render or trigger");
   expect(entry).toContain("do not promise an automatic reply that it does not trigger");
+  expect(entry).toContain("only calls `useState`, changes `openId`, or changes styling");
+  expect(entry).toContain("This scan covers the whole reply");
+  expect(entry).toContain("use `.has` only when the value is actually a `Set`");
+  expect(entry).toContain("never turn a failed directory read into an empty successful listing");
+  expect(entry).toContain("top-level capability failure must render a visible error");
+  expect(entry).toContain("silent fallback to seed data is allowed only around parsing");
+  expect(entry).toContain("complete reply must contain one opener and one closer");
+  const files = readFileSync(join(skillResourceBase.path, "references/files.md"), "utf8");
+  expect(files).toContain('`"file"` and `"directory"`');
+  expect(files).toContain("prefer one bounded command listing");
+  const ai = readFileSync(join(skillResourceBase.path, "references/ai.md"), "utf8");
+  expect(ai).toContain("only for the parser around an incomplete frame");
+  expect(ai).toContain("visible error state");
+  const checking = readFileSync(join(skillResourceBase.path, "references/checking.md"), "utf8");
+  expect(checking).toContain("complete assistant reply");
+  expect(checking).toContain("numeric summary from prose before and after the fence");
   expect(entry).toContain("Fixed factual lookups");
   expect(entry).toContain("put the short introduction on its own line");
   expect(entry).toContain("start the exact four-backtick `ui4a/tsx` opener at the beginning of the next line");
@@ -145,10 +163,15 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("required `file_path` argument");
   expect(entry).toContain("`file_path` is the only valid argument");
   expect(entry).toContain("or an empty read call");
-  expect(entry).toContain("when the card or canvas uses the concern it covers");
+  expect(entry).toContain("Before writing **any interactive card**");
   expect(entry).toContain("initialize every value that is visible on the first render");
   const accessibility = readFileSync(join(skillResourceBase.path, "references/accessibility.md"), "utf8");
   expect(accessibility).toContain("Contrast is part of the selected state");
   expect(accessibility).toContain("dsw-alias-label-primary-foreground");
   expect(accessibility).toContain("focus-visible:opacity-100");
+  expect(accessibility).toContain("expanding a row is disclosure, not selecting a file");
+  expect(accessibility).toContain("decorative loaders");
+  expect(checking).toContain("Mechanical source audit before handoff");
+  expect(checking).toContain("every user-editable expression");
+  expect(checking).toContain("exact current draft snapshot");
 });

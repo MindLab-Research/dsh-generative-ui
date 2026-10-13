@@ -94,7 +94,7 @@ Either way, don't restage the header. The panel already names the canvas, so a h
   **A control you have FILLED is the opposite case, and the two get confused.** The rule above is
   about separating a surface from the surface under it, where both tokens are deliberately faint —
   `border-line` is 4% black. Once an element carries a real fill (a selected segment on
-  `state-business-primary`, a primary button), that fill separates it completely and a leftover
+  `var(--dsw-alias-button-primary-fill)`, a primary button), that fill separates it completely and a leftover
   `border-line-2` is a grey ring around a blue block, related to nothing. Drop it — but to
   `transparent`, not to `none`, or the selected item loses a pixel of height and the row twitches
   as the reader clicks along it:
@@ -102,8 +102,8 @@ Either way, don't restage the header. The panel already names the canvas, so a h
       border: selected ? "1px solid transparent" : "1px solid var(--dsw-alias-border-l2)"
 
   **And once a row is filled, everything inside it has to move off that fill too.** Measured on a
-  real card: a step row filled with `state-business-primary` when ticked, and the checkbox inside
-  it took `background: state-business-primary` for its own checked state — the same token, so the
+  real card: a step row filled with `var(--dsw-alias-button-primary-fill)` when ticked, and the checkbox inside
+  it took the same background for its own checked state — the same token, so the
   box vanished into the row and left a white tick floating on blue with nothing around it. The
   same happens to a chip, a count, an icon tile: any child that had a background of its own is now
   sitting on a background that matches it. On a filled row the children want the fill's opposing
@@ -197,7 +197,7 @@ Either way, don't restage the header. The panel already names the canvas, so a h
 
 - **Layout breaks late, controls break early.** A row of buttons can reflow at a small width; a grid of content cards cannot, because each column has to stay wide enough to read.
 - **Whatever `hover:` changes, the selected state has to claim in its hover form too.** A
-  `hover:bg-hover` and an `aria-pressed:bg-accent` on the same button generate at the SAME
+  `hover:bg-hover` and an `aria-pressed:bg-[var(--dsw-alias-button-primary-fill)]` on the same button generate at the SAME
   specificity — `:is()` takes its argument's, so `.class:hover` and `.class[aria-pressed]` are
   both `(0,2,0)` — and source order in the generated sheet puts `hover` last. So the selected
   button turns back to neutral grey **while the pointer is on it**, which is exactly when the
@@ -219,7 +219,7 @@ Either way, don't restage the header. The panel already names the canvas, so a h
   **Do not reach for `not-`.** `not-aria-pressed:hover:bg-hover` and
   `hover:not-aria-pressed:bg-hover` are the intuitive fix and this generator matches **neither** —
   they produce no rule at all, so the button keeps the bug and the class list now says it was
-  handled. A ternary works too (`picked ? "bg-accent" : "hover:bg-hover"`) because only one branch
+  handled. A ternary works too (`picked ? "bg-[var(--dsw-alias-button-primary-fill)] text-[var(--dsw-alias-label-primary-foreground)]" : "hover:bg-hover"`) because only one branch
   is ever present; reach for that when the two states differ in more than a couple of properties.
 
 - **Icons must name the thing beside them.** `Sparkles`, `WandSparkles`, `Wand2`, `Stars`, `Bot`, `BrainCircuit`, `Zap` as decoration say "an AI made this" and nothing else — `Copy` on a copy button, `Languages` on a translate tab, and nothing on a heading that reads fine without one. Prefer no icon to a decorative one.

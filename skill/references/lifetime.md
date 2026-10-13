@@ -75,8 +75,27 @@ Two things follow from the lifetime difference:
   rather than an untouched form, and the button cannot send a second turn for a question already
   answered.
 
+  **The same boundary applies to any editable draft that is sent or applied, not only a choice.**
+  Keep `draft` and `committed` as separate persisted values. On commit, copy the exact current
+  draft snapshot into `committed`, then make every preview read and displayed "sent/applied" value
+  come from `committed`. Disable or no-op the draft controls after commit; if later edits are
+  supported, label the action as update/resend and send a new snapshot. Never show a sent/applied
+  result while the preview still follows a different editable draft.
+
 - A **canvas** stays interactive. It does not "complete"; it just sits there working.
-- A **canvas outlives the reply that made it**, so data the user puts into it — entries, notes, cards — must survive a reload on its own. Reach for `usePersistedState` from `$dsh/state` — `useState`'s signature including a lazy initialiser, with the value kept in `localStorage` under a namespaced key, and the read and write already wrapped:
+- Any Canvas control labelled or described as **select, apply, submit, continue, generate, or add**
+  needs a complete observable path: persist the draft, run a handler, produce a concrete effect
+  (update the Canvas's persisted state, call `sendMessage`, or invoke the relevant capability),
+  and show a confirmation or result. A control that only highlights an option, changes `openId`,
+  or promises “我来补” without changing anything is not wired. For a choice that continues the
+  conversation, use the one-time `sendMessage` + persisted answer + resend guard below; for a
+  local Canvas action, actually update the artifact it claims to change.
+
+  A feature picker has the same requirement: selecting an option must immediately update the
+  artifact, invoke a capability, or send a concrete request. If the user already asked for a
+  durable checklist or template, choose sensible defaults and write that Canvas in the same turn;
+  a local selector that only highlights buttons is not a substitute for the requested artifact.
+- A **canvas outlives the reply that made it**, so data the user puts into it — entries, notes, cards — must survive a reload on its own. Reach for `usePersistedState` from `$dsh/state`. It returns the familiar `[value, setValue]` pair and accepts a lazy initialiser, but its call signature is **key first**: `usePersistedState(key, initial)`. The value is kept in `localStorage` under a namespaced key, with the read and write already wrapped:
 
   ```tsx
   import { usePersistedState } from "$dsh/state"
@@ -105,15 +124,19 @@ Two things follow from the lifetime difference:
   `usePersistedState` survives in either. **Two chunks is enough** — this is not a rare race.
 
   So anything the reader can change belongs in `usePersistedState`, not only the answer you
-  intend to record. The one case it cannot reach is a third-party component holding its own state:
+  intend to record. Do not mirror a persisted input or draft in a second local `useState` value:
+  bind the control to its persisted value, or persist the raw editable string too when an invalid
+  intermediate token must survive. The one case it cannot reach is a third-party component holding
+  its own state:
   `<Disclosure defaultOpen>` reverts to `defaultOpen` on every remount, and the only way to keep
   what the reader did is to control it yourself from persisted state.
 
   **A displayed explanation is state too.** If a sentence repeats an input or a derived result,
   render it from that same state or formatter: `{miles} 英里 = {format(km)} 公里`, not `5 英里 =
-  {format(km)}`. A prose line before or after a calculation card should not contain a computed
-  numeric result at all; let the card own the single live number instead of creating a second
-  rounding path.
+  {format(km)}`. A prose line before or after a calculation or conversion card must not contain
+  its computed answer, threshold, or numeric summary — including the initial result — anywhere in
+  the complete reply. Let the card own the single live number instead of creating a second rounding
+  path; the framing line may introduce the editable pair or formula without giving a sample result.
 
   For a small editable calculation, keep the source shape this direct so the persistence and live
   text checks are visible in one place:
@@ -198,7 +221,8 @@ Two things follow from the lifetime difference:
   confirmed action.
 
   If the canvas reports or submits its state, include every user-editable field in the payload. A
-  dirty marker based only on an aggregate count (`done/total`) misses title, owner, note, and edits
+  submitted/dirty key should normally be a serialized snapshot of the complete persisted object;
+  a marker based only on an aggregate count (`done/total`) misses title, owner, note, and edits
   that return to the same count. Compare the complete persisted snapshot, or clear the submitted
   marker on every edit, before allowing a changed report to be sent again.
 

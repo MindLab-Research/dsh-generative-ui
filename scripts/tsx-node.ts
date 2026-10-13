@@ -7,8 +7,8 @@
  */
 import { readdirSync } from "node:fs";
 
-import { normalizeGeneratedTsx } from "partial-tsx";
 import initTsx, { transform } from "@esm.sh/tsx";
+import { normalizeGeneratedTsxCompat } from "../src/client/runtime/normalize.ts";
 
 let ready: Promise<unknown> | null = null;
 
@@ -30,9 +30,9 @@ export const compileCard = (filename: string, code: string) => transform({ filen
  */
 export const compileSettled = (filename: string, source: string) => {
   try {
-    return compileCard(filename, normalizeGeneratedTsx(source, { mode: "final" }));
+    return compileCard(filename, normalizeGeneratedTsxCompat(source, { mode: "final" }));
   } catch {
-    return compileCard(filename, normalizeGeneratedTsx(source, { mode: "streaming" }));
+    return compileCard(filename, normalizeGeneratedTsxCompat(source, { mode: "streaming" }));
   }
 };
 

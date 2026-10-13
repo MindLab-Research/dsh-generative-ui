@@ -90,6 +90,11 @@ for (const [name, entry] of Object.entries(PAIRS)) {
   });
 }
 
+test("SELECTION-WITHOUT-STATE ignores disclosure expansion state", () => {
+  const source = `items.map((item) => { const same = item.id === picked; return <Disclosure>{({ open }) => <button aria-expanded={open} className={\`row \${open ? "open" : ""}\`} />}</Disclosure> })`;
+  expect(SCREENS["SELECTION-WITHOUT-STATE"](source)).toBe(false);
+});
+
 /**
  * The `>` inside a JSX handler is what a `[^>]*` regex mistakes for the end of the tag, so an
  * attribute written after `onClick={() => …}` is invisible to it. Three screens have had this

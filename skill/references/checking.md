@@ -44,6 +44,39 @@ or use the host's available process deadline.
 
 Either way, the way to see your work actually run is to write the canvas and look at the panel.
 
+### Mechanical source audit before handoff
+
+Run a finite source pass over the complete card before sending or writing it:
+
+- Search `useState(` and every control binding (`value=`, `checked=`, `selected=`,
+  `aria-pressed=`, `aria-checked=`). Inspect every user-editable expression; it must come from
+  `usePersistedState`, while `useState` is reserved for transient UI, request status, abortable
+  work, or visual feedback. A mode or standard that changes a formula, threshold, classification,
+  or explanatory text is persisted input too.
+- For every send/apply/submit handler with an editable draft, verify that it copies the exact current draft snapshot into a separate committed value and then disables/no-ops the draft, or
+  clearly labels a later action as update/resend. The UI must not say sent/applied while rendering
+  a different editable draft.
+- Search action copy for “自动回复”, “选完即”, “submit”, “提交”, and “生成”, then compare each
+  claim with the real handler. A separate Submit means option clicks only change draft state; a
+  claim of automatic reply means the option handler itself sends and guards duplicate sends.
+- For “next person”, “clear progress”, or “reset progress”, inspect the handler rather than the
+  button label. It must functionally update the current persisted object; `setBoard(DEFAULT_BOARD)`,
+  `setBoard(SEED)`, or `cloneFresh(...)` is valid only behind a separately labelled restore-default
+  template action.
+- For a reported or submitted canvas, inspect the serialized payload/key and confirm it includes
+  every editable field, not only `done`, `total`, or another aggregate count. For numeric results,
+  check each label against its formatter and source scale (`fmtWan` vs `fmtYuan`) and run one known
+  sample through the displayed unit.
+
+For an inline card, run the same final check over the complete assistant reply, not only the
+extracted TSX or a cleaned-up transcript: there must be one opener that is exactly ````ui4a/tsx````
+and one closer that is exactly ```` on its own line, with a blank line before the opener. A
+three-backtick `tsx` block, an opener joined to prose, a scratch/example fence, or a second closing
+fence is a protocol failure even when the source itself compiles. If the card owns a calculation,
+conversion, or threshold, remove every computed answer and numeric summary from prose before and after the fence; the card must be the only place that reports it. Quote any glob, regex, or other
+pattern containing `{}` when it appears as JSX text (`{"src/**/*.{ts,tsx}"}`), then run the real
+compile and paint checks again.
+
 **Two mistakes it reports that do not blow up**, both found in real cards written here, and both
 the kind you never notice because the thing still works:
 

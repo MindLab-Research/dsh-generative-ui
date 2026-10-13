@@ -64,6 +64,13 @@ for await (const chunk of streamText({ prompt: `…Return JSON: {"items":[{"titl
 }
 ```
 
+That empty catch is only for the parser around an incomplete frame. Do not wrap the
+`streamText` call or the whole generation in `catch { setData(SEED) }`: a gateway, capability, or
+permission failure is not a valid empty result. Catch non-abort request failures, put the message
+in a visible error state with `aria-live="polite"`, and keep the seed only as an explicitly labelled
+fallback if the card tells the reader that generation failed. An `AbortError` from a newer request
+or unmount may return without an error message.
+
 **Every field is optional until the stream ends.** `partial-json` hands you the object as it
 grows, so an item can arrive with a title and nothing else — and one `item.difficulty.includes(…)`
 on that frame throws inside render, which unmounts the whole card mid-generation. Read every

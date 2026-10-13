@@ -16,7 +16,12 @@ snapshot via the model-side file tools first instead of importing `$dsh/fs`.
 
 `readdir` already returns the metadata needed for a listing. Map its result directly, for example
 `const entries = await readdir(path); entries.map(({ name, type, size }) => …)`. There is no `stat`
-export; do not probe each entry with an invented capability.
+export; do not probe each entry with an invented capability. The `type` values are exactly
+`"file"` and `"directory"`; do not silently rename `directory` to `dir` and then test the wrong
+value. For a recursive browse, prefer one bounded command listing when a command capability is
+available; otherwise list one directory and expand children on demand. A recursive `readdir` walk
+is many round trips and makes a permission error look like an empty tree. Keep the error separately
+and render it in the result region instead of returning `[]` from a catch.
 
 **Anything that is not text goes through `readBytes`.** `readFile` decodes as UTF-8, so a png, a wav
 or a `.mid` read that way comes back with every byte above 0x7f replaced by U+FFFD — corrupt, and

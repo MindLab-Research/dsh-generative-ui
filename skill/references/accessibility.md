@@ -28,6 +28,21 @@
   If it does something when clicked, it is a `<button type="button">`. A `div` with an
   `onClick` is a div.
 
+  If the control opens a panel, use `DisclosureButton`/`DisclosurePanel`, or a controlled
+  disclosure with `open` and `onChange`. Do not put `aria-expanded` on an unrelated button while
+  changing a separate `openPaths` value: `aria-expanded` must mirror the panel that actually
+  changes, and a custom implementation must pair it with an `aria-controls` id. `defaultOpen` is
+  only an initial value; persist and control the open state when the reader should keep it after a
+  remount.
+
+  In a file browser, expanding a row is disclosure, not selecting a file. Keep persisted
+  `openPaths`/`expanded` separate from a persisted `selectedPath`; use `aria-expanded` and
+  `aria-controls` for disclosure, and give the distinct selection control `aria-pressed` or
+  `aria-checked` plus a handler that writes `selectedPath`. If expansion must survive a remount,
+  use one controlled source of truth instead of persisted `defaultOpen` plus an independent
+  internal disclosure state. Do not call an expandable row “selected” unless it performs that
+  selection.
+
   The same rule applies to click-to-edit headings, labels, and rows. Do not put `onClick` on an
   `<h1>`, `<span>`, or other static element and leave keyboard users without a way to enter edit
   mode. Use a real `<button type="button">` with a visible focus style, or render the `<input>`
@@ -204,9 +219,16 @@
 
   This is about state that *persists* after the interaction. A key that lights while held, a row that highlights on hover — those are momentary feedback and want nothing announced; a state that is over before it is read is worse than none.
 - **Every visual change is continuous.** No jump cuts: enter from where the element is, and let exits finish.
-- **A card that animates needs the `motion-reduce:` variant on whatever moves.** Measured across
-  378 real cards: 131 animate and **7** honour the preference. It is not a preference about taste
-  — people turn it on for vestibular disorders and migraine, and a looping demo is exactly what it
+- **Treat reduced motion as a source gate, not a finishing touch.** Before sending, search every
+  `className` for `animate-`, `transition-` (including `transition-transform`), and keyframe utilities and add
+  a matching `motion-reduce:` variant to the same moving element. This includes chevrons and
+  decorative loaders, not only the main content transition. A loading spinner needs
+  `animate-spin` plus its reduced-motion off variant; a reveal or drag affordance needs
+  `transition-transform` plus the matching reduced-motion off variant (for example,
+  `transition-opacity`, `transition-colors`, or `transition-[...]`). Do not leave a keyframe, pulse, spin,
+  bounce, or transform transition unguarded just because it is decorative. Measured across 378
+  real cards: 131 animate and **7** honour the preference. It is not a preference about taste —
+  people turn it on for vestibular disorders and migraine, and a looping demo is exactly what it
   is for. It is one more token beside the transition you already wrote:
 
       <div className="transition-transform duration-150 motion-reduce:transition-none" />

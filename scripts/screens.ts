@@ -312,6 +312,10 @@ export const SCREENS = {
         // Either spelling of "shown as selected": an inline style ternary or a conditional class.
         (/(background|border|color)\s*:\s*[^\n]*\?/.test(block) || /className=\{`[^`]*\$\{[^}]*\?/.test(block)) &&
         /<button/.test(block) &&
+        // Disclosure buttons expose expansion state, not option selection. `open ? rotate : ""`
+        // is the same visual ternary, but `aria-expanded` already gives assistive technology the
+        // state and should not be reported as a missing selection contract.
+        !/<Disclosure\b|aria-expanded=/.test(block) &&
         !/aria-(pressed|selected|checked|current)|role="(radio|tab|option|checkbox|switch)"/.test(block) &&
         // A label that switches on the same flag carries the state, less conventionally but audibly.
         !/aria-label=\{[^}]*\?/.test(block) &&

@@ -41,7 +41,7 @@ const RULES = [
   ["the once-per-turn skill call", "The skill call is once per turn"],
   ["the post-skill build/check path", "use the tools needed to build or check the card"],
   ["export named after an import", "Never name it after something you imported"],
-  ["useState vs useMemo", "holds state"],
+  ["useState vs useMemo", "holds transient UI state"],
   ["Fragment must be imported", "Import every name you write"],
   ["a regex or glob in JSX text", "brace in JSX text is an expression"],
   ["px inside a style object", "is JavaScript, not CSS"],

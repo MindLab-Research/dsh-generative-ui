@@ -144,6 +144,8 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("top-level capability failure must render a visible error");
   expect(entry).toContain("silent fallback to seed data is allowed only around parsing");
   expect(entry).toContain("complete reply must contain one opener and one closer");
+  expect(entry).toContain("remove planning, self-review, scratch code");
+  expect(entry).toContain("exactly one `ui4a/tsx` block");
   const files = readFileSync(join(skillResourceBase.path, "references/files.md"), "utf8");
   expect(files).toContain('`"file"` and `"directory"`');
   expect(files).toContain("prefer one bounded command listing");

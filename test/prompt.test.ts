@@ -28,6 +28,7 @@ import { join } from "node:path";
 const RULES = [
   ["the fence language", `\`${FENCE_LANG}\`, never \`tsx\``],
   ["the final fence protocol pass", "Do a protocol pass before sending"],
+  ["the single user-visible inline fence", "exactly one four-backtick"],
   ["persistence for editable cards", "Every editable inline card gets the same source check"],
   ["the persisted hook import", "Never import it from `react`"],
   ["live displayed values", "Displayed numbers stay live"],

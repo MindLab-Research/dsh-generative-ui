@@ -110,6 +110,7 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("## Authoring order");
   expect(entry).toContain("start the first generation on mount");
   expect(entry).toContain("do not emit an inline fence or an export/re-export fence");
+  expect(entry).toContain("Keep tool work and self-review out of the user-visible reply");
   expect(entry).toContain("exactly four backticks followed by `ui4a/tsx`");
   expect(entry).toContain("Do not call the `generative-ui` skill again with the same name");
   expect(entry).toContain("loan or mortgage calculations");

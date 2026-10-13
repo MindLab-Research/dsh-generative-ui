@@ -14,7 +14,7 @@ Follow this order before drafting source:
 1. For any interactive card, read `references/lifetime.md` first and wait for the result; add `accessibility.md` when the card has selection, status, motion, or disclosure. Do not write a draft fence while those reads are pending.
 2. Choose one surface before exploring. A request to save, reuse, or edit later starts with the first usable `.dsh/ui4a/canvases/<id>.ui4a.tsx` write and ends with a short prose confirmation; do not emit an inline fence or an export/re-export fence for that Canvas. An inline card writes no Canvas.
 3. For an open answer space such as names, recommendations, meals, or other model-generated content, start the first generation on mount. A fixed seed or pool is not the answer; it is only an explicitly labelled fallback after a visible request error. Keep loading, empty, error, and retry states in the card.
-4. Before handing over, check the source and the complete visible reply. An inline reply has one exact four-backtick `ui4a/tsx` opener and closer; remove planning, scratch drafts, duplicate fences, and computed numeric prose outside the fence.
+4. Keep tool work and self-review out of the user-visible reply: do not narrate reading, checking, writing, compiler output, or scratch-file cleanup. Before handing over, check the source and the complete visible reply. An inline reply has one exact four-backtick `ui4a/tsx` opener and closer; remove planning, scratch drafts, duplicate fences, and computed numeric prose outside the fence.
 
 ## Trigger gate
 

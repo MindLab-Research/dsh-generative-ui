@@ -24,6 +24,20 @@ something you did not think of. Yours is the interface; the content is theirs.
 
 It inherits the app's model, so there is no key to ask for and no setup.
 
+For an open answer space, make the first `streamText` call during the initial mount/effect and
+render its streamed items as they arrive. A “regenerate” or “换一批” control may start another
+request, but it cannot be the only path that produces the initial answer. Do not present a fixed
+`SEED`/`POOL` as the requested result. If you keep fallback items, label them as fallback only
+after a failed request, show the request error in the card, and let the reader retry. Filter empty
+items, deduplicate them, and cap the final list to the requested count before rendering.
+
+If the reader can select, revisit, or submit one of the generated items, the batch is card-owned
+state too: persist it, or skip the initial request while a persisted batch is available. A
+persisted selection must still be present in the displayed batch after a remount or regeneration;
+do not pair an old selected answer with a newly generated list that no longer contains it. When
+regeneration or a style change intentionally replaces the batch, clear the old draft/answer before
+rendering the new candidates, or disable that action after commit and explain why.
+
 **A second call must cancel the first.** Regenerating as the user types, or offering a Stop
 button, means two generations in flight and the reader sees whichever finishes last — not the
 newest. Pass an `AbortController`'s signal in the options and abort the previous one; that

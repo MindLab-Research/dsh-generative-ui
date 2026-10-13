@@ -118,6 +118,7 @@ for (const [name, phrase] of SKILL_RULES) {
 }
 
 const SECTIONS = [
+  "Authoring order",
   "Trigger gate",
   "Is this a UI at all",
   "Inline or canvas",

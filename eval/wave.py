@@ -57,7 +57,7 @@ def freeze(round_dir: pathlib.Path) -> pathlib.Path:
     # Exactly what `package.json`'s `files` and `dsh.bundle.patch` name. Copying only lib/ and
     # types/ left out `cordis.patch.yml`, and dsh refuses to boot at all without the overlay a
     # plugin declares — `failed to read overlay …: ENOENT`, before a single run reaches a model.
-    for name in ("package.json", "cordis.patch.yml", "lib", "types"):
+    for name in ("package.json", "cordis.patch.yml", "lib", "skill", "types"):
         source = REPO / name
         if not source.exists(): sys.exit(f"wave: {source} is missing — run `bun run build` first")
         (shutil.copytree if source.is_dir() else shutil.copy2)(source, frozen / name)

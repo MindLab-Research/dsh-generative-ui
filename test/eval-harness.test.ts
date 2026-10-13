@@ -35,11 +35,25 @@ test("a hung run is reported separately from a dead one", () => {
 });
 
 test("the reply path is printed, so a caller can read the card", () => {
-  expect(script).toContain("reply=$out");
+  expect(script).toContain("reply=$visible");
+  expect(script).toContain("raw=$out");
+});
+
+test("the measured reply comes from visible assistant text blocks", () => {
+  expect(script).toContain('bun "$here/scripts/visible-reply.ts" - > "$visible"');
+  expect(script).toContain("fences=$(awk");
+  expect(script).toContain('"$visible")');
+  expect(script).toContain('"$visible.canvases"');
+});
+
+test("a frozen eval plugin carries the progressive skill references", () => {
+  expect(readFileSync("eval/wave.py", "utf8")).toContain('"skill"');
 });
 
 test("the trigger runner invokes the Bash evaluator and counts only complete four-backtick cards", () => {
-  expect(readFileSync("scripts/triggers.sh", "utf8")).toContain('bash "$d/eval.sh"');
+  const triggers = readFileSync("scripts/triggers.sh", "utf8");
+  expect(triggers).toContain('bash "$d/eval.sh"');
+  expect(triggers).toContain("reply=$(print -r --");
   expect(script).toContain('if ($0 == "````ui4a/tsx")');
   expect(script).toContain('if ($0 == "````" && open)');
 });

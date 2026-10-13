@@ -107,6 +107,9 @@ test("the progressive entrypoint hands durable requests to the first canvas writ
 
 test("the progressive entrypoint keeps the inline fence and reference-read contracts", () => {
   const entry = skillEntry("types.json", "standalone.json", true);
+  expect(entry).toContain("## Authoring order");
+  expect(entry).toContain("start the first generation on mount");
+  expect(entry).toContain("do not emit an inline fence or an export/re-export fence");
   expect(entry).toContain("exactly four backticks followed by `ui4a/tsx`");
   expect(entry).toContain("Do not call the `generative-ui` skill again with the same name");
   expect(entry).toContain("loan or mortgage calculations");
@@ -125,8 +128,10 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("Keep displayed values live");
   expect(entry).toContain("never `5 miles = {format(km)}`");
   expect(entry).toContain("Keep units and formulas on the same scale");
+  expect(entry).toContain("A zero interest rate is valid");
   expect(entry).toContain("do not output its computed answer or numeric summary anywhere outside the fence");
   expect(entry).toContain("Keep status text readable in both themes");
+  expect(entry).toContain("Do not use hex, rgb, or hsl utility colours");
   expect(entry).toContain("A hover-only action must remain visible");
   expect(entry).toContain("Run this source gate immediately before sending or writing");
   expect(entry).toContain("reset-for-next-person or reset-progress action transforms the current persisted object");
@@ -149,9 +154,13 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   const files = readFileSync(join(skillResourceBase.path, "references/files.md"), "utf8");
   expect(files).toContain('`"file"` and `"directory"`');
   expect(files).toContain("prefer one bounded command listing");
+  expect(files).toContain("A timed-out or failed command is an\nerror state");
   const ai = readFileSync(join(skillResourceBase.path, "references/ai.md"), "utf8");
   expect(ai).toContain("only for the parser around an incomplete frame");
   expect(ai).toContain("visible error state");
+  expect(ai).toContain("first `streamText` call during the initial mount/effect");
+  expect(ai).toContain("the batch is card-owned\nstate too: persist it");
+  expect(ai).toContain("clear the old draft/answer before\nrendering the new candidates");
   const checking = readFileSync(join(skillResourceBase.path, "references/checking.md"), "utf8");
   expect(checking).toContain("complete assistant reply");
   expect(checking).toContain("numeric summary from prose before and after the fence");

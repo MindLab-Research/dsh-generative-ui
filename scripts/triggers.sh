@@ -41,7 +41,8 @@ while IFS='|' read -r rule prompt seed; do
   else
     # A miss is the only outcome worth reading, so keep the path — the reply is the evidence for
     # whether the rule is wrong or the prompt merely did not need a card.
-    printf 'PROSE   %-30s %s\n         reply: %s\n' "${rule:0:30}" "$prompt" "${out##* }"
+    reply=$(print -r -- "$out" | grep -oE 'reply=[^ ]+' | cut -d= -f2 | head -1)
+    printf 'PROSE   %-30s %s\n         reply: %s\n' "${rule:0:30}" "$prompt" "$reply"
     misses=$((misses+1))
   fi
 done < "$d/trigger-cases.txt"

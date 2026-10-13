@@ -23,6 +23,12 @@ available; otherwise list one directory and expand children on demand. A recursi
 is many round trips and makes a permission error look like an empty tree. Keep the error separately
 and render it in the result region instead of returning `[]` from a catch.
 
+The first browse render should contain bounded metadata, not the contents of every file. If a
+command is used, bound the traversal and prune heavy/generated directories; inspect its exit code,
+timeout flag, and stderr before treating stdout as a result. A timed-out or failed command is an
+error state, and empty stdout is an explicit empty state only after a successful command. Read one
+file after the reader opens it, rather than running one unbounded `find`/`cat` over the workspace.
+
 **Anything that is not text goes through `readBytes`.** `readFile` decodes as UTF-8, so a png, a wav
 or a `.mid` read that way comes back with every byte above 0x7f replaced by U+FFFD — corrupt, and
 silently so. And there is **no HTTP route that serves workspace files**: `<img src={`/${path}`}>`

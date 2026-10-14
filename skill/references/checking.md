@@ -34,6 +34,10 @@ resolves mapped `$dsh/*` imports as `any`: a valid `usePersistedState<T>` can pr
 derived `any` diagnostics, while a nonexistent mapped export can be missed. Compare those calls
 against the installed declarations and the capability reference; do not change correct code just
 to make these false diagnostics disappear. Inspect every other diagnostic and fix real source errors.
+That `any` can also hide a real error in a local member chain: if a persisted key selects an entry
+from a typed record, compare the full render expression with the declared entry shape (for example,
+`Record<Goal, Item[]>` yields an array, so use `tracks[goal].filter(...)`, not
+`tracks[goal].items.filter(...)`). Check the initial render path before calling the card working.
 Treat a non-zero exit, command-not-found, timeout, missing import map, or missing report as
 **unchecked**; if a checker limitation remains, say the static check did not pass and verify
 the live card when available. Rerun after source edits or a corrected invocation, not unchanged input; only a fresh zero for that
@@ -56,6 +60,7 @@ Run a finite source pass over the complete card before sending or writing it:
 - For every send/apply/submit handler with an editable draft, verify that it copies the exact current draft snapshot into a separate committed value and then disables/no-ops the draft, or
   clearly labels a later action as update/resend. The UI must not say sent/applied while rendering
   a different editable draft.
+- For a generated batch, clear an uncommitted pick before a refresh starts and make the submit handler verify that the pick belongs to the successful batch for the active filters. A disabled-looking button alone is not a guard; test a filter change or regeneration with a previous pick still stored.
 - Search action copy for “自动回复”, “选完即”, “submit”, “提交”, and “生成”, then compare each
   claim with the real handler. A separate Submit means option clicks only change draft state; a
   claim of automatic reply means the option handler itself sends and guards duplicate sends.

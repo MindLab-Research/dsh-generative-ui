@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Append a dated section to CLAUDE.md, in date order.
+"""Append a dated section to `docs/measurements-log.md`, in date order.
+
+The dated record lives there, not in CLAUDE.md — the design doc is `CLAUDE.md` plus the `docs/`
+files that hold its evidence, and it keeps each lesson once rather than one section per session
+(`test/record-structure.test.ts` polices that).
 
 Written after making the same mistake twice in one session: inserting a section by anchoring on a
 neighbouring heading, which puts a 2026-08-24 entry above 2026-08-23 ones and fails
@@ -12,7 +16,7 @@ import re, sys
 
 date, title = sys.argv[1], sys.argv[2]
 body = sys.stdin.read().rstrip()
-path = "CLAUDE.md"
+path = "docs/measurements-log.md"
 text = open(path).read()
 
 headings = [(m.start(), m.group(1)) for m in re.finditer(r"^### .*\((\d{4}-\d{2}-\d{2})\)$", text, re.M)]

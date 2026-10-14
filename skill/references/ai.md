@@ -38,10 +38,13 @@ persisted selection must still be present in the displayed batch after a remount
 do not pair an old selected answer with a newly generated list that no longer contains it. Keep a
 preview draft and the one-time submitted answer separate. On regenerate, style, or filter changes,
 clear the uncommitted draft, keep the last successful batch while the request runs, and show any
-streamed items as provisional. Replace the persisted batch when the new one succeeds; if it fails,
+streamed items as provisional. Label a retained batch as previous while refreshing and prevent its
+items from being submitted as new results; an explicit choice to use previous results is fine.
+Replace the persisted batch when the new one succeeds; if it fails,
 clear the current request's preview, show the error, and reveal the last successful batch. Store the
-batch's generating style/filter with its items and label an old batch as old while a new filter is
-selected; never imply those retained items match the new filter. Do not let a provisional item be
+batch's generating style/filter with its items and compare it to the current filter after the same
+normalization (for example, trim both). Label an old batch as old while a new filter is selected;
+never imply those retained items match the new filter. Do not let a provisional item be
 submitted as if it were in the persisted batch. A partial chunk must never clear or overwrite a
 committed answer. After the answer is committed, disable replacement controls or require an explicitly
 labelled new-question action; do not silently turn a sent answer back into an uncommitted choice.

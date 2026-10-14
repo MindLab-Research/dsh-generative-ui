@@ -25,6 +25,7 @@ describe("mapNotes", () => {
   test("with only a type map, build and dev are called out as unsupported", () => {
     const notes = mapNotes("types.json", undefined);
     expect(notes).toContain(CAPABILITY_PREFIX);
+    expect(notes).toContain("check <file> -i types.json");
     expect(notes).toContain("`build` and `dev` want runnable JS and will fail on it");
     // Nothing may promise a second map that is not there.
     expect(notes).not.toContain("-i stub.json");
@@ -32,6 +33,7 @@ describe("mapNotes", () => {
 
   test("with both maps, build gets the stub map by name", () => {
     const notes = mapNotes("types.json", "stub.json");
+    expect(notes).toContain("check <file> -i types.json");
     expect(notes).toContain("-i stub.json");
     expect(notes).toContain("build <file>");
     // The earlier wording must not survive alongside the command that contradicts it.
@@ -110,7 +112,7 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("## Authoring order");
   expect(entry).toContain("start the first generation on mount");
   expect(entry).toContain("do not emit an inline fence or an export/re-export fence");
-  expect(entry).toContain("Keep tool work and self-review out of the user-visible reply");
+  expect(entry).toContain("Do not send interim assistant text while working");
   expect(entry).toContain("exactly four backticks followed by `ui4a/tsx`");
   expect(entry).toContain("Do not call the `generative-ui` skill again with the same name");
   expect(entry).toContain("loan or mortgage calculations");

@@ -624,9 +624,12 @@ optional until the end — `partial-json` hands out objects whose fields have no
 missing one throws inside render.
 
 **`-i` is mandatory once a card imports `$dsh/*`**, or `check` reports `Cannot find module '$dsh/chat'` on every
-such line and the model goes and "fixes" it. But the `.d.ts` are **not actually loaded**: `-i` suppresses TS2307
-and nothing more, so it buys silence, not signal. Use `npx`, not `bunx` — bun rejects pkg.pr.new's long form —
-and `@main`, not a SHA, so the instruction does not rot.
+such line and the model goes and "fixes" it. The current checker resolves mapped imports as `any` rather than
+typing their exports: a valid generic call can raise TS2347, and a nonexistent export can pass. Verify those
+calls against the installed declarations and report a nonzero check honestly; do not change correct source to
+silence mapped-import diagnostics. Use the type import map for `check`/`lint`, not the standalone `build` map.
+`bunx --yes genui@https://pkg.pr.new/MindLab-Research/macaron-genui-demo/@genui/cli@main` works with a named
+specifier (a bare URL does not); keep `@main` so the instruction does not rot.
 
 **Why trigger rules read the way they do.** The model reads "fixed" as *known to me*, so every framing about
 variable content argued past it; the test that works is **enumerability** — three-day Tokyo itineraries is not a

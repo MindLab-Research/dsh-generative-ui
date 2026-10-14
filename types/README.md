@@ -7,6 +7,11 @@ Two import maps, because the commands want different things:
 | `importmap.json` | `genui check`, `genui lint` | the `.d.ts` beside it |
 | `standalone/importmap.json` | `genui build`, `genui dev` | generated JS stubs |
 
+The current `genui check` resolves mapped `$dsh/*` imports but treats their exports as `any`.
+It can report TS2347 for a valid generic capability call and miss a nonexistent export. The
+type declarations remain the source for manual signature checks; `check.ts` tests that they
+match the runtime independently of the CLI.
+
 `build` and `dev` produce a page with no dsh around it, so the capabilities genuinely cannot
 work there — the conversation, the model and the workspace all live in the harness. The stubs
 make such a card *build* anyway: each call warns to the console and returns an empty value of

@@ -1,8 +1,8 @@
 ## Check it before you hand it over
 
 A canvas is a file, so you can run a checker over it. `@genui/cli` validates exactly this
-kind of TSX. Substitute the type import map path printed in the skill entrypoint; if it says
-none is installed, omit `-i` and verify harness calls in the live panel:
+kind of TSX. Use the `check` import map path and command printed in the skill entrypoint, not
+the standalone `build` map; if no type map is installed, omit `-i` and verify harness calls in the live panel:
 
 ```
 BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache" bunx --yes genui@https://pkg.pr.new/MindLab-Research/macaron-genui-demo/@genui/cli@main check <file> -i <type import map from the skill entrypoint>
@@ -13,32 +13,32 @@ argument as `<name>@<spec>`, so a bare URL gives it an empty name and it stops a
 `unrecognised dependency format` before fetching anything. Any name works; it is a label, not a
 lookup.
 
-If bun is not there, in order:
+If Bun is unavailable, use pnpx with the same type map:
 
 ```
-pnpx --config.blockExoticSubdeps=false https://pkg.pr.new/MindLab-Research/macaron-genui-demo/@genui/cli@main check <file>
-npm_config_cache="$TMPDIR/npm-cache" npx --yes https://pkg.pr.new/MindLab-Research/macaron-genui-demo/@genui/cli@main check <file>
+pnpx --config.blockExoticSubdeps=false https://pkg.pr.new/MindLab-Research/macaron-genui-demo/@genui/cli@main check <file> -i <type import map from the skill entrypoint>
 ```
 
-Both take the bare URL. The pnpm flag is **not** optional — the CLI pulls `@genui/unocss` by URL
+The pnpx command takes the bare URL. The pnpm flag is **not** optional — the CLI pulls `@genui/unocss` by URL
 as well, and pnpm refuses URL-resolved SUBdependencies by default, so without it you get
 `ERR_PNPM_EXOTIC_SUBDEP` naming a package you never asked for. Do **not** add
 `--config.cacheDir` beside it: pnpm then loses the package's own bin and dies with
 `spawn cli ENOENT`, which reads like the package is broken and is not. It needs no cache redirect
 anyway — its store is the one of the three your sandbox lets you write.
 
-**The other two do**, and the reason is worth knowing because it disguises itself. Sandboxed,
-`touch ~/.npm/_cacache/x` and `touch ~/.bun/install/cache/x` both come back
-`Operation not permitted`; the directories exist, they are simply not yours to write from in
-there. npm reports this as `EPERM mkdtemp` **and a message about root-owned files**, which sends
-you looking for a permissions problem in your home directory that is not there. `$TMPDIR` is
-writable, so pointing each cache at it is the whole fix.
+**Bun does need the cache redirect** in a sandbox where `~/.bun/install/cache` is not writable.
+`$TMPDIR` is writable, so point its install cache there.
 
-`check` includes TypeScript diagnostics; `lint` is the faster syntax-only pass. Treat a non-zero
-exit, command-not-found, timeout, missing import map, or missing report as **unchecked**. Inspect
-the exit code and output, fix the current Canvas source, and run the checker again after each edit;
-only a fresh zero result for that exact file supports saying it was checked. If the checker is not
-available, say the static check was not run and verify the live panel instead. Do not prepend a
+`check` includes TypeScript diagnostics; `lint` is the faster syntax-only pass. The current CLI
+resolves mapped `$dsh/*` imports as `any`: a valid `usePersistedState<T>` can produce TS2347 and
+derived `any` diagnostics, while a nonexistent mapped export can be missed. Compare those calls
+against the installed declarations and the capability reference; do not change correct code just
+to make these false diagnostics disappear. Inspect every other diagnostic and fix real source errors.
+Treat a non-zero exit, command-not-found, timeout, missing import map, or missing report as
+**unchecked**; if a checker limitation remains, say the static check did not pass and verify
+the live card when available. Rerun after source edits or a corrected invocation, not unchanged input; only a fresh zero for that
+exact file supports saying it passed. After real source errors are fixed and applicable checks finish,
+hand over the card instead of spending another round on optional polish. Do not prepend a
 platform-specific `timeout` command when the host does not provide it; invoke the checker directly
 or use the host's available process deadline.
 
@@ -69,8 +69,10 @@ Run a finite source pass over the complete card before sending or writing it:
   sample through the displayed unit.
 - For an expression explorer, test meaning as well as compilation: check a range step against
   multiple expected matches (for example, `5/10` minutes includes `:05`, `:15`, and `:25`), and
-  check rare calendar matches against a search horizon long enough to reach one. Do not call a
-  valid sparse expression impossible because a short preview window found no match.
+  reject malformed fields such as `*/` or `/5`; check rare calendar matches against a search
+  horizon long enough to reach one. Do not call a valid sparse expression impossible because a
+  short preview window found no match. If a preview says "next runs", advance its clock while the
+  card is open and clean up its timer on unmount; an old `new Date()` result becomes past tense.
 
 For an inline card, run the same final check over the complete assistant reply, not only the
 extracted TSX or a cleaned-up transcript: there must be one opener that is exactly ````ui4a/tsx````
@@ -116,8 +118,7 @@ yours to get right.
 Skip it for a small inline block you can read in one screen. Run it on anything long, and on
 anything you are about to leave in the workspace as a canvas.
 
-**Read the report, do not obey it.** Run over 378 real cards it reported something on 136 of
-them, and 97 of those were `implicitly has an 'any' type` on a lambda parameter — a card that
-runs perfectly. Annotating every parameter to quiet it costs lines and buys nothing. The lines
-worth acting on name a *mechanism* that is wrong (a conflicting declaration, a duplicate key, a
-name that does not exist, a comma operator), not a type that could be narrower.
+**Read the report, do not obey it blindly.** A mapped `$dsh/*` import can propagate `any` into
+lambda parameters; annotating only to silence those secondary diagnostics adds no safety. An
+`implicitly has an 'any' type` elsewhere may hide a real bug, so trace its source. Act on wrong
+mechanisms too: conflicting declarations, duplicate keys, unknown names, and comma operators.

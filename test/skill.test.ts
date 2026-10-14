@@ -57,6 +57,7 @@ test("the packaged entrypoint and reference base agree with the registration", (
   expect(SKILL_DESCRIPTION).toContain("learning plan or checklist");
   expect(SKILL_DESCRIPTION).toContain("recommendations or option requests");
   expect(SKILL_DESCRIPTION).toContain("saved checklists, reusable templates");
+  expect(SKILL_DESCRIPTION).toContain("anything to save, reuse, or edit later");
   expect(SKILL_DESCRIPTION).toContain("之后每次复用");
   expect(SKILL_DESCRIPTION).toContain("改改再用");
   expect(SKILL_DESCRIPTION).toContain("unit conversion");

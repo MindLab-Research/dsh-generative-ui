@@ -16,6 +16,10 @@ import type {} from "@deepseek-ai/dsh-client-locale/client";
 // must stay type-only: `sidebar-right` is not in PLATFORM_MODULES, so a value import would bundle
 // a second copy of the registry instead of reaching the host's `reflect.provide` singleton.
 import type {} from "@deepseek-ai/dsh-client-ui-sidebar-right/client";
+import type { SlotCore } from "@deepseek-ai/dsh-client-ui-slots";
+
+/** The slot service's declared-but-untyped half: `inject` defers a registration until the seat exists. */
+type SlotsInject = { inject<T>(name: string, body: () => T): () => void };
 import { GenUISurface } from "./runtime/GenUISurface.tsx";
 import { cancelPendingReport, cardRendered, reportCardError } from "./runtime/report-error.ts";
 import { disposeCompiler } from "./runtime/compiler.ts";
@@ -173,6 +177,13 @@ export function apply(ctx: ClientContext): void {
   let sidebarArrived = false;
   ctx.inject(["slots", "sidebarRightTabs", "sidebarRight"], (scoped) => {
     sidebarArrived = true;
+    // `slots` is not merged onto cordis's `Context` by any package's `declare module` — nothing
+    // in the tree declares it, so the property is genuinely absent from the type while present at
+    // runtime. Narrowed to the service's own class rather than left as `any`, so `register`'s
+    // generics still check the seat name and the composed props (§4's `as unknown as` precedent:
+    // this dodges a client-side type gap, not the runtime inject check, which still applies).
+    // `inject` is on the service wrapper rather than on `SlotCore` itself.
+    const slots = (scoped as unknown as { slots: SlotCore & SlotsInject }).slots;
     // Order matters: `openResource` throws on an address no type claims, so the type has to be
     // registered before anything can try to open one.
     scoped.effect(() => scoped.sidebarRightTabs.register(canvasTabDefinition), "dsh-generative-ui: canvas tab type");
@@ -182,8 +193,8 @@ export function apply(ctx: ClientContext): void {
         // `slot "..." is not declared` (§2.4). `inject` is a factory: the framework resolves the
         // session and calls it, which is what lets the body read under the address's own session
         // rather than whichever one the reader happens to have on screen.
-        scoped.slots.inject("sidebar.right.pane.tab", () =>
-          scoped.slots.register(
+        slots.inject("sidebar.right.pane.tab", () =>
+          slots.register(
             {
               name: "sidebar.right.pane.tab",
               key: CANVAS_TAB_ID,

@@ -63,5 +63,20 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: C
   const resolved = useSubPages(cwd, body === null || id === null ? undefined : { id, code: body, streaming: false });
 
   if (id === null) return null;
-  return <GenUISurface key={id} code={resolved} streaming={false} onError={(error, phase) => onCardError(error.message, phase)} onRendered={onCardRendered} />;
+  // A canvas is inset; an inline card is not. The card is told to fill whatever holds it, so
+  // the two surfaces have to differ HERE rather than in every generated component — inline sits
+  // in the transcript and must share the prose's left edge, while a canvas in a panel with its
+  // own chrome wants breathing room or the title sits on the frame. `24px` is the host's own
+  // number: the Sidebar's guide tab body (`sidebar.right.tab.guide`, the same seat family as
+  // this one) is `padding: 0 24px`.
+  //
+  // The grid row is the old panel's `.dgu-body > * { min-height: 100% }` without a stylesheet:
+  // one row at least as tall as the box and free to grow, so a short card still fills the panel
+  // and a card that asks for `height: 100%` has something to resolve against. `box-sizing:
+  // border-box` keeps that 100% inside the padding rather than overflowing it.
+  return (
+    <div style={{ boxSizing: "border-box", height: "100%", minHeight: 0, overflow: "auto", padding: "24px", display: "grid", gridTemplateRows: "minmax(100%, auto)" }}>
+      <GenUISurface key={id} code={resolved} streaming={false} onError={(error, phase) => onCardError(error.message, phase)} onRendered={onCardRendered} />
+    </div>
+  );
 }

@@ -265,6 +265,7 @@ the shim existed to protect. `lib/client.js` also lost 70KB, the shim's duplicat
 
 - `SlotMap` is stitched together from each package's `declare module`, and **the merge only happens for packages some file actually imports**. Measured 2026-08-23 by asking the type system directly: drop `import type {} from "@deepseek-ai/dsh-client-ui-layout/client"` (line 8 of `src/client/index.ts`) and `"conversation" extends keyof SlotMap` becomes **false** — the keys simply vanish. Note what does *not* happen: `tsc` stays green, because our own code never indexes `SlotMap` by those names. So the failure is silent until someone writes a slot registration that needs one. The entry used to claim TS2344 here; removing the *package* raises TS2307 (that same import names it), and removing only the import raises nothing at all. **A type-level trap has to be probed at the type level** — `tsc` passing says nothing about a merge that did not occur.
 - `allowImportingTsExtensions` must be on, because the source imports across files with `.ts` / `.tsx` suffixes.
+- **`ctx.slots` is not on cordis's `Context` at all.** No package's `declare module` puts it there — checked every `.d.ts` in the tree — while the service is plainly present at runtime and `sidebar-files` / `documentpreview` call `ctx.slots.register(...)` from their own JS. So `scoped.slots` is a type gap rather than a missing service, and it is narrowed to the service's own `SlotCore` (which keeps `register`'s generics checking the seat name and the composed props) plus a one-line structural type for `inject`, which lives on the wrapper rather than on `SlotCore`. Same precedent as §4's `as unknown as`: this dodges a client-side type hole, not the runtime inject check. `sidebarRight` / `sidebarRightTabs` **are** merged — `sidebar-right` declares both.
 
 ## 3. The ui4a contract
 
@@ -438,6 +439,18 @@ variable. Those go through `OPAQUE_WRITE` — the code text mentions `canvases` 
 the directory listing again, opening whatever **appeared** since the last one. The first listing is
 a BASELINE and opens nothing: a workspace already holding seventeen canvases must not get
 seventeen tabs. The 17-canvas case is real, and it is what the old `CanvasLauncher` was listing.
+
+**A canvas is inset; an inline card is not.** The card is told to fill whatever holds it, so the two
+surfaces have to differ in the *holder*, never in every generated component: inline sits in the
+transcript and must share the prose's left edge (a margin there reads as an indent the surrounding
+text does not have), while a canvas lives in a panel with its own chrome and its title otherwise
+sits on the frame. `CanvasBody` therefore pads at **24px** — the host's own number, taken from the
+Sidebar's guide tab body (`sidebar.right.tab.guide`, `padding: 0 24px`, the same seat family as
+this one) rather than invented. Measured in the live host after the change: the surface sits 24px
+inside the wrapper on both sides, and the canvas now left-aligns with the tab strip's own content
+where before it hung outside it. The grid row is the old panel's `.dgu-body > * { min-height: 100% }`
+without a stylesheet — one row at least as tall as the box and free to grow, so `height: 100%` still
+has something to resolve against and `box-sizing: border-box` keeps that 100% inside the padding.
 
 ## 3.65 `$dsh/*`: what generated code can call back into
 

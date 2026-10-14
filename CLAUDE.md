@@ -26,7 +26,7 @@ Dev pins moved to `0.2.0-rc.1` as a set (the manifest is a version SET, not ten 
 
 ## In one sentence
 
-A Web plugin for the DeepSeek Harness (dsh): the model writes TSX into the workspace, the Web half **compiles it as it streams and renders it with state preserved** into live UI — inline cards in the chat stream, canvas views in the side panel.
+A Web plugin for the DeepSeek Harness (dsh): the model writes TSX into the workspace, the Web half **compiles it as it streams and renders it with state preserved** into live UI — inline cards in the chat stream, canvas views as tabs in the host's right Sidebar.
 
 The rendering stack is `partial-tsx` + `partial-react` + `@esm.sh/tsx`, the same as `../ui4a-playground`. **That one owns its host; this one is a guest in someone else's** — nearly all the difference lives in §2.
 
@@ -141,9 +141,23 @@ debugging a report that "the plugin does nothing" — ask which 模式 the sessi
 
 | Slot | kind | Use |
 | --- | --- | --- |
+| `sidebar.right.pane.tab` | keyed, `scope: 'session'` | **Canvas tab body.** Keyed by the tab definition's `id`, not its `kind` |
+| `sidebar.right.pane.tab.title` | keyed, `scope: 'session'` | The canvas tab's chip text; omit and the chip keeps the title captured at open |
 | `conversation.chat.node` | keyed | **Inline cards.** Unregistered kinds degrade gracefully into a JsonBlock |
-| `conversation.view` | list | **Canvas view tab**, alongside Conversation / Trace |
 | `shell.overlay` | list | Frame-wide overlay, available if we need it |
+
+This table used to claim `conversation.view` as a "Canvas view tab". **That row never existed in
+code** — measured 2026-09: `ctx.slots` appears **zero times** under `src/`, and `dsh-client-ui-slots`
+was a peer dep nobody imported. Canvases were a DOM portal instead (§3.6). The row is gone rather
+than corrected, because the claim was load-bearing for a reader: it said the canvas was already a
+first-class host surface, which made the hand-rolled column look like a stopgap nobody got round to
+replacing rather than the only thing on offer at the time.
+
+**The canvas now lives in the right Sidebar as a registered tab type** (§3.6), which is the seam the
+host actually ships for this: `dsh-client-ui-sidebar-right` owns a tab-type registry, and its own doc
+says *"a tab type may ship from outside this repository"* with `priority: 'extension'` defined as *"a
+type from outside the product"* — the band that outranks every viewer the product ships. The
+`sidebar-files` / `browser` / `terminal` / `documentpreview` packages are all just tab types; so are we.
 
 **`details` (the right-hand column) is off-limits — and as of 2026-08-23 the mechanism below can no longer be found.** Checked against rc.8: the shell bundle contains exactly one `kind:"single"` and it belongs to the `root` slot (`declaredBy: "(built-in)"`), while `conversation.details` appears **nowhere in any implementation or in the shell bundle** — only in two READMEs of `dsh-client-ui-conversation`, whose text describes tool presentation dispatching through `conversation.chat.node`, the slot we already use. So the specific chain recorded here cannot be reproduced. Kept as a prohibition anyway: it describes something we deliberately do not do, the priority mechanic that makes a `single` slot evictable is unchanged, and nothing was gained by registering there. **Treat the reasoning below as history, not as current fact.** It's `kind: 'single'` and currently held by ui-conversation's `DetailsPanel`. A dynamically loaded package gets a ctx facade that overrides priority (decrementing into the negatives per install), so **we necessarily beat the shipped 0** — registering silently evicts DetailsPanel, taking the `conversation.details.tool` sub-slot it declares with it, which **breaks tool-call inspection app-wide**. There is no handoff API.
 
@@ -151,10 +165,12 @@ Registration must be wrapped in `ctx.slots.inject(name, () => ...)`: these slots
 
 ### 2.5 CSS has to mark itself
 
-The loader's `claimStyles(id)` runs `document.querySelectorAll('style:not([data-plugin])')` and **claims every match** for whichever plugin is currently materializing. So every `<style>` this plugin appends must carry `data-plugin="dsh-generative-ui"` itself, or HMR and unload will tear each other's styles out. `injectStyles` in `canvas/mount.ts` is the one place that appends one.
+The loader's `claimStyles(id)` runs `document.querySelectorAll('style:not([data-plugin])')` and **claims every match** for whichever plugin is currently materializing. So every `<style>` this plugin appends must carry `data-plugin="dsh-generative-ui"` itself, or HMR and unload will tear each other's styles out. `injectStyles` is the one place that appends one.
 
-**UnoCSS generates the cards' CSS in the browser, and the panel's own CSS is still hand-written.**
-`panel.css` (compiled into `panel-css.ts`) styles the chrome; everything a *card* writes goes
+**UnoCSS generates the cards' CSS in the browser; the canvas tab has no chrome to style.** The tab
+strip, header, close control and width drag are the host's (§3.6), so there is no hand-written panel
+stylesheet any more — `panel.css` and its compiled `panel-css.ts` went with the column they drew.
+Everything a *card* writes goes
 through `src/client/runtime/uno.ts`, which runs a real generator against the classes in the code
 that just arrived. A build-time pass cannot do it: those classes are typed by the model seconds
 ago and exist in no stylesheet of ours. Responsive is where that shows worst — a build-time sweep
@@ -307,17 +323,62 @@ Details you have to get right:
 - **Hide it when the card paints, not when the claim is made.** Compiling is not the same as having something to look at: mid-stream the default export usually exists while the body is still an empty shell, so hiding at claim time leaves a blank gap that fills in with a pop — with the source sitting right there the whole time. The signal is non-empty text or an `svg` in the mount node (icons and charts carry no text); a wrapper div with layout classes is not. Checked at most once per frame and torn down the moment it fires, because a streaming card mutates thousands of times and `textContent` walks the whole subtree. A card that never paints therefore keeps showing its source, which is the right fallback rather than a bug.
 - **Coalesce the MutationObserver into one frame.** A streaming reply fires dozens of mutations per second, and one sweep per mutation is the textbook way to burn the main thread.
 
-## 3.6 How the canvas panel works
+## 3.6 How the canvas tab works
 
-**Classify by argument shape, not by tool name.** `collect.ts` asks "does this call carry a canvas path" and "does it bring a whole file (`CONTENT_KEYS`), a patch (`PATCH_KEYS`), or neither." Enumerating tool names means the canvas silently dies the day the host renames one or adds another file tool. The easiest of the three to miss is the last: **reading a canvas must not touch its state** — `read` used to mark it dirty and conjure a panel for a canvas this session never wrote, so asking "what's in this file" popped the sidebar open by itself.
+**A canvas is a file kind in the host's right Sidebar, not a column we draw.** `dsh-client-ui-sidebar-right`
+is a docking surface with a tab-type registry: multi-tab, split panes, float/dock, undo, and tab
+state that survives a session switch. The product's own `sidebar-files` / `browser` / `terminal` /
+`documentpreview` packages are nothing but registered tab types, and the registry's own doc says
+*"a tab type may ship from outside this repository"* — `priority: 'extension'` is defined as *"a type
+from outside the product"*, the band that outranks every viewer the product ships. That is us.
+
+What that buys, all of it for free and none of it reimplemented: multiple canvases open at once
+(`multiple: true`), floating and docking, split panes, undo of a layout change, tabs that survive
+switching sessions, and a way back after closing one (the workspace file tree). Before 2026-10 this
+was a hand-rolled `position: fixed` column with its own header, tab strip, close button, width drag
+and a launcher listing every canvas id — ~1,273 lines of chrome for what the host already draws.
+
+**Registration is two stages, and the second is keyed by the definition's `id`, not its `kind`.**
+`sidebarRightTabs.register(definition)` declares what the type *is* (which addresses it recognises,
+how it ranks, what the chip says). The body goes in the `sidebar.right.pane.tab` seat under the same
+`id`. Writing the `kind` there instead is a silent failure — registered, and never receives a tab.
+Both live in `ctx.slots.inject(name, () => …)` / `ctx.effect`, because those seats are declared at
+runtime and registering early throws `slot "..." is not declared`.
+
+We claim canvases by **address**, not by asking: `patterns: ["*.ui4a.tsx"]`. A pattern without `:`
+matches the URI *path* at any depth, so this picks up
+`dsh-resource://file/session/<id>/.dsh/ui4a/canvases/todo.ui4a.tsx` and leaves plain `*.tsx` alone.
+`documentpreview`'s catch-all is `dsh-resource://file/**` at `priority: 'fallback'`; we are
+`extension`, so we take those files off it — which is the point, since a canvas opened as a text
+preview is a source listing where a running app should be.
+
+**Every way into the canvas is already routed by the host.** `dsh-client-ui-chat` sends transcript
+file links to `ctx.sidebarRight.openResource(url)`; the file tree opens rows the same way; the 产物
+chips go through it too. We only supply the *viewer*. The one thing still ours is **auto-open when
+the model writes one** — `collect.ts` finds the write in the transcript and calls
+`openResource(fileAddressFor(sessionId, cwd, path))` itself. `openResource` is idempotent per
+address (two opens of the same address are the same tab), so re-sweeping the transcript does not
+stack tabs.
+
+**Classify by argument shape, not by tool name.** `collect.ts` asks "does this call carry a canvas path" and "does it bring a whole file (`CONTENT_KEYS`), a patch (`PATCH_KEYS`), or neither." Enumerating tool names means the canvas silently dies the day the host renames one or adds another file tool. The easiest of the three to miss is the last: **reading a canvas must not open it** — `read` used to mark it dirty and conjure a panel for a canvas this session never wrote, so asking "what's in this file" popped the sidebar open by itself.
 
 **The data source is tool calls, not a new session event.** The model writes `ui4a/canvases/<id>.ui4a.tsx` with the host's own `write`, and the client reads `root.call.argsRaw` off the snapshot's `tool-call` nodes. No `SessionEventMap` extension, no touching the persistence contract, zero involvement from the Node half.
 
-**But the canvas gets no streaming under the web profile's default PTC mode** (measured 2026-08-20 with a probe inside `calls()`, 5000+ samples): under PTC every tool is called from `run_code`, and the host only exposes `write` as a subCall once `run_code` has **finished**, so the very first `write` frame we see is already `settled: true` with all 14388 characters. The outer `run_code`'s own `argsRaw` is just 165 characters (the calling code, not the file body). The panel therefore appears whole the moment the write lands — 490 samples on a real machine, **0** state changes. **Not re-verified 2026-08-23**, and worth saying why: the claim is about a code path that only exists inside a live PTC session, so it needs a canvas being written while something samples the store. `test/collect.test.ts` covers both branches of the logic (a settled write is not streaming, an unsettled one is), which is a different claim — that the *unsettled* branch is unreachable under PTC cannot be shown from a transcript after the fact. **Corrected an hour later:** the sessions do survive — 183 under `$DSH_HOME/sessions/`, the canvas-splitting run among them, because only the *working directory* is a `mktemp` and the session directory merely encodes its name. The real obstacle is more final: **`settled` is never persisted.** `collect.ts` derives it from a live snapshot's shape (`argsRaw` inline means running, wrapped in `call` means settled), so the 73 frames carrying a canvas path in that session contain no such field. This needs a probe in a live session, not an archive. The `streaming: !call.settled` code is itself correct and would work off-PTC where `write` is a top-level call; the default path just never reaches it. Inline is unaffected (see §3.5).
+**But the canvas gets no streaming under the web profile's default PTC mode** (measured 2026-08-20 with a probe inside `calls()`, 5000+ samples): under PTC every tool is called from `run_code`, and the host only exposes `write` as a subCall once `run_code` has **finished**, so the very first `write` frame we see is already `settled: true` with all 14388 characters. The outer `run_code`'s own `argsRaw` is just 165 characters (the calling code, not the file body). The tab therefore opens whole the moment the write lands — 490 samples on a real machine, **0** state changes. **Not re-verified 2026-08-23**, and worth saying why: the claim is about a code path that only exists inside a live PTC session, so it needs a canvas being written while something samples the store. `test/collect.test.ts` covers both branches of the logic (a settled write is not streaming, an unsettled one is), which is a different claim — that the *unsettled* branch is unreachable under PTC cannot be shown from a transcript after the fact. **Corrected an hour later:** the sessions do survive — 183 under `$DSH_HOME/sessions/`, the canvas-splitting run among them, because only the *working directory* is a `mktemp` and the session directory merely encodes its name. The real obstacle is more final: **`settled` is never persisted.** `collect.ts` derives it from a live snapshot's shape (`argsRaw` inline means running, wrapped in `call` means settled), so the 73 frames carrying a canvas path in that session contain no such field. This needs a probe in a live session, not an archive. The `streaming: !call.settled` code is itself correct and would work off-PTC where `write` is a top-level call; the default path just never reaches it. Inline is unaffected (see §3.5).
 
 `edit`-class tools are the exception: their arguments are a patch, not the full text. Those calls only mark the canvas stale (with an incrementing version as the cache key), and the truth is read back from the file through the Node half's `/dsh-generative-ui/canvas` route. The file is the one source that stays correct under every way of changing it, including edits made outside the agent.
 
-Three traps:
+**The address is the only thing a body gets, and it is enough — but the cwd is not on it.**
+`tab.contentId` is a `dsh-resource://file/session/<sessionId>/<path>` URI;
+`parseFileAddress` (from `@deepseek-ai/dsh-util-workspace-path`) splits it into
+`{scope, sessionId, path}`, and `owningCanvasIdOf(path)` takes the canvas id. The read route
+validates `cwd` against every session's `header.cwd` (§4 — it is a whole-disk oracle otherwise), and
+the address does not carry one, so the body resolves **the session named in the address**. Not the
+current one: several sessions share a workspace, and resolving from "wherever the reader is" runs the
+read under a stranger's allowlist. That is the same bug class §3.65 hit on `$dsh/fs`, where read-only
+mode did not deny until the id was threaded through.
+
+Four traps:
 
 - **A `tool-call` node's data is `{root: {...}}`**, not the assistant's `blocks`.
 - **Tool arguments carry absolute paths**, so contract matching looks for `ui4a/canvases/` as a path suffix and must not anchor at the start.
@@ -327,14 +388,29 @@ Three traps:
   graph: a blank card, nothing in the console, and smoke green throughout. It cost a bisect
   to find, because the symptom is identical to "the model wrote something broken". The guard
   is an identity check in `registerModules` — only a genuine hot-swap invalidates.
-- **The transcript's file links go to the OS, not to us.** `workspaces.openPath` is what both
-  the inline path links and the 产物 chips call, so clicking a canvas the model just wrote
-  opened it in an editor rather than in the panel beside it. We wrap that method: a path the
-  contract recognises shows the panel, everything else forwards untouched. Wrapping someone
-  else's method is a bet on its shape, so the wrapper checks for it and no-ops when absent —
-  losing that bet during registration would take the whole plugin down.
-- **Closing a canvas must leave a way back, and the transcript is not enough of one.** Dismissal only hides, and a canvas outlives the session that wrote it — so a panel fed purely by the current transcript strands both the one just closed and every one written yesterday. `CanvasLauncher` sits where the panel's edge was and offers the whole workspace: the canvas route lists the directory when given no `id` (same cwd allowlist), and a canvas opened that way has no tool call behind it, so its body is read off disk once. The same picker sits in the panel header, so switching to another canvas does not require closing first. Note the repaint signature has to carry that offerable list: closing the last canvas changes nothing about the visible one, so a signature built from the visible canvases alone never repaints and the launcher never appears.
-- **The panel cannot be inserted into AppFrame as a flex child.** The host's column widths exactly fill the viewport, so an inserted column is always pushed offscreen — present in the DOM, correctly sized, and invisible. The answer is `position: fixed` against the right edge plus an equal `padding-right` on the frame.
+- **`SlotMap` only knows `sidebar.right.pane.tab` if something imports the package that declares it.**
+  The `declare module` lives in `dsh-client-ui-sidebar-right`, so a type-only
+  `import type { … } from "@deepseek-ai/dsh-client-ui-sidebar-right/client"` is what merges the key
+  in (it also carries every type we need: `SidebarRightTabDefinition`, `SidebarRightTabInfo`,
+  `ISidebarRight`, `SidebarRightTabParamsMap`). Drop that import and the key vanishes from the map —
+  and `tsc` stays green, because nothing indexes `SlotMap` by name until a registration does. Probe
+  the type level at the type level: assert `"sidebar.right.pane.tab" extends keyof SlotMap`, and
+  watch it flip when the import goes.
+
+**What the old panel had to do by hand, and no longer does.** Three entries below used to be traps
+in their own right; each is now the tab system's job rather than ours, kept here so the next reader
+recognises why the code that answered them is gone.
+
+- *File links go to the OS.* They used to: `workspaces.openPath` opened a canvas in an editor, so we
+  wrapped it. Measured 2026-09 on 0.2.x: `dsh-client-ui-chat` routes file links to
+  `ctx.sidebarRight.openResource(url)`, so the wrapper is deleted — the host now opens the canvas as
+  a tab, which is what the wrapper was faking.
+- *Closing must leave a way back.* A panel fed by the transcript stranded every canvas it did not
+  show, so there was a `CanvasLauncher` listing workspace ids. Tabs persist and the file tree lists
+  `.dsh/ui4a/canvases/`, so reopening is a click on the file.
+- *The panel cannot be a flex child of AppFrame.* True and load-bearing while we drew the column: the
+  host's widths fill the viewport exactly, so an inserted column laid out offscreen. It is moot once
+  the host draws the panel — the sidebar is its own flex participant.
 
 ## 3.65 `$dsh/*`: what generated code can call back into
 

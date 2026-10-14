@@ -131,8 +131,11 @@ Two things follow from the lifetime difference:
   bind the control to its persisted value, or persist the raw editable string too when an invalid
   intermediate token must survive. The one case it cannot reach is a third-party component holding
   its own state:
-  `<Disclosure defaultOpen>` reverts to `defaultOpen` on every remount, and the only way to keep
-  what the reader did is to control it yourself from persisted state.
+  `<Disclosure defaultOpen>` reverts to `defaultOpen` on every remount. Headless UI `Disclosure`
+  has no controlled `open`/`onChange` API, so do not pretend that adding those props persists the
+  state. Use native `<details open={...} onToggle={...}>`, a custom button + panel with
+  `aria-expanded`/`aria-controls`, or a primitive with a documented controlled API, and persist
+  the source of truth.
 
   **A displayed explanation is state too.** If a sentence repeats an input or a derived result,
   render it from that same state or formatter: `{miles} 英里 = {format(km)} 公里`, not `5 英里 =

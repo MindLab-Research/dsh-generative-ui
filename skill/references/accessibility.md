@@ -28,12 +28,14 @@
   If it does something when clicked, it is a `<button type="button">`. A `div` with an
   `onClick` is a div.
 
-  If the control opens a panel, use `DisclosureButton`/`DisclosurePanel`, or a controlled
-  disclosure with `open` and `onChange`. Do not put `aria-expanded` on an unrelated button while
-  changing a separate `openPaths` value: `aria-expanded` must mirror the panel that actually
-  changes, and a custom implementation must pair it with an `aria-controls` id. `defaultOpen` is
-  only an initial value; persist and control the open state when the reader should keep it after a
-  remount.
+  If the control opens a panel, use `DisclosureButton`/`DisclosurePanel` and read Headless UI's
+  `open` render-prop value, or use a native/custom disclosure whose API is actually controlled. Do
+  not put `aria-expanded` on an unrelated button while changing a separate `openPaths` value:
+  `aria-expanded` must mirror the panel that actually changes, and a custom implementation must
+  pair it with an `aria-controls` id. Headless UI `Disclosure` only has `defaultOpen` for its
+  initial state; it does not accept controlled `open`/`onChange`. If the reader should keep the
+  panel after a remount, use `<details open={...} onToggle={...}>`, a custom button + panel driven
+  by persisted state, or a primitive with a documented controlled API.
 
   In a file browser, expanding a row is disclosure, not selecting a file. Keep persisted
   `openPaths`/`expanded` separate from a persisted `selectedPath`; use `aria-expanded` and
@@ -41,7 +43,8 @@
   (or full radio keyboard behavior) plus a handler that writes `selectedPath`. If expansion must survive a remount,
   use one controlled source of truth instead of persisted `defaultOpen` plus an independent
   internal disclosure state. Do not call an expandable row “selected” unless it performs that
-  selection.
+  selection. Do not try to make Headless UI `Disclosure` controlled with `open`/`onChange`; choose
+  the native/custom or controlled primitive described above.
 
   The same rule applies to click-to-edit headings, labels, and rows. Do not put `onClick` on an
   `<h1>`, `<span>`, or other static element and leave keyboard users without a way to enter edit

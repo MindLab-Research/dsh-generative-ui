@@ -37,8 +37,8 @@
 
   In a file browser, expanding a row is disclosure, not selecting a file. Keep persisted
   `openPaths`/`expanded` separate from a persisted `selectedPath`; use `aria-expanded` and
-  `aria-controls` for disclosure, and give the distinct selection control `aria-pressed` or
-  `aria-checked` plus a handler that writes `selectedPath`. If expansion must survive a remount,
+  `aria-controls` for disclosure, and give the distinct pick-one selection control a native radio
+  (or full radio keyboard behavior) plus a handler that writes `selectedPath`. If expansion must survive a remount,
   use one controlled source of truth instead of persisted `defaultOpen` plus an independent
   internal disclosure state. Do not call an expandable row “selected” unless it performs that
   selection.
@@ -149,23 +149,33 @@
 - **Selected state is not a colour.** A group of choices where the picked one differs only by `background` or `border` reads as three identical buttons to anything that is not looking at it — a screen reader, a keyboard user checking where they are, a browser's own find. Put the state on the element:
 
   ```tsx
-  <div role="radiogroup" aria-label="选择场次">
+  const sessionGroupName = useState(() => `session-${crypto.randomUUID()}`)[0] // each card is a separate React root
+  <fieldset>
+    <legend>选择场次</legend>
     {SESSIONS.map((s) => (
-      <button type="button" key={s.id} role="radio" aria-checked={s.id === picked} onClick={() => pick(s.id)}
-        className={s.id === picked ? "picked" : ""}>{s.label}</button>
+      <label key={s.id} className={s.id === picked ? "picked" : ""}>
+        <input type="radio" name={sessionGroupName} value={s.id} checked={s.id === picked} onChange={() => pick(s.id)} />{s.label}
+      </label>
     ))}
-  </div>
+  </fieldset>
   ```
+
+  Native radios provide the pick-one state and arrow-key behavior together. If you build custom
+  `role="radio"` buttons instead, implement roving focus and arrow-key navigation too; a click
+  handler plus `aria-checked` does not complete the keyboard interaction.
 
   **The tell is the ternary you are about to write.** Measured across 378 cards: 95 of the 114 that
   get this wrong express the selection as `background: picked === x ? … : …` — one shape, whatever
   the array is called (`PRESETS`, `options`, `ranges`, `STYLES`, `MODES` all appear). If you are
-  writing a conditional `background` inside a `.map` over choices, the attribute belongs on the
-  same element, and it is the same condition you already typed. The className spelling needs it just
+  writing a conditional `background` inside a `.map` over choices, the state belongs on the
+  same control, and it is the same condition you already typed. The className spelling needs it just
   as much — moving the ternary into a string changes nothing about what is announced:
 
   ```tsx
-  <button type="button" className={`btn${picked === x ? " active" : ""}`} aria-pressed={picked === x}>
+  const presetGroupName = useState(() => `preset-${crypto.randomUUID()}`)[0]
+  <label className={`btn${picked === x ? " active" : ""}`}>
+    <input type="radio" name={presetGroupName} value={x} checked={picked === x} onChange={() => pick(x)} />{x}
+  </label>
   ```
 
   **A disabled control should say why, in its own label.** Two wave-2 cards gate the same form.
@@ -176,7 +186,7 @@
 
   **The row of presets is where this gets dropped.** Measured: three cards answering the same `chmod` question, months apart, each wrote `aria-pressed` on its permission-bit grid and then nothing at all on the preset row twenty lines below — 755, 644, 700 shown as pills, the active one differing only by `background`. `PRESETS.map` is the commonest shape this fires on across 378 cards. A grid of toggles looks like state and a preset row looks like decoration; they are the same widget, and the one that looks like decoration is the one that gets it wrong.
 
-  `aria-pressed` for a standalone toggle, the shape above for a pick-one. It is one attribute beside the ternary you already wrote — and the group wrapper, which is what tells a screen reader these three belong together.
+  `aria-pressed` for a standalone toggle, native radios for a pick-one. The selected state belongs beside the ternary you already wrote; the fieldset and legend tell a screen reader which choices belong together.
 
 - **Getting the attribute right and the pixels wrong is the commoner half.** A vision panel reading
   59 cards raised this in **22% of its verdicts**, in one recurring form: `aria-checked` correctly

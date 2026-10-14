@@ -157,11 +157,11 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(files).toContain("prefer one bounded command listing");
   expect(files).toContain("A timed-out or failed command is an\nerror state");
   const ai = readFileSync(join(skillResourceBase.path, "references/ai.md"), "utf8");
-  expect(ai).toContain("only for the parser around an incomplete frame");
+  expect(ai).toContain("only for parsing an incomplete frame");
   expect(ai).toContain("visible error state");
   expect(ai).toContain("first `streamText` call during the initial mount/effect");
   expect(ai).toContain("the batch is card-owned\nstate too: persist it");
-  expect(ai).toContain("clear the old draft/answer before\nrendering the new candidates");
+  expect(ai).toContain("clear the uncommitted draft, keep the last successful batch");
   const checking = readFileSync(join(skillResourceBase.path, "references/checking.md"), "utf8");
   expect(checking).toContain("complete assistant reply");
   expect(checking).toContain("numeric summary from prose before and after the fence");

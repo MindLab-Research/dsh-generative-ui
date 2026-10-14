@@ -48,11 +48,11 @@ Two things follow from the lifetime difference:
   the result area is where the card earns its existence. **Start `pick` at `null`: a default first
   option is already a choice, so the first render must ask the reader to select one.**
 
-  The option control must visibly write the draft: `aria-pressed={pick === o.id}` goes with
-  `onClick={() => setPick(o.id)}` (or a handler that calls `setPick`). A persisted value that is
+  The option control must visibly write the draft: a native radio's `checked={pick === o.id}` goes
+  with `onChange={() => setPick(o.id)}` (or a handler that calls `setPick`). A persisted value that is
   only read (`pickedId`, `active`) is not wired selection. If the same row opens details, keep
   `openId`/`aria-expanded` as a second state; its disclosure handler must not be the only handler.
-  In a preview flow persist both draft `pick` and submitted `sent`: option click sets `pick` only;
+  In a preview flow persist both draft `pick` and submitted `sent`: changing the option sets `pick` only;
   Submit is disabled when `pick === null || sent !== null` and its guarded handler does
   `setSent(pick); sendMessage(...)`. After submission, keep the displayed selection tied to `sent`
   and disable or no-op further option changes. Use one persisted answer only for instant-choice
@@ -60,9 +60,12 @@ Two things follow from the lifetime difference:
 
       const [sent, setSent] = usePersistedState<string | null>("migration-plan-choice", null)
       const [pick, setPick] = usePersistedState<string | null>("migration-plan-draft", null)
+      const optionGroupName = useState(() => `migration-${crypto.randomUUID()}`)[0]
       const active = sent ?? pick
       …
-      <div className="flex flex-wrap gap-2">…one button per option, aria-pressed={active === o.id}…</div>
+      <fieldset disabled={sent !== null}><legend>选择方案</legend>
+        {OPTIONS.map((o) => <label key={o.id}><input type="radio" name={optionGroupName} value={o.id} checked={active === o.id} onChange={() => setPick(o.id)} />{o.label}</label>)}
+      </fieldset>
       <div className="mt-3">{active === null ? "请选择一个方案" : OPTIONS.find((o) => o.id === active)?.preview}</div>
       <button type="button" disabled={pick === null || sent !== null} onClick={() => { if (pick === null) return; setSent(pick); sendMessage(…) }}>…</button>
 

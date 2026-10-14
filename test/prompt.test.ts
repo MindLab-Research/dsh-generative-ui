@@ -123,7 +123,7 @@ const SECTIONS = [
   "Is this a UI at all",
   "Inline or canvas",
   "Ask with an interface when the request is underspecified",
-  "Say something before it and something after",
+  "Frame the final handoff",
   "Emit the inline block with the exact fence",
   "Read the relevant reference before writing TSX",
   "Checker import maps",

@@ -67,6 +67,10 @@ Run a finite source pass over the complete card before sending or writing it:
   every editable field, not only `done`, `total`, or another aggregate count. For numeric results,
   check each label against its formatter and source scale (`fmtWan` vs `fmtYuan`) and run one known
   sample through the displayed unit.
+- For an expression explorer, test meaning as well as compilation: check a range step against
+  multiple expected matches (for example, `5/10` minutes includes `:05`, `:15`, and `:25`), and
+  check rare calendar matches against a search horizon long enough to reach one. Do not call a
+  valid sparse expression impossible because a short preview window found no match.
 
 For an inline card, run the same final check over the complete assistant reply, not only the
 extracted TSX or a cleaned-up transcript: there must be one opener that is exactly ````ui4a/tsx````

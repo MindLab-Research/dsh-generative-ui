@@ -1,0 +1,91 @@
+/**
+ * Opens a canvas tab when the transcript shows one being written or edited.
+ *
+ * Everything else about a canvas is the tab system's job: closing, reopening, keeping several
+ * open, floating, docking, remembering them across a session switch. This is the one gesture
+ * still ours — the model wrote a file, so show it — and it is deliberately a single call into
+ * `sidebarRight.openResource`, which is idempotent per address: two opens of the same address
+ * are the same tab, so re-sweeping a transcript cannot stack duplicates.
+ */
+import { sessionFileAddress } from "@deepseek-ai/dsh-util-workspace-path";
+import { canvasPath } from "../../contract.ts";
+import { observeTranscript } from "../runtime/observe.ts";
+import { collectCanvases, type CollectedCanvases, type ToolCallView } from "./collect.ts";
+
+export type AutoOpenOptions = {
+  /** Every tool call in the session being swept. */
+  calls: () => readonly ToolCallView[];
+  /** The session being swept — the one whose transcript this is. */
+  sessionId: () => string | undefined;
+  /** Opens the canvas `id` as a tab in `sessionId`. */
+  open: (sessionId: string, id: string) => void;
+};
+
+/**
+ * What state a canvas is in, as a short string. Equal signatures mean nothing to say.
+ *
+ * `"streaming"` is its own value and is never acted on: a write that is still growing would
+ * otherwise open once per token, and each open bumps the tab's navigation revision, which makes
+ * the body re-read the file — a fetch per frame for content that is not written yet. Opening
+ * happens when the stream settles instead.
+ *
+ * `code.length` rather than the code, and `stale`'s count rather than a boolean: the first is
+ * what moves on every frame that matters and on none that do not, and the second is already the
+ * cache version `collect.ts` hands out for a patch.
+ */
+export const openSignature = (id: string, collected: CollectedCanvases): string => {
+  const canvas = collected.canvases.find((entry) => entry.id === id);
+  const stale = collected.stale.get(id) ?? 0;
+  return canvas === undefined ? `stale:${stale}` : canvas.streaming ? "streaming" : `s${stale}:c${canvas.code.length}`;
+};
+
+export function createCanvasAutoOpen({ calls, sessionId, open }: AutoOpenOptions): { sweep: () => void } {
+  /** Last signature acted on, per session and canvas. */
+  const opened = new Map<string, string>();
+  /**
+   * `collectCanvases` walks every argument string by hand, which is what makes it correct on a
+   * half-arrived JSON prefix — and it costs 0.16ms per canvas per sweep. The sweep runs on every
+   * transcript mutation, so a session with 34 canvas calls (the corpus maximum) spent ~5ms per
+   * streamed token re-deriving a result that had not changed. Keyed on the calls' own bytes: a
+   * streamed argument grows, so its length moves on every frame that matters and on none that do not.
+   */
+  let callsKey: string | null = null;
+  let collected = collectCanvases([]);
+
+  const sweep = () => {
+    const allCalls = calls();
+    const key = `${allCalls.length}:${allCalls.reduce((total, call) => total + call.argsRaw.length + (call.settled ? 1 : 0), 0)}`;
+    if (key !== callsKey) {
+      callsKey = key;
+      collected = collectCanvases(allCalls);
+    }
+    const session = sessionId();
+    if (session === undefined) return;
+    // Both maps, because a canvas can reach `canvases` two ways: a write carries a body, and a
+    // patch with no write here synthesizes an empty one. Either can move independently.
+    const ids = new Set([...collected.canvases.map((canvas) => canvas.id), ...collected.stale.keys()]);
+    for (const id of ids) {
+      const signature = openSignature(id, collected);
+      if (signature === "streaming") continue;
+      const mapKey = `${session}\0${id}`;
+      if (opened.get(mapKey) === signature) continue;
+      opened.set(mapKey, signature);
+      open(session, id);
+    }
+  };
+
+  return { sweep };
+}
+
+export function startCanvasAutoOpen(options: AutoOpenOptions): () => void {
+  return observeTranscript(createCanvasAutoOpen(options).sweep);
+}
+
+/**
+ * The address of a canvas, as the tab system spells it.
+ *
+ * Workspace-relative rather than the absolute path a tool argument carries: `canvasIdOf` round-trips
+ * it either way, the host resolves it against the named session's workspace, and an absolute path is
+ * machine-specific — building the address from one is a second way to get the same address wrong.
+ */
+export const canvasAddress = (sessionId: string, id: string) => sessionFileAddress(sessionId, canvasPath(id));

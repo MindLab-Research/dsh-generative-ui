@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 
 /**
  * `eval.sh` is the instrument every prompt measurement goes through, and it has been wrong in ways
@@ -69,11 +69,26 @@ const waveRunning = await (async () => {
 })();
 if (waveRunning) console.log("skipping the timeout test: a wave is running, so `bun run build` will refuse");
 
+// `eval.sh` refuses when the headless profile's plugin symlink resolves to a different checkout
+// than the one running it — correctly, because the run would measure someone else's build. That
+// is the normal state of a nested git worktree, where the profile still points at the main
+// checkout. Skipping says so; failing there would be a red about the directory layout (§6.4:
+// write down what you skipped, because "no failures" has two causes that look identical).
+const pluginLink = `${process.env.DSH_HOME ?? `${process.env.HOME}/.dsh`}/profiles/headless/node_modules/dsh-generative-ui`;
+const linkedHere = (() => {
+  try {
+    return realpathSync(pluginLink) === realpathSync(new URL("..", import.meta.url).pathname);
+  } catch {
+    return false;
+  }
+})();
+if (!linkedHere) console.log(`skipping the timeout test: the profile loads ${pluginLink}, not this checkout`);
+
 // Build first, deliberately. The staleness guard exits 4 BEFORE the timeout can fire, and `src/`
 // goes "newer" than `lib/` for reasons that are not edits at all — a `git checkout` or a restored
 // backup bumps an mtime. Without this the test measures which guard ran first, which is not what
 // it is asking about, and it fails on a tree nobody has changed.
-test.skipIf(!hasDsh || waveRunning)(
+test.skipIf(!hasDsh || waveRunning || !linkedHere)(
   "a run that exceeds EVAL_TIMEOUT reports timeout and exits 3",
   () => {
     // With BUILD_OUTDIR CLEARED, whatever the caller set. The `pre-push` hook sets it so a

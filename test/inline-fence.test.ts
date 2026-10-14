@@ -23,6 +23,14 @@ let frames: (() => void)[] = [];
 let blocks: any[] = [];
 let observers: { target: any; fire: () => void }[] = [];
 let intersections: { target: any; enter: () => void }[] = [];
+/** Pending `setTimeout`s by id; only the preview delay uses one here, and `elapse` fires whatever is still pending. */
+let timers = new Map<number, () => void>();
+
+const elapse = () => {
+  const due = [...timers.values()];
+  timers.clear();
+  for (const cb of due) cb();
+};
 
 const paint = () => {
   const due = frames;
@@ -35,7 +43,7 @@ const makeBlock = (text: string, top = 0) => {
   const pre = { textContent: text };
   const block: any = {
     attrs: {} as Record<string, string>,
-    style: {},
+    style: { display: "" },
     isConnected: true,
     // Where this block sits relative to the viewport. `defer` measures it, so a test that wants
     // an offscreen block sets `top` far below `innerHeight`.
@@ -82,6 +90,13 @@ beforeEach(() => {
     return frames.length;
   };
   (globalThis as any).cancelAnimationFrame = () => {};
+  timers = new Map();
+  (globalThis as any).setTimeout = (cb: () => void) => {
+    const id = Math.random();
+    timers.set(id, cb);
+    return id;
+  };
+  (globalThis as any).clearTimeout = (id: number) => void timers.delete(id);
   (globalThis as any).innerHeight = 800;
   (globalThis as any).IntersectionObserver = class {
     constructor(private cb: (entries: { target: any; isIntersecting: boolean }[]) => void) {}
@@ -251,21 +266,27 @@ test("completion re-renders a block whose code stopped changing", async () => {
  * There is always source on screen until the card paints — never a blank gap.
  *
  * The rule §3.5 records is that hiding at claim time leaves nothing to look at for however long
- * the card takes to have a body. That still holds; what changed is WHICH source is shown. The
- * host's own block is hidden immediately and replaced by one we render, for two measured reasons:
- * its markdown parser truncates `ui4a/tsx` at the slash, so `ui4a` reaches shiki, matches no
- * grammar, and the code renders unhighlighted; and a 300-line card streams for over a minute with
- * every line of it on screen. Ours passes `lang="tsx"` and is capped.
+ * the card takes to have a body. That still holds; what changed is WHICH source is shown. Once it
+ * is ready, ours replaces the host's, for two measured reasons: the host's markdown parser
+ * truncates `ui4a/tsx` at the slash, so `ui4a` reaches shiki, matches no grammar, and the code
+ * renders unhighlighted; and a 300-line card streams for over a minute with every line of it on
+ * screen. Ours passes `lang="tsx"` and is capped.
  *
- * So the invariant to protect is not "the block is visible" — it is "a preview exists until the
- * card paints, and is gone afterwards".
+ * So the invariant to protect is not "the block is visible" or "a preview exists" — it is that
+ * ONE of them is on screen until the card paints, with the swap between them coming after
+ * `PREVIEW_DELAY_MS`. The next test covers the card that paints before then.
  */
 test("a highlighted source preview stands in until the card paints", async () => {
   const block = makeBlock("export default () => <div />");
   const { stop } = await start(() => [segment("export default () => <div />")]);
-  // claimed: the host's block is out, ours is in, and it asks for the grammar the host could not
-  expect(block.style.display).toBe("none");
+  // claimed, and the host's block is still there: ours waits out the delay, so hiding it now
+  // would leave a gap where the source was
+  expect(block.style.display).toBe("");
+  expect(previews).toHaveLength(0);
+  elapse();
+  // then ours is in — asking for the grammar the host could not — and the host's is out
   expect(previews).toHaveLength(1);
+  expect(block.style.display).toBe("none");
   expect(previews[0]?.lang).toBe("tsx");
   expect(previews[0]?.code).toBe("export default () => <div />");
   // The copy labels come from `t`, not from literals — see the harness's identity `t`.
@@ -276,6 +297,26 @@ test("a highlighted source preview stands in until the card paints", async () =>
   // painted: the preview is torn down, and the host's block stays hidden behind the card
   await Promise.resolve();
   expect(unmounts).toBe(1);
+  expect(block.style.display).toBe("none");
+  stop();
+});
+
+/**
+ * A card that paints inside the delay never highlights its source at all.
+ *
+ * shiki tokenizes synchronously in React's render: on a session switch two settled 7–8KB cards
+ * cost one 310ms long task, while the cards themselves paint 20–25ms after mount. Rendering the
+ * preview eagerly is what kept the source on screen; skipping it is the fix, so "zero previews"
+ * is the assertion, not "a preview that was later removed" — and the host's block is still what
+ * hid the source, so it must go at that moment rather than at the claim.
+ */
+test("a card that paints before the delay never renders its source preview", async () => {
+  const block = makeBlock("export default () => <div />");
+  const { stop } = await start(() => [segment("export default () => <div />")]);
+  observers.at(-1)?.fire();
+  paint();
+  elapse();
+  expect(previews).toHaveLength(0);
   expect(block.style.display).toBe("none");
   stop();
 });
@@ -599,6 +640,7 @@ test("语言变化只刷新存留的源码预览，卸载后取消订阅", async
     t: (key) => language + ":" + key,
     subscribeLocale: (refresh) => { listeners.add(refresh); return () => { listeners.delete(refresh); }; },
   });
+  elapse();
   language = "zh";
   for (const refresh of listeners) refresh();
   expect(previews.at(-1)).toEqual({ code, lang: "tsx", copyLabel: "zh:copy", copiedLabel: "zh:copied" });

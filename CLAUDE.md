@@ -378,10 +378,17 @@ current one: several sessions share a workspace, and resolving from "wherever th
 read under a stranger's allowlist. That is the same bug class §3.65 hit on `$dsh/fs`, where read-only
 mode did not deny until the id was threaded through.
 
-Four traps:
+Five traps:
 
 - **A `tool-call` node's data is `{root: {...}}`**, not the assistant's `blocks`.
 - **Tool arguments carry absolute paths**, so contract matching looks for `ui4a/canvases/` as a path suffix and must not anchor at the start.
+- **Decode the address before matching the contract.** `sessionFileAddress` percent-encodes every
+  segment, so `背单词.ui4a.tsx` travels as `%E8%83%8C%E5%8D%95%E8%AF%8D.ui4a.tsx`. Running
+  `canvasIdOf` on the raw URI returns **that encoded string**, which is all ASCII, passes
+  `isCanvasId`, and names a file that does not exist — the chip shows mojibake and every read 404s,
+  while the canvas is still "claimed". `parseFileAddress` decodes; the rule is *always through it,
+  never on the URI*. This is §4.5's "Chinese canvas ids were silently rejected" one level up: the
+  id rules were widened and the address layer mangles them instead. Found by a test, not in use.
 - **Re-registering an unchanged namespace must keep its blob URL.** The document import map
   is installed once and names those blobs for the tab's life, so revoking one leaves every
   esm.sh package resolving `react` to a dead URL. ESM fails that by killing the whole module

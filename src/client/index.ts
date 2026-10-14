@@ -10,6 +10,12 @@ import type {} from "@deepseek-ai/dsh-client-ui-session/client";
 import type {} from "@deepseek-ai/dsh-client-ui-layout/client";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
+// Type-only, and load-bearing twice over. `sidebar-right` declares `sidebar.right.pane.tab` into
+// SlotMap through this package's `declare module`, and a merge only happens for packages some file
+// actually imports — drop the line and the seat key vanishes while `tsc` stays green (§2.7). It
+// must stay type-only: `sidebar-right` is not in PLATFORM_MODULES, so a value import would bundle
+// a second copy of the registry instead of reaching the host's `reflect.provide` singleton.
+import type {} from "@deepseek-ai/dsh-client-ui-sidebar-right/client";
 import { GenUISurface } from "./runtime/GenUISurface.tsx";
 import { cancelPendingReport, cardRendered, reportCardError } from "./runtime/report-error.ts";
 import { disposeCompiler } from "./runtime/compiler.ts";

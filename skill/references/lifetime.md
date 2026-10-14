@@ -219,6 +219,15 @@ Two things follow from the lifetime difference:
   whole persisted object silently deletes the user's template edits. A separately labelled
   “restore default template” control may replace it, but must not share the next-person handler.
 
+  **Reuse is not permission to expand the visible schema.** If the request says the checklist should
+  contain only named fields and actions, keep item titles and template-owned fields fixed unless the
+  user explicitly asks to edit them. Do not add a progress counter/bar, visible heading, helper/status
+  text, undo panel, add/delete action, restore-default control, or confirmation/cancel panel merely
+  because the checklist is reusable. If the request names one reset action, render that action once
+  and let it run the reset transform directly; confirmation is an extra control and needs an explicit
+  request. Preserve any existing template fields in the persisted object even when they have no
+  visible editor.
+
   For split state such as `days` plus a `done` map, “next person” leaves the current `days` value
   untouched and clears only per-person fields and completion (`setDone({})`), or maps the current
   value without replacing its items. Do not emit `setDays(SEED)`, `setDays(DEFAULT_...)`, or

@@ -106,6 +106,8 @@ test("the progressive entrypoint hands durable requests to the first canvas writ
   expect(lifetime).toContain("draft` and `committed` as separate persisted values");
   expect(lifetime).toContain("serialized snapshot of the complete persisted object");
   expect(lifetime).toContain("setDays(SEED)");
+  expect(lifetime).toContain("Reuse is not permission to expand the visible schema");
+  expect(lifetime).toMatch(/confirmation is an extra control and needs an explicit\s+request/);
 });
 
 test("the progressive entrypoint keeps the inline fence and reference-read contracts", () => {
@@ -130,6 +132,7 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(entry).toContain("a choice card must contain both `sendMessage` and `usePersistedState`");
   expect(entry).toContain("Persist every card-owned value the reader can edit in an inline card");
   expect(entry).toContain("Keep displayed values live");
+  expect(entry).toContain("only the named data and controls");
   expect(entry).toContain("never `5 miles = {format(km)}`");
   expect(entry).toContain("Keep units and formulas on the same scale");
   expect(entry).toContain("A zero interest rate is valid");
@@ -189,4 +192,6 @@ test("the progressive entrypoint keeps the inline fence and reference-read contr
   expect(checking).toContain("Mechanical source audit before handoff");
   expect(checking).toContain("every user-editable expression");
   expect(checking).toContain("exact current draft snapshot");
+  expect(checking).toContain("Compare the rendered schema with explicit scope words");
+  expect(checking).toContain("If it also asks for one reset action");
 });

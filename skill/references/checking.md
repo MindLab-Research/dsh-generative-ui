@@ -73,6 +73,12 @@ Run a finite source pass over the complete card before sending or writing it:
   button label. It must functionally update the current persisted object; `setBoard(DEFAULT_BOARD)`,
   `setBoard(SEED)`, or `cloneFresh(...)` is valid only behind a separately labelled restore-default
   template action.
+- Compare the rendered schema with explicit scope words in the request. A checklist requested as
+  “only name, date, and three checkboxes” must not grow a progress counter/bar, editable item titles,
+  add/delete controls, visible heading or helper/status copy, undo panel, restore-default action, or
+  confirmation/cancel panel unless the request names it. If it also asks for one reset action, that
+  single action is the only extra control and should run its persisted transform directly. Persistence,
+  reset transformation, and accessibility wiring may stay in source without becoming visible fields.
 - For a reported or submitted canvas, inspect the serialized payload/key and confirm it includes
   every editable field, not only `done`, `total`, or another aggregate count. For numeric results,
   check each label against its formatter and source scale (`fmtWan` vs `fmtYuan`) and run one known

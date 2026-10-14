@@ -419,6 +419,26 @@ recognises why the code that answered them is gone.
   host's widths fill the viewport exactly, so an inserted column laid out offscreen. It is moot once
   the host draws the panel — the sidebar is its own flex participant.
 
+**Verified end to end on 2026-10-14, on 0.2.x.** The one thing static analysis could not settle was
+whether `sidebarRight` / `sidebarRightTabs` / `slots` reach a *third-party* client ctx at all — §4's
+`settings` is exactly the service that exists for built-ins and is withheld from us. They do, and
+the measurement is the plugin's own startup: `dsh-generative-ui/client.js` and its
+`tsx_bg.wasm` both load, the 5-second "no right Sidebar" warn **does not fire**, and the tab type
+takes effect. Then a real `label-audit.ui4a.tsx` in the workspace's `.dsh/ui4a/canvases/` opened
+from the **host's own file tree** into a tab named `label-audit` beside `文件` — and the body
+rendered the live app (its stats, its filter tabs), not documentpreview's source listing. So the
+`extension` band does beat the product's `fallback` catch-all in a real host, which is the whole
+reason to register as a tab type rather than keep drawing a column.
+
+**Auto-open has two paths, and only the first one was obvious.** A canvas the transcript names — a
+`write` whose arguments carry a canvas path — is opened from `collect.ts`. But 29 canvas writes in
+the corpus are made by *executed code* (`p.write_text(src)` with the path built from a variable), so
+`collect.ts`, which classifies by argument shape, cannot see any of them; in 27 the path is a
+variable. Those go through `OPAQUE_WRITE` — the code text mentions `canvases` — and the sweep asks
+the directory listing again, opening whatever **appeared** since the last one. The first listing is
+a BASELINE and opens nothing: a workspace already holding seventeen canvases must not get
+seventeen tabs. The 17-canvas case is real, and it is what the old `CanvasLauncher` was listing.
+
 ## 3.65 `$dsh/*`: what generated code can call back into
 
 The playground gives generated code four capability modules under `$ui4a/`. Here the prefix

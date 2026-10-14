@@ -19,7 +19,21 @@ export type AutoOpenOptions = {
   sessionId: () => string | undefined;
   /** Opens the canvas `id` as a tab in `sessionId`. */
   open: (sessionId: string, id: string) => void;
+  /** The workspace root of that session, for listing; omit and code-written canvases are skipped. */
+  cwd?: () => string | undefined;
+  /** Every canvas on disk in the workspace. */
+  list?: (cwd: string) => Promise<readonly string[]>;
 };
+
+/**
+ * A canvas written by executed code rather than by a file tool.
+ *
+ * 29 canvas writes in the corpus go through `run_code`, and in 27 of them the path is built from
+ * a variable — so nothing in the arguments names the canvas and `collect.ts`, which classifies by
+ * argument shape, cannot see any of them. The workspace listing already knows. This predicate is
+ * what says "ask it again"; without it a code-written canvas is in the file tree and nowhere else.
+ */
+export const OPAQUE_WRITE = /"(?:code|command)"\s*:[\s\S]*canvases/;
 
 /**
  * What state a canvas is in, as a short string. Equal signatures mean nothing to say.
@@ -39,25 +53,62 @@ export const openSignature = (id: string, collected: CollectedCanvases): string 
   return canvas === undefined ? `stale:${stale}` : canvas.streaming ? "streaming" : `s${stale}:c${canvas.code.length}`;
 };
 
-export function createCanvasAutoOpen({ calls, sessionId, open }: AutoOpenOptions): { sweep: () => void } {
+/**
+ * Cheap identity for a call list, so a sweep over an unchanged transcript can skip the walk.
+ *
+ * Exported because `test/sweep-cost.test.ts` asserts its *shape* — and a test that re-implements
+ * the key it is measuring asserts that a re-implementation agrees with itself (§6.5's
+ * `compiler.test.ts` trap). Lengths rather than the bytes: a streamed argument grows, so its
+ * length moves on every frame that matters and on none that do not, and comparing megabytes of
+ * source per token would cost more than the walk it avoids.
+ */
+export const callsKeyOf = (views: readonly ToolCallView[]): string =>
+  `${views.length}:${views.reduce((total, call) => total + call.argsRaw.length + (call.settled ? 1 : 0), 0)}`;
+
+export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: AutoOpenOptions): { sweep: () => void } {
   /** Last signature acted on, per session and canvas. */
   const opened = new Map<string, string>();
+  /**
+   * The canvases the last listing saw, or `null` before the first one.
+   *
+   * The first listing is a BASELINE and opens nothing: a workspace that already holds seventeen
+   * canvases from last week would otherwise get seventeen tabs. What it is for is the difference
+   * — a canvas that appears after it is one this session caused.
+   */
+  let listed: ReadonlySet<string> | null = null;
+  /** Settled opaque calls at the time of the last listing; `0`, so none means never relist. */
+  let listedAt = 0;
   /**
    * `collectCanvases` walks every argument string by hand, which is what makes it correct on a
    * half-arrived JSON prefix — and it costs 0.16ms per canvas per sweep. The sweep runs on every
    * transcript mutation, so a session with 34 canvas calls (the corpus maximum) spent ~5ms per
-   * streamed token re-deriving a result that had not changed. Keyed on the calls' own bytes: a
-   * streamed argument grows, so its length moves on every frame that matters and on none that do not.
+   * streamed token re-deriving a result that had not changed.
    */
   let callsKey: string | null = null;
   let collected = collectCanvases([]);
+  let opaqueAfter = -1;
+
+  /** The canvases `collect.ts` cannot name, found by listing after a call that might have written one. */
+  const relist = (session: string, settledOpaque: number) => {
+    const root = cwd?.();
+    if (root === undefined || list === undefined) return;
+    if (settledOpaque === listedAt) return;
+    listedAt = settledOpaque;
+    void list(root).then((ids) => {
+      const known = listed;
+      const fresh = known === null ? [] : ids.filter((id) => !known.has(id));
+      listed = new Set(ids);
+      for (const id of fresh) open(session, id);
+    });
+  };
 
   const sweep = () => {
     const allCalls = calls();
-    const key = `${allCalls.length}:${allCalls.reduce((total, call) => total + call.argsRaw.length + (call.settled ? 1 : 0), 0)}`;
+    const key = callsKeyOf(allCalls);
     if (key !== callsKey) {
       callsKey = key;
       collected = collectCanvases(allCalls);
+      opaqueAfter = allCalls.filter((call) => call.settled && OPAQUE_WRITE.test(call.argsRaw)).length;
     }
     const session = sessionId();
     if (session === undefined) return;
@@ -72,6 +123,7 @@ export function createCanvasAutoOpen({ calls, sessionId, open }: AutoOpenOptions
       opened.set(mapKey, signature);
       open(session, id);
     }
+    relist(session, opaqueAfter);
   };
 
   return { sweep };

@@ -30,6 +30,7 @@ import { CANVAS_TAB_ID, canvasTabDefinition } from "./canvas/definition.ts";
 import { CanvasBody } from "./canvas/body.tsx";
 import { canvasAddress, startCanvasAutoOpen } from "./canvas/auto-open.ts";
 import { toolCallsOf, type CallBlock, type ToolCallView } from "./canvas/collect.ts";
+import { listCanvasIds } from "./canvas/read.ts";
 import { CARD_ERROR_PATH } from "../contract-assets.ts";
 
 export const inject = ["sessions", "locale"];
@@ -208,6 +209,8 @@ export function apply(ctx: ClientContext): void {
         startCanvasAutoOpen({
           calls,
           sessionId: currentSession,
+          cwd,
+          list: listCanvasIds,
           open: (session, id) => {
             try {
               scoped.sidebarRight.openResource(canvasAddress(session, id));

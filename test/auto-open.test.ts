@@ -16,12 +16,14 @@ const read = (id: string): ToolCallView => ({ name: "read", argsRaw: JSON.string
 const unrelated = (): ToolCallView => ({ name: "write", argsRaw: JSON.stringify({ path: "/home/me/proj/README.md", content: "hi" }), settled: true });
 
 /** Drives one auto-open over a growing transcript — the shape production has: calls arrive, they do not swap. */
-function harness() {
+function harness(options: { list?: () => Promise<readonly string[]> } = {}) {
   let calls: readonly ToolCallView[] = [];
   const opens: string[] = [];
   const { sweep } = createCanvasAutoOpen({
     calls: () => calls,
     sessionId: () => SID,
+    cwd: () => "/workspace",
+    list: options.list ?? (async () => []),
     open: (session, id) => opens.push(`${session}/${id}`),
   });
   return {
@@ -34,6 +36,13 @@ function harness() {
     },
   };
 }
+
+/** Let a listing promise settle. */
+const drain = async () => {
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+};
+
+const runCode = (code: string, settled = true): ToolCallView => ({ name: "run_code", argsRaw: JSON.stringify({ code }), settled });
 
 test("a settled write opens the canvas once", () => {
   const h = harness();
@@ -131,4 +140,45 @@ test("openSignature is what makes a sweep free when nothing moved", () => {
   expect(openSignature("todo", { canvases: [{ id: "todo", code: "abc", streaming: true }], stale: new Map() })).toBe("streaming");
   // An edit to a canvas never written here is synthesized with an empty body; it still moves.
   expect(openSignature("ghost", collected)).toBe("stale:0");
+});
+
+test("the first listing is a baseline and opens nothing", async () => {
+  // Seventeen canvases from last week are not seventeen tabs. The listing's job is the
+  // difference after it, not everything it can see.
+  let onDisk = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"];
+  const h = harness({ list: async () => onDisk });
+  h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+  await drain();
+  expect(h.opens).toEqual([]);
+});
+
+test("a canvas written by executed code is opened when it appears", async () => {
+  // `collect.ts` classifies by argument shape and a run_code whose path is built from a
+  // variable names no canvas at all — 27 of the corpus's 29 code-written canvases. The
+  // listing is the only thing that knows.
+  let onDisk = ["a", "b"];
+  const h = harness({ list: async () => onDisk });
+  h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+  await drain();
+  expect(h.opens).toEqual([]);
+  onDisk = ["a", "b", "newcomer"];
+  // The corpus's opaque writes all mention `canvases` in the code text — the path is built
+  // there — which is the whole basis of `OPAQUE_WRITE`. A write that never says so is invisible.
+  h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+  await drain();
+  expect(h.opens).toEqual(["s1/newcomer"]);
+});
+
+test("ordinary shell work does not pay for a listing", async () => {
+  let listings = 0;
+  const h = harness({
+    list: async () => {
+      listings += 1;
+      return [];
+    },
+  });
+  h.push({ name: "run_code", argsRaw: JSON.stringify({ command: "ls -la", description: "list" }), settled: true });
+  h.push({ name: "run_code", argsRaw: JSON.stringify({ command: "cat package.json" }), settled: true });
+  await drain();
+  expect(listings).toBe(0);
 });

@@ -23,7 +23,7 @@ import { readCanvasChild } from "./read.ts";
  * NOT global, and that is load-bearing. It was `/g`, shared by all three call sites, and `.test`
  * on a global regex leaves `lastIndex` past the match it found — so `importsSibling` returning
  * TRUE made the very next `matchAll` on the same string return ZERO. That is the order
- * `CanvasPanel` calls them in: ask whether there are sibling imports, then go resolve them. The
+ * the body calls them in: ask whether there are sibling imports, then go resolve them. The
  * panel found none to resolve and the card rendered without its sub-pages.
  *
  * `matchAll` requires `/g`, so it gets its own copy; the shared one stays sticky-free and no
@@ -33,7 +33,7 @@ const SPECIFIER = /(\bfrom\s*|\bimport\s*\(\s*)["'](\.[^"']*)["']/;
 const SPECIFIER_ALL = new RegExp(SPECIFIER, "g");
 
 /**
- * Whether the card imports a sibling at all — the cheap question `CanvasPanel` asks before
+ * Whether the card imports a sibling at all — the cheap question `useSubPages` asks before
  * paying for a resolve pass. It had its own copy of the regex, identical but for the `g` flag;
  * a widening applied to one and not the other means the panel never calls `inlineSubPages` and
  * the card silently renders without its sub-pages. Sharing one pattern fixed that and introduced

@@ -32,6 +32,12 @@ after a failed request, show the request error in the card, and let the reader r
 items, deduplicate them, and cap the final list to the requested count before rendering. If the
 user requested a count, do not label fewer usable items as a completed batch.
 
+Build the smallest working request-to-result path first: show loading, render the first usable
+result, and keep visible empty/error/retry states. Add optional polish only after that path works;
+do not spend the turn on checker experiments or speculative debugging before delivering a usable
+card. Run one bounded source check after the first usable card exists, fix real source errors, and
+do not loop on unchanged commands or known mapped-import diagnostics.
+
 If the reader can select, revisit, or submit one of the generated items, the batch is card-owned
 state too: persist it, or skip the initial request while a persisted batch is available. A
 persisted selection must still be present in the displayed batch after a remount or regeneration;

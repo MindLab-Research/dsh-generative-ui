@@ -1,11 +1,19 @@
 ---
 name: generative-ui
-description: Always load this skill first when a request might need an interface for any editable value, adjustable calculations, or unit conversion (including “5 英里是多少公里” and “98°F 是多少摄氏度”), a calculator or threshold such as BMI or mortgage, recommendations or option requests, a learning plan or checklist, or anything to save, reuse, or edit later, including saved checklists, reusable templates, “存下来”, “之后每次复用”, and “改改再用”, or an expression whose behavior the user wants to explore (cron, glob, regex, chmod). Use it even when the user asks for one number or expects prose, and even without saying “canvas”. It decides between an inline ui4a/tsx block, a canvas file, and plain prose. Load it **once before you decide**, not after — never answer a conversion, calculator, recommendation, plan, or option request in prose first. Once the result returns, the skill step is complete; read a specific reference, write the requested canvas, or answer, including emitting the inline card; do not call this skill again in the same turn.
+description: Always load this skill first when a request might need an interface for any editable value, adjustable calculations, or unit conversion (including “5 英里是多少公里” and “98°F 是多少摄氏度”), a calculator or threshold such as BMI or mortgage, recommendations or option requests, a learning plan or checklist, saved checklists, reusable templates (“存下来”, “之后每次复用”, “改改再用”), or an expression to explore (cron, glob, regex, chmod). Use it even when the user asks for one number or expects prose, and without saying “canvas”. Do not load it for a fixed factual lookup such as “HTTP 状态码 418 是什么意思” or “今天星期几” unless the user explicitly asks for an interface. Choose one inline ui4a/tsx block, canvas file, or plain prose. Load it once before deciding; after it returns, read the needed reference, write the Canvas or emit the card, and do not call it again this turn.
 ---
 
 # Building a generative UI
 
 This skill is already loaded for the current turn. Once the skill tool returns this result, continue with the task: read the relevant references, use tools needed to build or check the card, and deliver the answer or canvas. Do not call the `generative-ui` skill again with the same name, even if you switch between prose and a card. If a topic guide applies, read its linked `references/*.md` file with the file-reading tool instead of reloading this skill.
+
+### Output protocol
+
+Treat the final handoff as the only user-visible part of the work. Do not narrate planning, reference reads, tool calls, checker output, compiler diagnostics, scratch files, or self-review. Fix issues silently; checker results are internal evidence, not reply content.
+
+Honor explicit scope words such as “只含”, “仅包含”, “只有”, “only”, and “just” as a schema: include only the named data and controls. Do not add progress bars, editable labels, reset/undo panels, helper/status copy, or other fields unless the user asked for them or the stated contract requires them. Keep required persistence and accessibility state internal when it does not belong in that schema.
+
+For an inline result, make the first usable card the deliverable, then emit one short introduction, exactly one four-backtick `ui4a/tsx` fence, and at most one short closing sentence. For a Canvas, write the first usable file before optional polish and return only a short confirmation after the write succeeds.
 
 ## Authoring order
 
@@ -15,7 +23,7 @@ Follow this order before drafting source:
 2. Choose one surface before exploring. A request to save, reuse, or edit later starts with the first usable `.dsh/ui4a/canvases/<id>.ui4a.tsx` write and ends with a short prose confirmation; do not emit an inline fence or an export/re-export fence for that Canvas. An inline card writes no Canvas.
 3. For an open answer space such as names, recommendations, meals, or other model-generated content, start the first generation on mount. A fixed seed or pool is not the answer; it is only an explicitly labelled fallback after a visible request error. Keep loading, empty, error, and retry states in the card.
 4. Do not send interim assistant text while working. Assistant messages before the final handoff contain tool calls only; the first user-visible text is the completed answer. Keep reading, checking, writing, compiler output, and scratch-file cleanup silent. Before handing over, check the source and the complete visible reply. An inline reply has one exact four-backtick `ui4a/tsx` opener and closer; remove planning, scratch drafts, duplicate fences, and computed numeric prose outside the fence.
-5. Run one finite source audit and the applicable checks. Fix real errors, and rerun a checker after changing checked source or correcting its invocation; do not repeat an unchanged check. If confirmed `$dsh/*` mapping diagnostics are the only remaining checker failures, verify those calls against installed declarations and the live card when available, report that static checking did not pass, and hand over once the request is met. Do not keep the user waiting for optional polish rounds.
+5. Run one finite source audit and the applicable checks. Fix real errors, and rerun a checker after changing checked source or correcting its invocation; do not repeat an unchanged check. If confirmed `$dsh/*` mapping diagnostics are the only remaining checker failures, verify those calls against installed declarations and the live card when available, note internally that static checking did not pass, and hand over once the request is met. Mention that concise limitation only when verification status is requested; never paste checker diagnostics into the normal handoff. Do not keep the user waiting for optional polish rounds.
 
 ## Trigger gate
 

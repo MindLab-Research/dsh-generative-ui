@@ -245,10 +245,13 @@ const RULE_FOR_SCREEN: Record<string, string | string[]> = {
  */
 const UNSCREENABLE = [
   "Routing gate:",
+  "Hard output protocol",
   "Four backticks",
   "The info string is",
   "Write the React import before you write the data",
   "Do a protocol pass before sending",
+  "Intermediate response rule",
+  "Canvas handoff rule",
   "Every editable inline card gets the same source check",
   "Displayed numbers stay live",
   "Keep units and formulas on the same scale",

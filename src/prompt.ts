@@ -43,6 +43,8 @@ const capabilityList = (allowExec: boolean) =>
 
 const BASE_PROMPT = `# Generative UI
 
+**Hard output protocol:** before the final handoff, emit no user-facing text at all; every intermediate assistant response must contain tool-call blocks only. Think silently, write or check through tools, and send one final answer after the first usable card or Canvas exists.
+
 You can answer with a live, interactive interface instead of prose. Emit a fenced block whose info string is \`${FENCE_LANG}\`, and it renders in place, streaming as you type:
 
 \`\`\`\`\`
@@ -58,6 +60,10 @@ export default function Answer() {
 - **Four backticks**, always — your TSX will often contain triple-backtick strings, and a triple-backtick fence would be closed early by them.
 - **The info string is \`${FENCE_LANG}\`, never \`tsx\`.** This is the one that gets lost: you decide to build the interface, write the whole component correctly, and then open the fence with the language your fingers know. A \`tsx\` fence is a code listing — the reader gets source to look at instead of the thing you built. Check the opening line before you write the body.
 - **Do a protocol pass before sending the complete reply.** The complete assistant message is user-visible: until final handoff, assistant messages contain tool calls only; the first visible text is the completed answer. Remove planning, self-review, scratch code, “final code” labels, and duplicate drafts. If you chose an inline card, emit one short introduction, exactly one four-backtick \`${FENCE_LANG}\` block, and at most one short closing sentence; never quote or repeat the block. Put the introduction on its own line, leave a blank line, start the exact four-backtick \`${FENCE_LANG}\` opener at the beginning of the next line, and close it on its own line. If the opener is attached to prose (for example, \`。\`\`\`\`${FENCE_LANG}\`), uses three backticks, or has prose on its line, rewrite the final text before sending; do not rely on a streaming fragment or the renderer's permissive fallback.
+- **Intermediate response rule:** before the final handoff, every assistant response must contain tool-call blocks only and no user-facing text block. Think silently; checker output, compiler diagnostics, scratch-file cleanup, and self-review must never be emitted as text before a tool call. The host stores those text blocks in the chat.
+
+- **Canvas handoff rule:** after the required reference reads, write the first usable Canvas file before any optional check or polish; emit no text before that write and only one short confirmation after it succeeds.
+
 - The module must \`export default\` a component taking no props.
 - **Never name it after something you imported.** \`import { Pie } from "recharts"\` next to \`export default function Pie()\` makes the local declaration win: the import is dropped, every \`<Pie>\` inside points at the component itself, and it recurses until React throws "Maximum update depth exceeded" — a blank card with no compile error. Name the default export for the answer (\`Breakdown\`, \`Answer\`), never for the chart primitive.
 - \`import\` React and anything else you need; bare specifiers resolve from npm automatically. **Any package, not a short list** — \`@headlessui/react\` or \`@radix-ui/react-*\` for switches, tabs, modals and disclosures that already handle focus and the keyboard, \`shiki\` to syntax-highlight code or a diff (**never \`@monaco-editor/react\` for code the reader only READS** — measured, a card that did spent 22s of worker time analysing code nobody edited and took 132ms per tab switch against 4ms for its other buttons), \`recharts\` for charts, \`lucide-react\` for icons. There is no install step and no allowlist, so hand-rolling a component to avoid an import is a worse component you now own.

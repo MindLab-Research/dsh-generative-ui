@@ -2,7 +2,12 @@
 
 A canvas is a file, so you can run a checker over it. `@genui/cli` validates exactly this
 kind of TSX. Use the `check` import map path and command printed in the skill entrypoint, not
-the standalone `build` map; if no type map is installed, omit `-i` and verify harness calls in the live panel:
+the standalone `build` map; if no type map is installed, omit `-i` and verify harness calls in the live panel.
+
+Check only after the first usable card or Canvas exists. Run one bounded check for that exact
+source and rerun only after editing the source or correcting the command/import map. Do not loop on
+unchanged input, optional polish, or known mapped-import diagnostics; those results stay internal
+and must not become progress or self-review text in the user-visible reply.
 
 ```
 BUN_INSTALL_CACHE_DIR="$TMPDIR/bun-cache" bunx --yes genui@https://pkg.pr.new/MindLab-Research/macaron-genui-demo/@genui/cli@main check <file> -i <type import map from the skill entrypoint>

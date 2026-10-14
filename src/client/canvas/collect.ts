@@ -12,7 +12,9 @@
  * wherever the stream currently ends.
  */
 import { owningCanvasIdOf } from "../../contract.ts";
-import type { Canvas } from "./CanvasPanel.tsx";
+
+/** One canvas as the transcript describes it: its id, the body the last write carried, and whether that write is still going. */
+export type Canvas = { id: string; code: string; streaming: boolean };
 
 /**
  * A call is classified by the SHAPE of its arguments, never by the tool's name.

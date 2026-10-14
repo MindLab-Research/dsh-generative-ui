@@ -87,13 +87,6 @@ Measured end to end, including how to put the prompt back (it is a preset copy, 
 | `conversation.chat.node` | keyed | **Inline cards.** Unregistered kinds degrade gracefully into a JsonBlock |
 | `shell.overlay` | list | Frame-wide overlay, available if we need it |
 
-This table used to claim `conversation.view` as a "Canvas view tab". **That row never existed in
-code** — measured 2026-09: `ctx.slots` appears **zero times** under `src/`, and `dsh-client-ui-slots`
-was a peer dep nobody imported. Canvases were a DOM portal instead (§3.6). The row is gone rather
-than corrected, because the claim was load-bearing for a reader: it said the canvas was already a
-first-class host surface, which made the hand-rolled column look like a stopgap nobody got round to
-replacing rather than the only thing on offer at the time.
-
 **The canvas now lives in the right Sidebar as a registered tab type** (§3.6), which is the seam the
 host actually ships for this: `dsh-client-ui-sidebar-right` owns a tab-type registry, and its own doc
 says *"a tab type may ship from outside this repository"* with `priority: 'extension'` defined as *"a
@@ -347,50 +340,13 @@ Five traps:
   the type level at the type level: assert `"sidebar.right.pane.tab" extends keyof SlotMap`, and
   watch it flip when the import goes.
 
-**What the old panel had to do by hand, and no longer does.** Three entries below used to be traps
-in their own right; each is now the tab system's job rather than ours, kept here so the next reader
-recognises why the code that answered them is gone.
-
-- *File links go to the OS.* They used to: `workspaces.openPath` opened a canvas in an editor, so we
-  wrapped it. Measured 2026-09 on 0.2.x: `dsh-client-ui-chat` routes file links to
-  `ctx.sidebarRight.openResource(url)`, so the wrapper is deleted — the host now opens the canvas as
-  a tab, which is what the wrapper was faking.
-- *Closing must leave a way back.* A panel fed by the transcript stranded every canvas it did not
-  show, so there was a `CanvasLauncher` listing workspace ids. Tabs persist and the file tree lists
-  `.dsh/ui4a/canvases/`, so reopening is a click on the file.
-- *The panel cannot be a flex child of AppFrame.* True and load-bearing while we drew the column: the
-  host's widths fill the viewport exactly, so an inserted column laid out offscreen. It is moot once
-  the host draws the panel — the sidebar is its own flex participant.
-
-**Verified end to end on 2026-10-14, on 0.2.x.** The one thing static analysis could not settle was
-whether `sidebarRight` / `sidebarRightTabs` / `slots` reach a *third-party* client ctx at all — §4's
-`settings` is exactly the service that exists for built-ins and is withheld from us. They do, and
-the measurement is the plugin's own startup: `dsh-generative-ui/client.js` and its
-`tsx_bg.wasm` both load, the 5-second "no right Sidebar" warn **does not fire**, and the tab type
-takes effect. Then a real `label-audit.ui4a.tsx` in the workspace's `.dsh/ui4a/canvases/` opened
-from the **host's own file tree** into a tab named `label-audit` beside `文件` — and the body
-rendered the live app (its stats, its filter tabs), not documentpreview's source listing. So the
-`extension` band does beat the product's `fallback` catch-all in a real host, which is the whole
-reason to register as a tab type rather than keep drawing a column.
-
-**Auto-open has two paths, and only the first one was obvious.** A canvas the transcript names — a
-`write` whose arguments carry a canvas path — is opened from `collect.ts`. But 29 canvas writes in
-the corpus are made by *executed code* (`p.write_text(src)` with the path built from a variable), so
-`collect.ts`, which classifies by argument shape, cannot see any of them; in 27 the path is a
-variable. Those go through `OPAQUE_WRITE` — the code text mentions `canvases` — and the sweep asks
-the directory listing again, opening whatever **appeared** since the last one. The first listing is
-a BASELINE and opens nothing: a workspace already holding seventeen canvases must not get
-seventeen tabs. The 17-canvas case is real, and it is what the old `CanvasLauncher` was listing.
-
 **A canvas is inset; an inline card is not.** The card is told to fill whatever holds it, so the two
 surfaces have to differ in the *holder*, never in every generated component: inline sits in the
 transcript and must share the prose's left edge (a margin there reads as an indent the surrounding
 text does not have), while a canvas lives in a panel with its own chrome and its title otherwise
 sits on the frame. `CanvasBody` therefore pads at **24px** — the host's own number, taken from the
 Sidebar's guide tab body (`sidebar.right.tab.guide`, `padding: 0 24px`, the same seat family as
-this one) rather than invented. Measured in the live host after the change: the surface sits 24px
-inside the wrapper on both sides, and the canvas now left-aligns with the tab strip's own content
-where before it hung outside it. The grid row is the old panel's `.dgu-body > * { min-height: 100% }`
+this one) rather than invented. The grid row is the old panel's `.dgu-body > * { min-height: 100% }`
 without a stylesheet — one row at least as tall as the box and free to grow, so `height: 100%` still
 has something to resolve against and `box-sizing: border-box` keeps that 100% inside the padding.
 

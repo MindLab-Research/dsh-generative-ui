@@ -89,7 +89,10 @@ export const SETTINGS_NAMESPACE = name;
  * from a five-capability set writes those as file-by-file loops or does not write the card at all.
  */
 export const Config = z.object({
-  allowExec: z.boolean().default(true).description("Let generated cards run shell commands through `$dsh/exec`, under this session's own sandbox mode. Cards use it to search (`rg`, `fd`), run `lint`/`check`, and read `git`. The sandbox still applies; what does not is the per-command approval prompt, so turn this off for a session where that matters."),
+  allowExec: z
+    .boolean()
+    .default(true)
+    .description("Let generated cards run shell commands through `$dsh/exec`, under this session's own sandbox mode. Cards use it to search (`rg`, `fd`), run `lint`/`check`, and read `git`. The sandbox still applies; what does not is the per-command approval prompt, so turn this off for a session where that matters."),
 });
 
 // Old schemastery ignores this metadata; new hosts project it into SettingsForms
@@ -651,9 +654,10 @@ function applyWith(ctx: Context, allowExec: boolean): void {
     // And again for the shell: a host may compose a web server without a command executor — and
     // now also a host that has one but has not opted in. Both mean the same thing to a card, and
     // both are expressed the same way: no route.
-    if (allowExec) scoped.inject(["shell", "sandboxPolicy"], (withShell) => {
-      withShell.effect(() => withShell.webServer.register({ kind: "exact", path: EXEC_PATH, handler: (req, res) => serveExec(withShell as unknown as ExecCtx, liveWorkspaces, req, res) }), "dsh-generative-ui: commands");
-    });
+    if (allowExec)
+      scoped.inject(["shell", "sandboxPolicy"], (withShell) => {
+        withShell.effect(() => withShell.webServer.register({ kind: "exact", path: EXEC_PATH, handler: (req, res) => serveExec(withShell as unknown as ExecCtx, liveWorkspaces, req, res) }), "dsh-generative-ui: commands");
+      });
     // Same nesting as the rest: a host with no web capability loses `$dsh/web` and keeps
     // everything else. `dsh-base` composes `ctx.web` with `searchProvider: deepseek-official`.
     scoped.inject(["web"], (withWeb) => {
@@ -668,11 +672,20 @@ function applyWith(ctx: Context, allowExec: boolean): void {
   // subsystem is disabled. Nested, only the skill goes missing.
   // Model-only: `/generative-ui` as a user command would just print the guidance at the user.
   ctx.inject(["skills"], (scoped) => {
-    scoped.effect(() => scoped.skills.register({ name: SKILL_NAME, description: SKILL_DESCRIPTION, // `allowExec` is the third argument and was omitted, so the skill dropped its whole
-    // "Running a command" section even where the route IS registered: the prompt said six
-    // capabilities and the skill described five. Same rule as the prompt — the docs have to
-    // name the set that exists, in both directions.
-    content: skillBody(typesImportMap(import.meta.url), standaloneImportMap(import.meta.url), allowExec), source: "runtime", invocation: { modelInvocable: true, userInvocable: false } }), "dsh-generative-ui: skill");
+    scoped.effect(
+      () =>
+        scoped.skills.register({
+          name: SKILL_NAME,
+          description: SKILL_DESCRIPTION, // `allowExec` is the third argument and was omitted, so the skill dropped its whole
+          // "Running a command" section even where the route IS registered: the prompt said six
+          // capabilities and the skill described five. Same rule as the prompt — the docs have to
+          // name the set that exists, in both directions.
+          content: skillBody(typesImportMap(import.meta.url), standaloneImportMap(import.meta.url), allowExec),
+          source: "runtime",
+          invocation: { modelInvocable: true, userInvocable: false },
+        }),
+      "dsh-generative-ui: skill",
+    );
   });
 }
 

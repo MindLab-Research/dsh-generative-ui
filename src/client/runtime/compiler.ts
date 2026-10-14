@@ -56,9 +56,7 @@ export function disposeCompiler(): void {
  * compiles perfectly and has nothing in it. Matches the two spellings the renderer accepts, and is
  * written to ignore both comment forms so a `// export default` in prose cannot fake it.
  */
-const hasDefaultExport = (source: string) =>
-  /^\s*export\s+default\s/m.test(source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")) ||
-  /\bexport\s*\{[^}]*\bas\s+default\b/.test(source);
+const hasDefaultExport = (source: string) => /^\s*export\s+default\s/m.test(source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "")) || /\bexport\s*\{[^}]*\bas\s+default\b/.test(source);
 
 export function createBrowserTsxCompiler(): TsxCompiler {
   return {

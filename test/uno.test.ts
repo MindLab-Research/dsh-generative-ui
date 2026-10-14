@@ -155,7 +155,14 @@ test("a merged vendor rule is split so Chromium keeps the half it understands", 
 test("the first streaming frame emits the preflight block", async () => {
   // A stub rather than a DOM library: the module touches exactly `createElement`, two
   // `setAttribute`s, `head.appendChild` and `textContent`, and the repo has no jsdom.
-  const style = { attrs: {} as Record<string, string>, textContent: "", setAttribute(k: string, v: string) { this.attrs[k] = v; }, remove() {} };
+  const style = {
+    attrs: {} as Record<string, string>,
+    textContent: "",
+    setAttribute(k: string, v: string) {
+      this.attrs[k] = v;
+    },
+    remove() {},
+  };
   const previous = (globalThis as { document?: unknown }).document;
   (globalThis as { document?: unknown }).document = { createElement: () => style, head: { appendChild: (n: unknown) => n } };
   try {
@@ -178,9 +185,7 @@ test("the first streaming frame emits the preflight block", async () => {
 // and the card renders unstyled — the failure §2.5 records, which no screen and no compile
 // catches. A recipe shown as code has to be spellable before it is worth showing.
 test("the tokens the prompt's own recipes write all generate", async () => {
-  const tokens = ["divide-y", "divide-line", "first:pt-0", "last:pb-0", "flex-wrap",
-                  "hover:bg-hover", "aria-pressed:bg-accent", "aria-pressed:text-white", "aria-pressed:border-transparent",
-                  "isolate", "relative", "sticky", "top-0", "z-10", "max-h-[30rem]", "overflow-y-auto", "border-b", "bg-layer"];
+  const tokens = ["divide-y", "divide-line", "first:pt-0", "last:pb-0", "flex-wrap", "hover:bg-hover", "aria-pressed:bg-accent", "aria-pressed:text-white", "aria-pressed:border-transparent", "isolate", "relative", "sticky", "top-0", "z-10", "max-h-[30rem]", "overflow-y-auto", "border-b", "bg-layer"];
   const { css, matched } = await generate(tokens);
   expect([...matched].toSorted()).toEqual(tokens.toSorted());
   expect(css).toContain('[aria-pressed="true"]');
@@ -219,8 +224,7 @@ test("the selected-and-hovered pair generates; `not-` generates nothing", async 
   // spellings too, so all three have to generate or the rule covers half the corpus and looks like
   // it covers all of it. `aria-current:hover:` is the one this preset does NOT match — it appears
   // zero times in the corpus, and it is asserted here so the skill never starts recommending it.
-  for (const token of ["data-[state=active]:hover:bg-accent", "checked:hover:bg-accent",
-                       "aria-selected:hover:bg-accent"]) {
+  for (const token of ["data-[state=active]:hover:bg-accent", "checked:hover:bg-accent", "aria-selected:hover:bg-accent"]) {
     const { matched: some } = await generate([token]);
     expect([...some]).toContain(token);
   }
@@ -282,7 +286,14 @@ test("every class in a code example generates a rule", async () => {
  *    exists to stop.
  */
 test("streaming frames define the theme variables, and do not re-append the theme layer", async () => {
-  const style = { attrs: {} as Record<string, string>, textContent: "", setAttribute(k: string, v: string) { this.attrs[k] = v; }, remove() {} };
+  const style = {
+    attrs: {} as Record<string, string>,
+    textContent: "",
+    setAttribute(k: string, v: string) {
+      this.attrs[k] = v;
+    },
+    remove() {},
+  };
   const previous = (globalThis as { document?: unknown }).document;
   (globalThis as { document?: unknown }).document = { createElement: () => style, head: { appendChild: (n: unknown) => n } };
   const roots = () => (style.textContent.match(/:root,\s*:host\s*\{/g) ?? []).length;

@@ -17,9 +17,7 @@ type SessionId = Parameters<ISessions["binding"]>[0];
 export function selectedSessionId(ctx: ClientContext): SessionId | undefined {
   // `uiSession` is not statically injected: older hosts may not provide it.
   const uiSession = ctx.get("uiSession") as { adapter?: { current: { getSnapshot(): { key?: string } } } } | undefined;
-  const key = uiSession === undefined
-    ? (ctx.sessions as unknown as { list: { getSnapshot(): { current?: string } } }).list.getSnapshot().current
-    : uiSession.adapter?.current.getSnapshot().key;
+  const key = uiSession === undefined ? (ctx.sessions as unknown as { list: { getSnapshot(): { current?: string } } }).list.getSnapshot().current : uiSession.adapter?.current.getSnapshot().key;
   return key as SessionId | undefined;
 }
 

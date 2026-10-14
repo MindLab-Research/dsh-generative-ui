@@ -144,6 +144,6 @@ for (const [label, result] of [
 // not carry, and the symptom is an unrelated TypeError blamed on the card that happened to be
 // rendering. Cheap enough to run on every build.
 const clientSource = await Bun.file(`${OUTDIR}/client.js`).text();
-for (const marker of ["react-dom-server.browser.development", "react/jsx-dev-runtime\")"]) {
+for (const marker of ["react-dom-server.browser.development", 'react/jsx-dev-runtime")']) {
   if (clientSource.includes(marker)) throw new Error(`client bundle carries a React development build (${marker}) — check NODE_ENV handling in this file`);
 }

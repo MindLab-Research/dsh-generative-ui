@@ -39,7 +39,13 @@ const PLAYWRIGHT_HOSTS = ["..", "../../macaron-genui-demo", "../../ui4a-playgrou
 const resolveFrom = (dir) => {
   const url = new URL(`${dir}/package.json`, import.meta.url);
   if (!existsSync(url)) return null;
-  try { const require = createRequire(url); require.resolve("playwright"); return require } catch { return null }
+  try {
+    const require = createRequire(url);
+    require.resolve("playwright");
+    return require;
+  } catch {
+    return null;
+  }
 };
 const pwRequire = PLAYWRIGHT_HOSTS.map(resolveFrom).find(Boolean);
 if (!pwRequire) throw new Error(`playwright resolves from none of: ${PLAYWRIGHT_HOSTS.join(", ")}`);
@@ -70,7 +76,8 @@ const iconsOf = (code) => [...(code.match(/import\s*\{([^}]*)\}\s*from\s*["']luc
 
 const MOUNT = async ({ code, width, icons }) => {
   const { GenUISurface, registerModules, registerUi4aHost } = await import("/surface.js");
-  const React = globalThis.React, { createRoot } = globalThis.ReactDOM;
+  const React = globalThis.React,
+    { createRoot } = globalThis.ReactDOM;
   const icon = () => React.createElement("span", { "data-icon": "" });
   if (icons.length) registerModules({ "lucide-react": Object.fromEntries(icons.map((n) => [n, icon])) });
   // What the card's `$dsh/chat` reaches. Recording rather than sending is the whole point: the
@@ -106,8 +113,11 @@ const PROBE = () => {
     if (r.width === 0 && r.height === 0) continue;
     const label = (el.getAttribute("aria-label") || el.innerText || el.value || el.placeholder || el.getAttribute("title") || "").trim().replace(/\s+/g, " ").slice(0, 120);
     controls.push({
-      ref: controls.length, tag: el.tagName.toLowerCase(), role: el.getAttribute("role") ?? undefined,
-      type: el.getAttribute("type") ?? undefined, label,
+      ref: controls.length,
+      tag: el.tagName.toLowerCase(),
+      role: el.getAttribute("role") ?? undefined,
+      type: el.getAttribute("type") ?? undefined,
+      label,
       state: { disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true", selected: el.getAttribute("aria-selected") ?? el.getAttribute("aria-checked") ?? (el.checked === true ? "true" : undefined), value: el.value === undefined ? undefined : String(el.value).slice(0, 80) },
       box: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
     });
@@ -138,9 +148,11 @@ const PROBE = () => {
 const CLICK = (ref) => {
   const host = document.getElementById("shot-host");
   const sel = "button, [role=button], [role=tab], [role=option], [role=radio], [role=checkbox], [role=switch], a[href], input, select, textarea, [onclick], [tabindex]:not([tabindex='-1'])";
-  const seen = new Set(); const list = [];
+  const seen = new Set();
+  const list = [];
   for (const el of host.querySelectorAll(sel)) {
-    if (seen.has(el)) continue; seen.add(el);
+    if (seen.has(el)) continue;
+    seen.add(el);
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) continue;
     list.push(el);
@@ -155,13 +167,19 @@ const CLICK = (ref) => {
 const shot = async (page, name, width) => {
   const path = `${shotDir}/${name}.png`;
   await page.setViewportSize({ width, height: 2400 });
-  await page.evaluate((w) => { const h = document.getElementById("shot-host"); if (h) h.style.width = w + "px"; }, width);
+  await page.evaluate((w) => {
+    const h = document.getElementById("shot-host");
+    if (h) h.style.width = w + "px";
+  }, width);
   await page.waitForTimeout(350);
   const box = await page.evaluate(() => {
     const host = document.getElementById("shot-host");
     if (!host) return null;
     let bottom = host.getBoundingClientRect().bottom;
-    for (const el of host.querySelectorAll("*")) { const r = el.getBoundingClientRect(); if (r.width > 0 && r.height > 0) bottom = Math.max(bottom, r.bottom); }
+    for (const el of host.querySelectorAll("*")) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) bottom = Math.max(bottom, r.bottom);
+    }
     return { x: 0, y: 0, width: Math.ceil(host.getBoundingClientRect().width), height: Math.min(2400, Math.max(40, Math.ceil(bottom))) };
   });
   if (!box) return { ok: false, error: "nothing mounted" };
@@ -175,7 +193,12 @@ const say = (obj) => process.stdout.write(JSON.stringify(obj) + "\n");
 for await (const line of rl) {
   if (line.trim() === "") continue;
   let msg;
-  try { msg = JSON.parse(line); } catch (e) { say({ ok: false, error: `bad json: ${e.message}` }); continue; }
+  try {
+    msg = JSON.parse(line);
+  } catch (e) {
+    say({ ok: false, error: `bad json: ${e.message}` });
+    continue;
+  }
   try {
     if (msg.cmd === "quit") break;
     if (msg.cmd === "mount") {
@@ -192,21 +215,27 @@ for await (const line of rl) {
     } else if (msg.cmd === "click") {
       const page = await pageFor(current.theme);
       const res = await page.evaluate(CLICK, msg.ref);
-      if (!res.ok) { say(res); continue; }
+      if (!res.ok) {
+        say(res);
+        continue;
+      }
       await page.waitForTimeout(msg.settle ?? 900);
       say({ ok: true, ...(await page.evaluate(PROBE)), errors: page.errors.slice(0, 5) });
     } else if (msg.cmd === "fill") {
       const page = await pageFor(current.theme);
-      const ok = await page.evaluate(({ ref, text }) => {
-        const host = document.getElementById("shot-host");
-        const el = [...host.querySelectorAll("input, textarea")][ref];
-        if (!el) return false;
-        const setter = Object.getOwnPropertyDescriptor(el.constructor.prototype, "value").set;
-        setter.call(el, text);
-        el.dispatchEvent(new Event("input", { bubbles: true }));
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-        return true;
-      }, { ref: msg.ref, text: msg.text });
+      const ok = await page.evaluate(
+        ({ ref, text }) => {
+          const host = document.getElementById("shot-host");
+          const el = [...host.querySelectorAll("input, textarea")][ref];
+          if (!el) return false;
+          const setter = Object.getOwnPropertyDescriptor(el.constructor.prototype, "value").set;
+          setter.call(el, text);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+          return true;
+        },
+        { ref: msg.ref, text: msg.text },
+      );
       await page.waitForTimeout(300);
       say({ ok, ...(await page.evaluate(PROBE)) });
     } else if (msg.cmd === "reload") {

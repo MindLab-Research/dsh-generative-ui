@@ -6,11 +6,18 @@ const call = async (body: string, opts: { cwd?: string; method?: string; search?
   const chunks: string[] = [];
   let status = 0;
   const res = {
-    writeHead(code: number) { status = code; return res; },
-    end(text?: string) { if (text !== undefined) chunks.push(text); },
+    writeHead(code: number) {
+      status = code;
+      return res;
+    },
+    end(text?: string) {
+      if (text !== undefined) chunks.push(text);
+    },
   };
   const req = Object.assign(
-    (async function* () { yield body; })(),
+    (async function* () {
+      yield body;
+    })(),
     { url: `/x?cwd=${encodeURIComponent(opts.cwd ?? "/w")}`, method: opts.method ?? "POST", on: () => {} },
   );
   const ctx = { web: { search: opts.search ?? (async () => ({ sources: [{ url: "https://e.x" }], truncated: false })) } };
@@ -21,7 +28,10 @@ const call = async (body: string, opts: { cwd?: string; method?: string; search?
 test("a search is forwarded and its result returned", async () => {
   const seen: unknown[] = [];
   const r = await call(JSON.stringify({ query: "bun test" }), {
-    search: async (request: unknown) => { seen.push(request); return { content: "c", sources: [{ url: "https://a" }], truncated: true }; },
+    search: async (request: unknown) => {
+      seen.push(request);
+      return { content: "c", sources: [{ url: "https://a" }], truncated: true };
+    },
   });
   expect(r.status).toBe(200);
   expect(JSON.parse(r.body)).toEqual({ content: "c", sources: [{ url: "https://a" }], truncated: true });
@@ -50,7 +60,9 @@ test("GET is not a search", async () => {
 // something; swallowing it would give the reader a card that is empty for no stated reason.
 test("a provider failure comes back as a message, not a crash", async () => {
   const r = await call(JSON.stringify({ query: "x" }), {
-    search: async () => { throw new Error("WEB_PROVIDER_UNAVAILABLE: no usable provider"); },
+    search: async () => {
+      throw new Error("WEB_PROVIDER_UNAVAILABLE: no usable provider");
+    },
   });
   expect(r.status).toBe(500);
   expect(JSON.parse(r.body).error).toContain("WEB_PROVIDER_UNAVAILABLE");

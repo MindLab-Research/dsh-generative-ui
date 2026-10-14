@@ -597,7 +597,12 @@ test("语言变化只刷新存留的源码预览，卸载后取消订阅", async
   const listeners = new Set<() => void>();
   const { stop } = await start(() => [segment(code)], {
     t: (key) => language + ":" + key,
-    subscribeLocale: (refresh) => { listeners.add(refresh); return () => { listeners.delete(refresh); }; },
+    subscribeLocale: (refresh) => {
+      listeners.add(refresh);
+      return () => {
+        listeners.delete(refresh);
+      };
+    },
   });
   language = "zh";
   for (const refresh of listeners) refresh();

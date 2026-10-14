@@ -31,8 +31,7 @@ test("nothing CI runs invokes a shell the runner does not have", () => {
 // The shebang matters too: a script invoked as `sh foo.sh` ignores it, but anything that runs it
 // directly (a hook, a human) follows it, and then the two paths differ.
 test("and no script CI runs carries a zsh shebang", () => {
-  const scripts = reachable("check:ci")
-    .flatMap((name) => [...(pkg.scripts[name] ?? "").matchAll(/(?:^|\s)(?:sh|bash|zsh) (scripts\/[\w.-]+)/g)].map((m) => m[1]));
+  const scripts = reachable("check:ci").flatMap((name) => [...(pkg.scripts[name] ?? "").matchAll(/(?:^|\s)(?:sh|bash|zsh) (scripts\/[\w.-]+)/g)].map((m) => m[1]));
   for (const path of scripts) {
     expect(readFileSync(path, "utf8").split("\n")[0]).not.toContain("zsh");
   }

@@ -10,8 +10,12 @@ export function createClock() {
   let generation = 0;
   let waiters: { at: number; resolve: () => void; reject: (e: unknown) => void }[] = [];
   return {
-    get now() { return now; },
-    get generation() { return generation; },
+    get now() {
+      return now;
+    },
+    get generation() {
+      return generation;
+    },
     tick(ms: number) {
       now += ms;
       const due = waiters.filter((w) => w.at <= now);

@@ -204,7 +204,7 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
     // reports asynchronously, so a block would be claimed before its first entry ever arrives and
     // the deferral would never happen at all.
     const box = block.getBoundingClientRect();
-    const limit = (globalThis.innerHeight || 0) || 0;
+    const limit = globalThis.innerHeight || 0 || 0;
     // A zero-height box means the block is not laid out yet (display:none, or an ancestor still
     // hidden). That is not "far away", and treating it as such parks a card that is about to be
     // visible, so measure it again next sweep instead of parking it.

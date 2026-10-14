@@ -52,8 +52,7 @@ export const failureText = (failure: CardFailure) =>
  * the turn that followed it. Without a defined outcome for that, the model has been told something
  * is broken, cannot find it, and goes looking — in that session it rewrote a card that was fine.
  */
-export const WAKE_TEXT =
-  "A ui4a card you wrote is not rendering — the failure is in the runtime context. If there is no card failure there, it recovered on its own between this notice and now: say nothing about it and carry on with what you were doing.";
+export const WAKE_TEXT = "A ui4a card you wrote is not rendering — the failure is in the runtime context. If there is no card failure there, it recovered on its own between this notice and now: say nothing about it and carry on with what you were doing.";
 
 /** Shown as the context row's label in the transcript, so a reader can see what fired without opening it. */
 export const WAKE_SUMMARY = "ui4a card failed to render";

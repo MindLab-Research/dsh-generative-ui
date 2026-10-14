@@ -23,6 +23,8 @@ test("every script is named in CLAUDE.md", () => {
   // added and never written down while this stayed green. A gate that cannot fail on the thing it
   // measures is worse than no gate, because its green is quoted as evidence.
   const recorded = (name: string) => doc.includes(`scripts/${name}`) || doc.includes(name) || doc.includes(`bun run ${stem(name)}`);
-  const missing = readdirSync("scripts", { withFileTypes: true }).filter((e) => e.isFile() && !recorded(e.name)).map((e) => e.name);
+  const missing = readdirSync("scripts", { withFileTypes: true })
+    .filter((e) => e.isFile() && !recorded(e.name))
+    .map((e) => e.name);
   expect(missing).toEqual([]);
 });

@@ -62,8 +62,7 @@ export const openSignature = (id: string, collected: CollectedCanvases): string 
  * length moves on every frame that matters and on none that do not, and comparing megabytes of
  * source per token would cost more than the walk it avoids.
  */
-export const callsKeyOf = (views: readonly ToolCallView[]): string =>
-  `${views.length}:${views.reduce((total, call) => total + call.argsRaw.length + (call.settled ? 1 : 0), 0)}`;
+export const callsKeyOf = (views: readonly ToolCallView[]): string => `${views.length}:${views.reduce((total, call) => total + call.argsRaw.length + (call.settled ? 1 : 0), 0)}`;
 
 export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: AutoOpenOptions): { sweep: () => void } {
   /** Last signature acted on, per session and canvas. */

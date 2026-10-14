@@ -33,18 +33,28 @@ export default function TokyoBudget() {
       </Slider>
       <ToggleButtonGroup selectedKeys={[tier]} onSelectionChange={(keys) => setTier([...keys][0] as keyof typeof TIERS)} disallowEmptySelection className="grid grid-cols-3 gap-1 rounded-xl bg-[#1b1b1c] p-1">
         {Object.keys(TIERS).map((key) => (
-          <ToggleButton key={key} id={key} className="rounded-lg py-1.5 text-[13px] capitalize text-[#adb2b8] outline-none transition-colors data-[selected]:bg-[#353638] data-[selected]:text-[#f9fafb]">{key}</ToggleButton>
+          <ToggleButton key={key} id={key} className="rounded-lg py-1.5 text-[13px] capitalize text-[#adb2b8] outline-none transition-colors data-[selected]:bg-[#353638] data-[selected]:text-[#f9fafb]">
+            {key}
+          </ToggleButton>
         ))}
       </ToggleButtonGroup>
       <dl className="grid grid-cols-[1fr_auto] gap-y-2 text-[14px]">
         <dt className="text-[#adb2b8]">Stay</dt>
-        <dd className="text-right tabular-nums"><NumberFlow value={stay} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} /></dd>
+        <dd className="text-right tabular-nums">
+          <NumberFlow value={stay} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} />
+        </dd>
         <dt className="text-[#adb2b8]">Food</dt>
-        <dd className="text-right tabular-nums"><NumberFlow value={food} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} /></dd>
+        <dd className="text-right tabular-nums">
+          <NumberFlow value={food} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} />
+        </dd>
         <dt className="text-[#adb2b8]">Metro + airport</dt>
-        <dd className="text-right tabular-nums"><NumberFlow value={transit} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} /></dd>
+        <dd className="text-right tabular-nums">
+          <NumberFlow value={transit} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} />
+        </dd>
         <dt className="border-t border-[#ffffff1f] pt-3 font-medium">Total</dt>
-        <dd className="border-t border-[#ffffff1f] pt-3 text-right text-[20px] font-medium text-[#7aaaff] tabular-nums"><NumberFlow value={stay + food + transit} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} /></dd>
+        <dd className="border-t border-[#ffffff1f] pt-3 text-right text-[20px] font-medium text-[#7aaaff] tabular-nums">
+          <NumberFlow value={stay + food + transit} format={{ style: "currency", currency: "USD", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }} />
+        </dd>
       </dl>
     </div>
   );

@@ -128,13 +128,13 @@ for (const width of widths) {
     const host = document.getElementById("shot-host");
     const boxes = [];
     for (const el of host.querySelectorAll("*")) {
-      if (el.children.length || !(el.innerText || "").trim()) continue;   // leaves with text
+      if (el.children.length || !(el.innerText || "").trim()) continue; // leaves with text
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) boxes.push(r);
     }
     const lines = new Map();
     for (const r of boxes) {
-      const key = Math.round((r.top + r.bottom) / 2 / 6);                 // same visual line
+      const key = Math.round((r.top + r.bottom) / 2 / 6); // same visual line
       if (!lines.has(key)) lines.set(key, []);
       lines.get(key).push(r);
     }
@@ -182,9 +182,10 @@ for (const width of widths) {
   const flush = await p.evaluate(() => {
     const host = document.getElementById("shot-host");
     const hr = host.getBoundingClientRect();
-    let best = 1e9, who = null;
+    let best = 1e9,
+      who = null;
     for (const el of host.querySelectorAll("*")) {
-      if (el.classList.contains("ui4a-root")) continue;   // the full-width wrapper, same as UNUSED
+      if (el.classList.contains("ui4a-root")) continue; // the full-width wrapper, same as UNUSED
       // Only TEXT-BEARING LEAVES. The first version measured every element, so it fired on both
       // the defect and the control: a card's own root div is supposed to fill the host, and a
       // card with perfect `p-4` still has a 0px-from-edge container. What loses a character to
@@ -194,16 +195,25 @@ for (const width of widths) {
       const r = el.getBoundingClientRect();
       if (r.width < 4 || r.height < 4) continue;
       const gap = Math.min(r.left - hr.left, hr.right - r.right);
-      if (gap < best) { best = gap; who = `${el.tagName.toLowerCase()}.${(el.className || "").toString().slice(0, 30)}`; }
+      if (gap < best) {
+        best = gap;
+        who = `${el.tagName.toLowerCase()}.${(el.className || "").toString().slice(0, 30)}`;
+      }
     }
     return { px: Math.round(best), who };
   });
   if (flush.px < 4) console.log(`FLUSH ${width} ${flush.px}px from the host edge — ${flush.who}`);
   if (process.env.PROBE_TRUNC) {
-    const t = await p.evaluate(() => [...document.querySelectorAll(".truncate")].map((e) => ({
-      t: (e.textContent || "").trim().slice(0, 24), box: Math.round(e.getBoundingClientRect().width), want: e.scrollWidth,
-      parent: Math.round(e.parentElement.getBoundingClientRect().width),
-    })).filter((x) => x.want > x.box + 1));
+    const t = await p.evaluate(() =>
+      [...document.querySelectorAll(".truncate")]
+        .map((e) => ({
+          t: (e.textContent || "").trim().slice(0, 24),
+          box: Math.round(e.getBoundingClientRect().width),
+          want: e.scrollWidth,
+          parent: Math.round(e.parentElement.getBoundingClientRect().width),
+        }))
+        .filter((x) => x.want > x.box + 1),
+    );
     if (t.length) console.log(`TRUNC ${width} ` + JSON.stringify(t));
   }
   if (errs.length) console.log(`pageerror ${width}:`, errs[0]);

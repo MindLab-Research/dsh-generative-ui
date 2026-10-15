@@ -486,6 +486,13 @@ the 0.1.x release (prerelease range behavior is easy to remember backwards — o
 than guessing). Bumping to `^0.1.0-rc.8` would only exclude hosts still on rc.7 — renovate leaves peerDeps alone by
 default, and it's right to.
 
+**A bundled `@deepseek-ai` helper stays in `devDependencies`, even though the source imports it.**
+`dsh-util-workspace-path` (`parseFileAddress` / `sessionFileAddress`) is inlined into `lib/client.js` —
+measured: zero `require()` for it, six inlined references — so nothing that installs this package ever
+resolves it. Listing it under `dependencies` claims otherwise, keeps it out of the version SET every
+other `@deepseek-ai` pin lives in, and makes `bun install` warn about a duplicate. It is a build-time
+input, like the compiler plugins above it.
+
 **Renovate groups packages by config, not by closing PRs manually.** One `groupName` plus
 `matchPackageNames: ["/^@deepseek-ai//"]` in `.github/renovate.json` reopens 8 dsh packages as a single PR. Validate
 with `bunx -p renovate renovate-config-validator` (`bunx --bun` crashes on the re2 native module; drop `--bun` and it

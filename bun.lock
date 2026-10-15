@@ -5,7 +5,6 @@
     "": {
       "name": "dsh-generative-ui",
       "dependencies": {
-        "@deepseek-ai/dsh-util-workspace-path": "^0.1.5-rc.1 || ^0.1.6-0 || ^0.1.7-0 || ^0.2.0-0 || ^0.2.1-0",
         "@esm.sh/tsx": "^1.5.3",
         "@unocss/core": "^66.8.1",
         "@unocss/preset-wind4": "^66.8.1",

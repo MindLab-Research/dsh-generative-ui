@@ -27,7 +27,10 @@ export function StreamedHeadline({ lines }: { lines: string[] }) {
             {/* The full line holds the box so the page below never moves while it types. */}
             <span className="relative block">
               <span className="invisible">{line}</span>
-              <span className="absolute inset-0">{shown}{typing && <span className="ui4a-caret ui4a-caret-lg" />}</span>
+              <span className="absolute inset-0">
+                {shown}
+                {typing && <span className="ui4a-caret ui4a-caret-lg" />}
+              </span>
             </span>
           </span>
         );
@@ -92,7 +95,9 @@ export function FirstPaintRace() {
   const box = useRef<HTMLDivElement>(null);
   const seen = useInView(box);
   const [t, setT] = useState(PERIOD * 0.7);
-  useFrame((dt) => { if (seen.get() && !reducedMotion()) setT((x) => (x + dt) % PERIOD); });
+  useFrame((dt) => {
+    if (seen.get() && !reducedMotion()) setT((x) => (x + dt) % PERIOD);
+  });
   // The loop fades fully out before it wraps and the reset happens while invisible — no frame jumps.
   const at = Math.max(0, Math.min(t - 0.8, PERIOD - 2));
   const fade = Math.min(1, (PERIOD - t) / 0.7, t / 0.5);

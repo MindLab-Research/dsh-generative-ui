@@ -12,13 +12,18 @@
  * has no base to resolve against. Children may import their siblings, which works for the same
  * reason once they too have been rewritten.
  */
+import { useEffect, useState } from "react";
+import { canvasPath } from "../../contract.ts";
+import { compiler } from "../runtime/GenUISurface.tsx";
+import type { Canvas } from "./collect.ts";
+import { readCanvasChild } from "./read.ts";
 /**
  * Matches the specifier of a static import or re-export; the second capture is the specifier.
  *
  * NOT global, and that is load-bearing. It was `/g`, shared by all three call sites, and `.test`
  * on a global regex leaves `lastIndex` past the match it found — so `importsSibling` returning
  * TRUE made the very next `matchAll` on the same string return ZERO. That is the order
- * `CanvasPanel` calls them in: ask whether there are sibling imports, then go resolve them. The
+ * the body calls them in: ask whether there are sibling imports, then go resolve them. The
  * panel found none to resolve and the card rendered without its sub-pages.
  *
  * `matchAll` requires `/g`, so it gets its own copy; the shared one stays sticky-free and no
@@ -28,7 +33,7 @@ const SPECIFIER = /(\bfrom\s*|\bimport\s*\(\s*)["'](\.[^"']*)["']/;
 const SPECIFIER_ALL = new RegExp(SPECIFIER, "g");
 
 /**
- * Whether the card imports a sibling at all — the cheap question `CanvasPanel` asks before
+ * Whether the card imports a sibling at all — the cheap question `useSubPages` asks before
  * paying for a resolve pass. It had its own copy of the regex, identical but for the `g` flag;
  * a widening applied to one and not the other means the panel never calls `inlineSubPages` and
  * the card silently renders without its sub-pages. Sharing one pattern fixed that and introduced
@@ -106,4 +111,69 @@ export async function inlineSubPages(code: string, entry: string, read: (specifi
   }
 
   return rewrite(code, entryTargets);
+}
+
+/**
+ * Whether this canvas needs the sub-page pass at all. Extracted from the effect because the
+ * mutation audit could not constrain it there — flipping `streaming` or dropping the
+ * `importsSibling` check survived every test, and both are load-bearing: resolving mid-stream
+ * inlines a prefix that the next frame supersedes, and a canvas with no sibling imports would
+ * pay a compile per frame to produce the code it already had.
+ *
+ * The `undefined` checks stay in the effect: a type predicate narrows only one parameter, and
+ * moving them here would cost the compiler its knowledge that `cwd` and `id` are strings after.
+ */
+export const needsResolve = (code: string, streaming: boolean | undefined): boolean => !streaming && importsSibling(code);
+
+/**
+ * Revoke every blob URL in a list, exactly once each.
+ *
+ * Both callers hand it the SAME array — the disposer, and the resolve that lands after it. The
+ * array is filled by `inlineSubPages` as it goes, so the two can see different lengths, and a
+ * URL revoked twice is harmless while one revoked never is a leak per edit. Emptying the list
+ * as it goes makes the pair idempotent regardless of which runs first or what arrived between.
+ */
+export const revokeAll = (urls: string[]): void => {
+  while (urls.length > 0) URL.revokeObjectURL(urls.pop()!);
+};
+
+/**
+ * Rewrites a canvas's relative sub-page imports into blob URLs before it is compiled.
+ *
+ * Only for a settled canvas: mid-stream the sibling files are usually not written yet, and a
+ * canvas does not stream under the default PTC mode anyway (see CLAUDE.md §3.6). Until the
+ * rewrite lands the original source is rendered, which fails exactly as it does today rather
+ * than blanking a canvas that was working.
+ */
+export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined) {
+  const [resolved, setResolved] = useState<{ key: string; code: string } | null>(null);
+  // Destructured so the effect depends on scalars: the caller rebuilds `canvas` on every
+  // sweep, and depending on the object would re-run the whole resolve for an unchanged canvas.
+  const id = canvas?.id;
+  const code = canvas?.code;
+  const streaming = canvas?.streaming;
+
+  useEffect(() => {
+    if (cwd === undefined || id === undefined || code === undefined) return;
+    if (!needsResolve(code, streaming)) return;
+    const key = `${id}:${code.length}`;
+    let live = true;
+    const urls: string[] = [];
+    const compile = async (filename: string, source: string) => (await compiler().compile(source, { filename })).code;
+    void inlineSubPages(code, canvasPath(id), (specifier, from) => readCanvasChild(cwd, id, specifier, from), compile, urls).then((next) => {
+      // Resolved after teardown: nobody will ever render these, so revoke them here — the
+      // disposer already ran and cannot see urls the pass appended after it.
+      if (!live) return void revokeAll(urls);
+      setResolved({ key, code: next });
+    });
+    return () => {
+      live = false;
+      // The surface holds the previous code, so its blobs stay reachable until it re-renders;
+      // revoking on the next resolve rather than here would leak one set per edit.
+      revokeAll(urls);
+    };
+  }, [cwd, id, code, streaming]);
+
+  if (id === undefined || code === undefined) return "";
+  return resolved !== null && resolved.key === `${id}:${code.length}` ? resolved.code : code;
 }

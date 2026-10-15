@@ -59,7 +59,7 @@ describe("createBrowserTsxCompiler", () => {
   // so cutting it away leaves something to mount. An input whose damage sits above the component
   // is rescued into an empty module, which is now a rethrow; see the test further down.
   test("a card only streaming can rescue still compiles when settled", async () => {
-    const { code } = await compile('export default function A() {\n  return <div>hi</div>\n}\n\ntype T');
+    const { code } = await compile("export default function A() {\n  return <div>hi</div>\n}\n\ntype T");
     expect(code).toContain("jsx");
   });
 

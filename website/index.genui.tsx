@@ -35,11 +35,18 @@ const lede = "text-[16px] leading-[26px] text-[#b6bcc4]";
  * to be in the HTML before any module script runs, so it is server-rendered. Every package that map
  * shims has to be imported in this file: `genui build` resolves bare specifiers from the entry alone.
  */
-installRuntime({ GenUIRenderer, normalize: normalizeGeneratedTsx, tsx }, {
-  react: React, "react/jsx-runtime": JsxRuntime, "react-dom": ReactDOM, "react-dom/client": ReactDOMClient, scheduler: Scheduler,
-  "$dsh/chat": { sendMessage: (text: string) => dispatchEvent(new CustomEvent("ui4a:send", { detail: text })) },
-  "$dsh/state": { usePersistedState },
-});
+installRuntime(
+  { GenUIRenderer, normalize: normalizeGeneratedTsx, tsx },
+  {
+    react: React,
+    "react/jsx-runtime": JsxRuntime,
+    "react-dom": ReactDOM,
+    "react-dom/client": ReactDOMClient,
+    scheduler: Scheduler,
+    "$dsh/chat": { sendMessage: (text: string) => dispatchEvent(new CustomEvent("ui4a:send", { detail: text })) },
+    "$dsh/state": { usePersistedState },
+  },
+);
 
 // Rendered only where it can work: in the server render, and in the hydration that has to match it.
 // genui dev renders on the client alone, where React warns about the tag and it would never run.
@@ -49,23 +56,25 @@ const ImportMap = () => (ssr ? <script type="importmap" dangerouslySetInnerHTML=
 /** The stage needs the browser (wasm, rAF, real layout); it mounts after hydration with its box already reserved. */
 function useMounted() {
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { ensureImportMap(); setMounted(true); }, []);
+  useEffect(() => {
+    ensureImportMap();
+    setMounted(true);
+  }, []);
   return mounted;
 }
 
 function Install() {
   const [copied, setCopied] = useState(false);
-  const copy = () => void navigator.clipboard?.writeText(INSTALL).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1600); });
+  const copy = () =>
+    void navigator.clipboard?.writeText(INSTALL).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    });
   return (
     // One signal only: a barely-there wash, no stroke. The palette is the same white at four opacities.
     <div className="flex max-w-full items-center gap-3 rounded-xl bg-white/[0.035] py-2.5 pl-4 pr-1.5">
       <code className="min-w-0 flex-1 truncate font-mono text-[13px]">
-        <span className="text-white/25">$</span>{" "}
-        <span className="text-white/90">dsh</span>{" "}
-        <span className="text-white/55">plugin</span>{" "}
-        <span className="text-white/35">--profile</span>{" "}
-        <span className="text-white/70">web</span>{" "}
-        <span className="text-white/55">add</span>{" "}
+        <span className="text-white/25">$</span> <span className="text-white/90">dsh</span> <span className="text-white/55">plugin</span> <span className="text-white/35">--profile</span> <span className="text-white/70">web</span> <span className="text-white/55">add</span>{" "}
         <span className="text-white/90">dsh-generative-ui</span>
       </code>
       <button type="button" onClick={copy} aria-live="polite" className="shrink-0 rounded-lg px-3 py-1.5 font-sans text-[12px] text-white/45 transition-colors hover:bg-white/[0.06] hover:text-white/85">
@@ -77,11 +86,19 @@ function Install() {
 
 const Nav = () => (
   <nav className={`${page} flex h-16 items-center justify-between`}>
-    <span className="flex items-center gap-2.5 text-[14px] font-medium text-[#f9fafb]"><Fish className="h-[15px] w-[20px]" /> dsh-generative-ui</span>
+    <span className="flex items-center gap-2.5 text-[14px] font-medium text-[#f9fafb]">
+      <Fish className="h-[15px] w-[20px]" /> dsh-generative-ui
+    </span>
     <div className="flex items-center gap-6 text-[14px] text-[#adb2b8]">
-      <a className="transition-colors hover:text-[#f9fafb]" href={UI4A}>Research</a>
-      <a className="transition-colors hover:text-[#f9fafb]" href={NPM}>npm</a>
-      <a className="transition-colors hover:text-[#f9fafb]" href={REPO}>GitHub</a>
+      <a className="transition-colors hover:text-[#f9fafb]" href={UI4A}>
+        Research
+      </a>
+      <a className="transition-colors hover:text-[#f9fafb]" href={NPM}>
+        npm
+      </a>
+      <a className="transition-colors hover:text-[#f9fafb]" href={REPO}>
+        GitHub
+      </a>
     </div>
   </nav>
 );
@@ -94,10 +111,7 @@ function Hero({ live }: { live: boolean }) {
           <StreamedHeadline lines={["Streams like text.", "Works like software."]} />
         </div>
         <div className={`${col} flex flex-col gap-6 lg:pb-3`}>
-          <p className={lede}>
-            A plugin for DeepSeek Harness. The model writes a React component into its reply and dsh web runs it as the tokens arrive — sliders you can drag
-            before the card is finished, 3D, games, any package on npm.
-          </p>
+          <p className={lede}>A plugin for DeepSeek Harness. The model writes a React component into its reply and dsh web runs it as the tokens arrive — sliders you can drag before the card is finished, 3D, games, any package on npm.</p>
           <Install />
         </div>
       </div>
@@ -147,13 +161,14 @@ const Race = () => (
     <section className={`${page} grid gap-12 py-24 lg:grid-cols-[1fr_1.4fr]`}>
       <div className={`${col} flex flex-col gap-5`}>
         <h2 className={h2}>Half the tokens. On screen from the first tenth.</h2>
-        <p className={lede}>
-          A component is shorter than the page that would draw it — about 45% fewer output tokens across the 48-case gallery in the UI4A report — and it can
-          render long before it is complete. HTML has nothing to show until it parses.
-        </p>
-        <a href={UI4A} className="text-[14px] text-[#7aaaff] transition-colors hover:text-[#a5c4ff]">Read the UI4A report →</a>
+        <p className={lede}>A component is shorter than the page that would draw it — about 45% fewer output tokens across the 48-case gallery in the UI4A report — and it can render long before it is complete. HTML has nothing to show until it parses.</p>
+        <a href={UI4A} className="text-[14px] text-[#7aaaff] transition-colors hover:text-[#a5c4ff]">
+          Read the UI4A report →
+        </a>
       </div>
-      <div className={col}><FirstPaintRace /></div>
+      <div className={col}>
+        <FirstPaintRace />
+      </div>
     </section>
   </>
 );
@@ -193,9 +208,15 @@ const Footer = () => (
     <footer className={`${page} flex flex-wrap items-center justify-between gap-4 py-10 text-[13px] text-[#81858c]`}>
       <span>Apache-2.0 · Mind Lab</span>
       <div className="flex gap-5">
-        <a className="transition-colors hover:text-[#cfd3d6]" href={REPO}>GitHub</a>
-        <a className="transition-colors hover:text-[#cfd3d6]" href={NPM}>npm</a>
-        <a className="transition-colors hover:text-[#cfd3d6]" href={UI4A}>UI4A report</a>
+        <a className="transition-colors hover:text-[#cfd3d6]" href={REPO}>
+          GitHub
+        </a>
+        <a className="transition-colors hover:text-[#cfd3d6]" href={NPM}>
+          npm
+        </a>
+        <a className="transition-colors hover:text-[#cfd3d6]" href={UI4A}>
+          UI4A report
+        </a>
       </div>
     </footer>
   </>

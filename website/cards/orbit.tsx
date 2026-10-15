@@ -72,7 +72,7 @@ function Dust({ count, radius, spin, size, opacity, spread }) {
     const y = 1 - (i / (count - 1)) * 2;
     const r = Math.sqrt(Math.max(0, 1 - y * y));
     const th = i * 2.399963;
-    const d = radius * (0.62 + ((i * 97) % 100) / 100 * spread);
+    const d = radius * (0.62 + (((i * 97) % 100) / 100) * spread);
     pos[i * 3] = Math.cos(th) * r * d;
     pos[i * 3 + 1] = y * d * 0.55;
     pos[i * 3 + 2] = Math.sin(th) * r * d;

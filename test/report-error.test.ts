@@ -171,8 +171,18 @@ test("the newest card is still reported", async () => {
 // not re-arm, because `reportStranded`'s `reportedFor` guard already fired for that code.
 test("a superseded card's failure does not starve the newest card's report", async () => {
   const sent: Report[] = [];
-  reportCardError((r) => sent.push(r), "B broke", "render", () => true);
-  reportCardError(() => expect.unreachable("a superseded card must not send"), "A broke", "render", () => false);
+  reportCardError(
+    (r) => sent.push(r),
+    "B broke",
+    "render",
+    () => true,
+  );
+  reportCardError(
+    () => expect.unreachable("a superseded card must not send"),
+    "A broke",
+    "render",
+    () => false,
+  );
   await settle();
   expect(sent).toEqual([{ message: "B broke", phase: "render" }]);
 });
@@ -182,7 +192,12 @@ test("a superseded card's failure does not starve the newest card's report", asy
 // the observer margin, is claimed, compiles and paints.
 test("a card that may not report may not retract either", async () => {
   const sent: Report[] = [];
-  reportCardError((r) => sent.push(r), "A broke", "render", () => true);
+  reportCardError(
+    (r) => sent.push(r),
+    "A broke",
+    "render",
+    () => true,
+  );
   await settle();
   expect(sent).toEqual([{ message: "A broke", phase: "render" }]);
   cardRendered(false, () => false);
@@ -193,7 +208,12 @@ test("a card that may not report may not retract either", async () => {
 // that never retracts anything.
 test("the newest card's paint still retracts its failure", async () => {
   const sent: Report[] = [];
-  reportCardError((r) => sent.push(r), "A broke", "render", () => true);
+  reportCardError(
+    (r) => sent.push(r),
+    "A broke",
+    "render",
+    () => true,
+  );
   await settle();
   cardRendered(false, () => true);
   expect(sent).toEqual([{ message: "A broke", phase: "render" }, null]);

@@ -22,7 +22,9 @@ export function advance(s: { x: number; v: number }, target: number, dt: number,
 /** One rAF loop for the lifetime of the component; `tick` gets seconds, clamped so a background tab does not teleport. */
 export function useFrame(tick: (dt: number, now: number) => void, active = true) {
   const ref = useRef(tick);
-  useLayoutEffect(() => { ref.current = tick; });
+  useLayoutEffect(() => {
+    ref.current = tick;
+  });
   useEffect(() => {
     if (!active) return;
     let last = performance.now();
@@ -39,7 +41,12 @@ export function useFrame(tick: (dt: number, now: number) => void, active = true)
 export function useInView(ref: { current: Element | null }, margin = "0px") {
   const seen = useRef(false);
   useEffect(() => {
-    const io = new IntersectionObserver(([entry]) => { seen.current = entry.isIntersecting; }, { rootMargin: margin });
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        seen.current = entry.isIntersecting;
+      },
+      { rootMargin: margin },
+    );
     io.observe(ref.current!);
     return () => io.disconnect();
   }, [ref, margin]);
@@ -56,24 +63,36 @@ export function useFollowScroll(ref: { current: HTMLElement | null }, response =
   const held = useRef(-Infinity);
   // On window, not the element: a box remounted per scene would drop listeners attached to the old one.
   useEffect(() => {
-    const take = (e: Event) => { if (ref.current?.contains(e.target as Node)) held.current = performance.now(); };
+    const take = (e: Event) => {
+      if (ref.current?.contains(e.target as Node)) held.current = performance.now();
+    };
     const events = ["wheel", "touchmove", "pointerdown"] as const;
     for (const type of events) addEventListener(type, take, { passive: true });
-    return () => { for (const type of events) removeEventListener(type, take); };
+    return () => {
+      for (const type of events) removeEventListener(type, take);
+    };
   }, [ref]);
   useFrame((dt, now) => {
     const el = ref.current;
     if (!el) return;
     const bottom = Math.max(0, el.scrollHeight - el.clientHeight);
-    if (now - held.current < 2200 && bottom - el.scrollTop > 4) { y.current = { x: el.scrollTop, v: 0 }; return; }
+    if (now - held.current < 2200 && bottom - el.scrollTop > 4) {
+      y.current = { x: el.scrollTop, v: 0 };
+      return;
+    }
     advance(y.current, to?.(el) ?? bottom, dt, response, 1);
     el.scrollTop = y.current.x;
   });
-  return () => { y.current = { x: 0, v: 0 }; held.current = -Infinity; };
+  return () => {
+    y.current = { x: 0, v: 0 };
+    held.current = -Infinity;
+  };
 }
 
 type Spring = { x: number; v: number };
-const stop = (s: Spring) => { s.x = s.v = 0; };
+const stop = (s: Spring) => {
+  s.x = s.v = 0;
+};
 
 /**
  * FLIP on springs for the transcript: a row that moves because something above or below it changed
@@ -89,7 +108,11 @@ export function useFlip(box: { current: HTMLElement | null }, from?: { current: 
     if (reducedMotion()) return;
     for (const el of kids) {
       const row = seen.get(el);
-      if (row) { row.y.x += row.top - el.offsetTop; row.top = el.offsetTop; continue; }
+      if (row) {
+        row.y.x += row.top - el.offsetTop;
+        row.top = el.offsetTop;
+        continue;
+      }
       const next = { top: el.offsetTop, x: { x: 0, v: 0 }, y: { x: 10, v: 0 } };
       const src = from?.current;
       const morph = el.querySelector<HTMLElement>("[data-morph]");
@@ -107,7 +130,10 @@ export function useFlip(box: { current: HTMLElement | null }, from?: { current: 
       if (!r.x.x && !r.y.x && !r.x.v && !r.y.v) continue;
       advance(r.x, 0, dt, 0.5, 0.9);
       advance(r.y, 0, dt, 0.45, 0.95);
-      if (Math.abs(r.x.x) + Math.abs(r.y.x) < 0.2 && Math.abs(r.x.v) + Math.abs(r.y.v) < 4) { stop(r.x); stop(r.y); }
+      if (Math.abs(r.x.x) + Math.abs(r.y.x) < 0.2 && Math.abs(r.x.v) + Math.abs(r.y.v) < 4) {
+        stop(r.x);
+        stop(r.y);
+      }
       el.style.setProperty("transform", r.x.x || r.y.x ? `translate3d(${r.x.x}px,${r.y.x}px,0)` : "");
     }
   });

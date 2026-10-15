@@ -11,6 +11,7 @@
  * algorithm rather than of the machine. Measured 3.725ms against 0.014ms — 265×.
  */
 import { expect, test } from "bun:test";
+import { callsKeyOf } from "../src/client/canvas/auto-open.ts";
 import { collectCanvases, type ToolCallView } from "../src/client/canvas/collect.ts";
 
 const code = await Bun.file("test/cards/2048.ui4a.tsx").text();
@@ -20,8 +21,8 @@ const calls: ToolCallView[] = Array.from({ length: 34 }, (_, i) => ({
   settled: true,
 }));
 
-/** The same key `mountCanvasHost` computes, kept here so the shape is asserted rather than described. */
-const keyOf = (views: readonly ToolCallView[]) => `${views.length}:${views.reduce((total, call) => total + call.argsRaw.length + (call.settled ? 1 : 0), 0)}`;
+// The production key, not a copy of it: a test that re-implements the thing it measures only
+// proves a re-implementation agrees with itself (§6.5).
 
 /*
  * The BEST of several batches, not the mean of one — and few enough iterations that the whole
@@ -50,20 +51,20 @@ const msPerCall = (run: () => void) => {
 
 test("the cheap key is an order of magnitude cheaper than the walk", () => {
   const walk = msPerCall(() => collectCanvases(calls));
-  const key = msPerCall(() => keyOf(calls));
+  const key = msPerCall(() => callsKeyOf(calls));
   expect(key * 10).toBeLessThan(walk);
 });
 
-// The key has to MOVE when a streamed argument grows, or the panel stops updating mid-write —
+// The key has to MOVE when a streamed argument grows, or the sweep stops opening mid-write —
 // which would be a far worse bug than the cost it avoids.
 test("a growing argument changes the key", () => {
   const growing = [{ name: "write", argsRaw: '{"file_path":"/w/.dsh/ui4a/canvases/a.ui4a.tsx","content":"exp', settled: false }];
-  const before = keyOf(growing);
+  const before = callsKeyOf(growing);
   growing[0]!.argsRaw += "ort default";
-  expect(keyOf(growing)).not.toBe(before);
+  expect(callsKeyOf(growing)).not.toBe(before);
   // ...and when a call settles, since `complete` flips with no byte added.
   const settling = [{ ...growing[0]!, settled: false }];
-  const unsettled = keyOf(settling);
+  const unsettled = callsKeyOf(settling);
   settling[0]!.settled = true;
-  expect(keyOf(settling)).not.toBe(unsettled);
+  expect(callsKeyOf(settling)).not.toBe(unsettled);
 });

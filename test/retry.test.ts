@@ -94,9 +94,13 @@ test("three retries outlast an esm.sh cold build", () => {
   for (let i = 0; i < 3; i++) {
     dispatchError("retry", {
       attempts: () => attempts,
-      setAttempts: (n) => { attempts = n; },
+      setAttempts: (n) => {
+        attempts = n;
+      },
       schedule: (ms) => waits.push(ms),
-      report: () => { throw new Error("must not report while retrying"); },
+      report: () => {
+        throw new Error("must not report while retrying");
+      },
     });
   }
   expect(waits).toHaveLength(3);
@@ -121,8 +125,7 @@ describe("unbundleFetchedImports", () => {
     // than the bundle-side 500 this retry exists to route around, and one that only shows up on
     // the SECOND attempt. Asserted as an exact string so a future "simplification" cannot quietly
     // widen it back.
-    expect(unbundleFetchedImports({ x: "https://esm.sh/mermaid?bundle&target=es2022&external=react,react-dom,scheduler" }).x)
-      .toBe("https://esm.sh/mermaid?target=es2022&external=react%2Creact-dom%2Cscheduler");
+    expect(unbundleFetchedImports({ x: "https://esm.sh/mermaid?bundle&target=es2022&external=react,react-dom,scheduler" }).x).toBe("https://esm.sh/mermaid?target=es2022&external=react%2Creact-dom%2Cscheduler");
   });
 
   test("leaves a blob URL alone", () => {

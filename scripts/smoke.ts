@@ -186,8 +186,12 @@ if (dom_gaps.length > 0) console.log(`       ${dom_gaps.length} not run here, no
  * exactly like one that does — and cordis would simply never run that callback, silently costing
  * whatever it registered. The list is short and changes rarely; a genuinely new dependency is a
  * one-line edit here and a deliberate one.
+ *
+ * `sidebarRightTabs` / `sidebarRight` / `slots` are the canvas tab's three (§3.6). They travel
+ * together in one nested fiber, and the whole fiber is optional — a host without the right
+ * Sidebar keeps inline cards and the prompt, and canvases simply have nowhere to render.
  */
-const CLIENT_SERVICES = new Set(["conversation", "workspaces"]);
+const CLIENT_SERVICES = new Set(["conversation", "slots", "sidebarRightTabs", "sidebarRight"]);
 const unknown = [...new Set(injected)].filter((name) => !CLIENT_SERVICES.has(name));
 if (unknown.length > 0) throw new Error(`apply() injects ${unknown.join(", ")}, which no profile provides — that callback would never run. Add it to CLIENT_SERVICES if it is real.`);
 

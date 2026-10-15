@@ -12,7 +12,7 @@ catches the sentences that transcribe it anyway.
 Usage: scripts/audit-rates.py < a `bun scripts/corpus-rates.ts` run >
        bun scripts/corpus-rates.ts | python3 scripts/audit-rates.py
 """
-import re, sys, io
+import glob, re, sys, io
 
 actual = {}
 for line in sys.stdin:
@@ -26,7 +26,13 @@ if not actual:
     print("no corpus rates on stdin — skipping (extract the corpus to check quoted rates)")
     sys.exit(0)
 
-text = io.open("CLAUDE.md", encoding="utf-8").read()
+# The design doc is CLAUDE.md plus the docs/ files that hold its evidence — a split in two cannot
+# mean a rate stops being checked. `measurements-log.md` and `examples.md` are deliberately left
+# out: they are raw provenance and card samples, where the same number may legitimately appear at
+# several times in its life, and flagging those would be the over-reporting that gets a checker
+# ignored.
+DESIGN_DOC = ["CLAUDE.md", *sorted(p for p in glob.glob("docs/*.md") if not p.endswith(("measurements-log.md", "examples.md")))]
+text = "".join(io.open(p, encoding="utf-8").read() for p in DESIGN_DOC)
 stale = 0
 for name, (count, total) in sorted(actual.items()):
     # The screen name and a rate on the same line. A rate further away belongs to something else.

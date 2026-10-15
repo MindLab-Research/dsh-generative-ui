@@ -15,10 +15,12 @@ type Point = { x: number; y: number };
 /** Client coordinates, re-read every frame — the thing it chases may be moving. */
 export type Target = () => Point | null;
 
-export const centerOf = (el: () => Element | null | undefined, fx = 0.5, fy = 0.5): Target => () => {
-  const r = el()?.getBoundingClientRect();
-  return r && r.width > 0 ? { x: r.left + r.width * fx, y: r.top + r.height * fy } : null;
-};
+export const centerOf =
+  (el: () => Element | null | undefined, fx = 0.5, fy = 0.5): Target =>
+  () => {
+    const r = el()?.getBoundingClientRect();
+    return r && r.width > 0 ? { x: r.left + r.width * fx, y: r.top + r.height * fy } : null;
+  };
 
 export function createCursor(stage: HTMLElement, node: HTMLElement, clock: Clock) {
   const px = { x: 0, v: 0 };
@@ -39,7 +41,10 @@ export function createCursor(stage: HTMLElement, node: HTMLElement, clock: Clock
   let idle = 0;
 
   const origin = () => stage.getBoundingClientRect();
-  const client = () => { const r = origin(); return { clientX: r.left + px.x, clientY: r.top + py.x }; };
+  const client = () => {
+    const r = origin();
+    return { clientX: r.left + px.x, clientY: r.top + py.x };
+  };
 
   function fire(type: string, at?: Element | null) {
     const c = client();
@@ -59,7 +64,12 @@ export function createCursor(stage: HTMLElement, node: HTMLElement, clock: Clock
     }
   }
 
-  const resume = (ms: number) => { clearTimeout(idle); idle = window.setTimeout(() => { yielded = false; }, ms); };
+  const resume = (ms: number) => {
+    clearTimeout(idle);
+    idle = window.setTimeout(() => {
+      yielded = false;
+    }, ms);
+  };
   const onMove = (e: PointerEvent) => {
     if (!e.isTrusted) return;
     yielded = true;
@@ -148,7 +158,7 @@ export function createCursor(stage: HTMLElement, node: HTMLElement, clock: Clock
     pressTo = 1;
     fire("pointerup", el);
     fire("mouseup", el);
-    (el.closest("button,[role=button],label,a") as HTMLElement | null ?? (el as HTMLElement)).click?.();
+    ((el.closest("button,[role=button],label,a") as HTMLElement | null) ?? (el as HTMLElement)).click?.();
   }
 
   /**
@@ -180,7 +190,9 @@ export function createCursor(stage: HTMLElement, node: HTMLElement, clock: Clock
     hover = false;
   }
 
-  const rest = () => { target = null; };
+  const rest = () => {
+    target = null;
+  };
   const dispose = () => {
     stage.removeEventListener("pointermove", onMove);
     stage.removeEventListener("pointerdown", onMove);

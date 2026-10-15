@@ -125,10 +125,13 @@ export function reportCardError(send: ErrorReporter | undefined, message: string
   // Asked AGAIN when the report is about to be SENT, because that is the question that matters:
   // a card is the newest one in the transcript at the instant it throws and stops being so the
   // moment the model's next reply lands — which is precisely the second this timer waits out.
-  pending = { timer: setTimeout(() => {
-    pending = null;
-    if (!current()) return;
-    outstanding = send;
-    send({ message, phase });
-  }, SETTLE_MS), message };
+  pending = {
+    timer: setTimeout(() => {
+      pending = null;
+      if (!current()) return;
+      outstanding = send;
+      send({ message, phase });
+    }, SETTLE_MS),
+    message,
+  };
 }

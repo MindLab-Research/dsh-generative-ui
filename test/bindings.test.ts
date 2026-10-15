@@ -73,13 +73,17 @@ test("a denial is told from an outage by a field, not by the message", async () 
     globalThis.fetch = (async () => new Response(JSON.stringify({ error }), { status })) as typeof fetch;
   };
   failWith(403, "FS_SANDBOX_DENIED");
-  const refused = await bind().fs.writeFile("a.txt", "x").catch((e: unknown) => e as { denied?: boolean; code?: string });
+  const refused = await bind()
+    .fs.writeFile("a.txt", "x")
+    .catch((e: unknown) => e as { denied?: boolean; code?: string });
   expect(refused.denied).toBe(true);
   expect(refused.code).toBe("FS_SANDBOX_DENIED");
   // A missing file is not a denial: same rejection shape, `denied` false, so a card that
   // branches on it offers a retry here and does not offer one above.
   failWith(404, "ENOENT");
-  const missing = await bind().fs.readFile("a.txt").catch((e: unknown) => e as { denied?: boolean; code?: string });
+  const missing = await bind()
+    .fs.readFile("a.txt")
+    .catch((e: unknown) => e as { denied?: boolean; code?: string });
   expect(missing.denied).toBe(false);
   expect(missing.code).toBe("ENOENT");
 });

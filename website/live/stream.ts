@@ -36,7 +36,11 @@ export function reveal(a: string, b: string, k: number) {
   let i = 0;
   const out: { text: string; fresh?: boolean }[] = [];
   for (const line of b.split("\n")) {
-    if (old[i] === line) { i++; out.push({ text: line }); continue; }
+    if (old[i] === line) {
+      i++;
+      out.push({ text: line });
+      continue;
+    }
     if (k <= 0) continue;
     out.push({ text: line.slice(0, k), fresh: true });
     k -= line.length + 1;

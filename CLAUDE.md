@@ -242,8 +242,8 @@ Same protocol as the playground: **four backticks + `ui4a/tsx`**, module `export
 Two separate concerns:
 
 - **Teaching the model** splits in two, along the line of "what you pay for every turn."
-  - `src/prompt.ts` is injected **permanently** via `ctx.systemPrompt.section()`: triggers, fence syntax, canvas paths, palette. Nothing else.
-  - `src/skill.ts` is loaded **on demand** via `ctx.skills.register()`: the judgement calls (should there be UI at all, inline or canvas), framing rules, layout constraints. `dsh-base`'s bundle ships the skill tooling by default (the installed package is `@deepseek-ai/dsh-skill`; this used to cite a `dsh-tool-skill` that does not exist under that name), so a runtime-registered skill lands in the model's `<available_skills>` catalog and the body is only fetched when it calls the `skill` tool.
+  - `src/prompt.ts` is injected **permanently** via `ctx.systemPrompt.section()`: triggers, fence syntax, canvas paths, palette, and card guardrails. Keep its library claims consistent with the topic references: Headless UI `TabGroup` supports arrow-key navigation, while `Disclosure` has no controlled `open`/`onChange` API.
+  - `skill/SKILL.md` is loaded **on demand** via `ctx.skills.register()`: it keeps the shared decision rules and routes the model to topic-specific files in `skill/references/`. The registration supplies the installed skill directory as `resourceBase`, so the model resolves those relative paths from the package rather than the workspace. `dsh-base`'s bundle ships the skill tooling by default (the installed package is `@deepseek-ai/dsh-skill`; this used to cite a `dsh-tool-skill` that does not exist under that name), so a runtime-registered skill lands in the model's `<available_skills>` catalog. The body is fetched when it calls the `skill` tool; referenced files are read only for the task at hand. Keep the full guidance in those files and include `skill/` in the published package.
   - Note the catalog carries **only `name` and `description`** (neither `whenToUse` nor the body). The description is therefore the sole routing signal — write triggers into it, not a summary of the contents.
   - Register it as `modelInvocable: true, userInvocable: false`: this is a spec written for the model, and exposing it as a user `/` command would just dump a long guide at the user.
   - Under the PTC profile every tool is called from inside `run_code`, so don't write a concrete call form like `` call `skill({name})` `` into the prompt (the model tries it directly once, gets `unknown tool`, then recovers). Just say "load the X skill first."
@@ -539,7 +539,7 @@ Only rules and invariants stay here — the things you need before you touch cod
 | --- | --- | --- |
 | §4.5 Why the trigger belongs in the resident layer | [docs/prompt-rules.md](docs/prompt-rules.md) | changing `prompt.ts` / `skill.ts`, or asking whether a request wants a card |
 | §5 Reference implementations | [docs/reference-implementations.md](docs/reference-implementations.md) | porting from `ui4a-playground` or another renderer |
-| §6.1–6.89 What measuring established | [docs/measuring.md](docs/measuring.md) | writing an eval, trusting a number, or about to believe a screenshot |
+| §6.1–6.90 What measuring established | [docs/measuring.md](docs/measuring.md) | writing an eval, trusting a number, or about to believe a screenshot |
 | §6.9 The tools | [docs/tools.md](docs/tools.md) | picking a script; every gate and probe is listed there |
 | §2.35 narrative, dsh version checks, js-yaml pin | [docs/host-notes.md](docs/host-notes.md) | a dsh upgrade lands, or a dependency audit flags something |
 

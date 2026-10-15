@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { normalizeGeneratedTsx } from "partial-tsx";
-import { compileCard, initTsxFromDisk } from "../scripts/tsx-node.ts";
+import { compileCard, compileSettled, initTsxFromDisk } from "../scripts/tsx-node.ts";
 
 await initTsxFromDisk();
 
@@ -38,6 +38,12 @@ test("normalize leaves this complete card alone", () => {
   const normalized = normalizeGeneratedTsx(src, { mode: "final" });
   expect(normalized.trimEnd()).toBe(src.trimEnd());
   expect(() => compileCard("normalized.tsx", normalized)).not.toThrow();
+});
+
+test("the shared settled compiler repairs a plain generic arrow", () => {
+  const src = `type Persisted = <T>(key: string, initial: T | (() => T)) => [T, (next: T) => void]
+export default function C() { return <div /> }`;
+  expect(() => compileSettled("generic.tsx", src)).not.toThrow();
 });
 
 /**

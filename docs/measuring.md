@@ -83,8 +83,9 @@ so repetition does not help; **the wrong answer is the alarming one**, which is 
 gets written up; **a check written for one has a blind spot for the next**; and **the tell is never
 in the number** — it is in the byte count, the first line of the reply, whether a transcript exists.
 
-Hence `scripts/eval.sh` prints `skill=`, `bytes=` and `tools=[]` beside every verdict, and a zero
-is not evidence until the reply behind it has been read.
+Hence `scripts/eval.sh` prints `skill=`, `bytes=` and `tools=[]` beside every verdict. It derives the
+assistant-visible reply with `scripts/visible-reply.ts`, so reasoning scratch text cannot inflate the
+fence count. A zero is not evidence until the reply behind it has been read.
 
 **A first-pass detector over-reports by roughly an order of magnitude, in the direction you
 expected.** Six times: streaming guards 7→0, remounts 35→0, hardcoded colours 80→2, nested borders

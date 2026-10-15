@@ -1,8 +1,9 @@
 # Prompt rules: what the 40-prompt rounds established
 
 Moved out of [CLAUDE.md](../CLAUDE.md) — the evidence and the per-round narrative. The rules this
-produced are not here: they live in `src/prompt.ts` (resident, every turn) and `src/skill.ts` (on
-demand). Where anything here disagrees with those or with CLAUDE.md, they win.
+produced are not here: they live in `src/prompt.ts` (resident, every turn) and the packaged
+`skill/SKILL.md` plus `skill/references/` (on demand, registered by `src/skill.ts`). Where anything
+here disagrees with those or with CLAUDE.md, they win.
 
 See also [measuring.md](measuring.md), which generalises these rounds into a checklist.
 
@@ -198,9 +199,12 @@ optional until the end — `partial-json` hands out objects whose fields have no
 missing one throws inside render.
 
 **`-i` is mandatory once a card imports `$dsh/*`**, or `check` reports `Cannot find module '$dsh/chat'` on every
-such line and the model goes and "fixes" it. But the `.d.ts` are **not actually loaded**: `-i` suppresses TS2307
-and nothing more, so it buys silence, not signal. Use `npx`, not `bunx` — bun rejects pkg.pr.new's long form —
-and `@main`, not a SHA, so the instruction does not rot.
+such line and the model goes and "fixes" it. The current checker resolves mapped imports as `any` rather than
+typing their exports: a valid generic call can raise TS2347, and a nonexistent export can pass. Verify those
+calls against the installed declarations and report a nonzero check honestly; do not change correct source to
+silence mapped-import diagnostics. Use the type import map for `check`/`lint`, not the standalone `build` map.
+`bunx --yes genui@https://pkg.pr.new/MindLab-Research/macaron-genui-demo/@genui/cli@main` works with a named
+specifier (a bare URL does not); keep `@main` so the instruction does not rot.
 
 **Why trigger rules read the way they do.** The model reads "fixed" as _known to me_, so every framing about
 variable content argued past it; the test that works is **enumerability** — three-day Tokyo itineraries is not a
@@ -218,7 +222,7 @@ the same sentence measured in another harness had worked — a fix does not tran
 free. Two resident rules can also simply collide, and "not for text that is already fine as text" wins; left
 alone, because tightening either damages what the other covers.
 
-**What a resident rule costs.** The always-on layer is 3254 tokens across 8 bold rules, the on-demand skill 6183.
+**What a resident rule costs.** In the measured round, the always-on layer was 3254 tokens across 8 bold rules and the then-monolithic on-demand skill was 6183; the current skill entrypoint loads references separately.
 Every rule added dilutes the attention the others get and is paid on every turn, including the ones that will
 never produce UI. So the bar: recognisable from the request alone, covering a _shape_ rather than a topic, and
 having flipped something measurable. Everything else belongs in the skill.

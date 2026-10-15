@@ -25,7 +25,7 @@ while IFS='|' read -r rule prompt seed; do
   [[ -n "$filter" && "$rule$prompt" != *"$filter"* ]] && continue
   cards=0; runs=0
   for _ in {1..$repeat}; do
-    out=$(zsh "$d/eval.sh" "$prompt" ${seed:+"$d/../$seed"} 2>&1) || { failed=$((failed+1)); continue }
+    out=$(bash "$d/eval.sh" "$prompt" ${seed:+"$d/../$seed"} 2>&1) || { failed=$((failed+1)); continue }
     # A canvas counts: the rules ask for an interface, not for a fence specifically.
     fence=$(print -r -- "$out" | grep -o 'fence=[0-9]*' | cut -d= -f2)
     canvas=$(print -r -- "$out" | grep -o 'canvas=[0-9]*' | cut -d= -f2)
@@ -41,7 +41,8 @@ while IFS='|' read -r rule prompt seed; do
   else
     # A miss is the only outcome worth reading, so keep the path — the reply is the evidence for
     # whether the rule is wrong or the prompt merely did not need a card.
-    printf 'PROSE   %-30s %s\n         reply: %s\n' "${rule:0:30}" "$prompt" "${out##* }"
+    reply=$(print -r -- "$out" | grep -oE 'reply=[^ ]+' | cut -d= -f2 | head -1)
+    printf 'PROSE   %-30s %s\n         reply: %s\n' "${rule:0:30}" "$prompt" "$reply"
     misses=$((misses+1))
   fi
 done < "$d/trigger-cases.txt"

@@ -14,9 +14,8 @@
  */
 import { statSync } from "node:fs";
 import { REPLAY_CONTROLS } from "./screens.ts";
-import { normalizeGeneratedTsx } from "partial-tsx";
-
 import { cardsIn, compileCard, initTsxFromDisk } from "./tsx-node.ts";
+import { normalizeGeneratedTsxCompat } from "../src/client/runtime/normalize.ts";
 
 await initTsxFromDisk();
 const hooks = (s: string) => (s.match(/\buse[A-Z]\w*\s*\(/g) ?? []).length;
@@ -48,7 +47,7 @@ for (const path of paths) {
     // A prefix normalize cannot repair is skipped — and COUNTED. `frames=12` on a card with 60
     // prefixes reads as a short card rather than as a pass that gave up on 48 of them.
     try {
-      out = normalizeGeneratedTsx(src.slice(0, n), { mode: "streaming" });
+      out = normalizeGeneratedTsxCompat(src.slice(0, n), { mode: "streaming" });
     } catch {
       unnormalizable += 1;
       continue;
@@ -95,7 +94,7 @@ for (const name of REPLAY_CONTROLS) {
   for (let n = step; n <= src.length; n += step) {
     let out: string;
     try {
-      out = normalizeGeneratedTsx(src.slice(0, n), { mode: "streaming" });
+      out = normalizeGeneratedTsxCompat(src.slice(0, n), { mode: "streaming" });
     } catch {
       continue;
     }

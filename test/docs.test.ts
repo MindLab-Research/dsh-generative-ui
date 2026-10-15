@@ -2,7 +2,12 @@ import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
 /** `CLAUDE.md` and the `docs/` files that hold its evidence, minus the two raw records. */
-const DESIGN_DOC = ["CLAUDE.md", ...readdirSync("docs").filter((f) => f.endsWith(".md") && f !== "measurements-log.md" && f !== "examples.md").map((f) => `docs/${f}`)].sort();
+const DESIGN_DOC = [
+  "CLAUDE.md",
+  ...readdirSync("docs")
+    .filter((f) => f.endsWith(".md") && f !== "measurements-log.md" && f !== "examples.md")
+    .map((f) => `docs/${f}`),
+].toSorted();
 const doc = DESIGN_DOC.map((p) => readFileSync(p, "utf8")).join("\n");
 
 /**

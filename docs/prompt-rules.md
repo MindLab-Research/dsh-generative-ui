@@ -5,6 +5,7 @@ produced are not here: they live in `src/prompt.ts` (resident, every turn) and `
 demand). Where anything here disagrees with those or with CLAUDE.md, they win.
 
 See also [measuring.md](measuring.md), which generalises these rounds into a checklist.
+
 ## 4.5 Why the trigger belongs in the resident layer, not the skill
 
 The finding this section exists for: **a skill the model never reads may as well not exist**, so the
@@ -19,10 +20,10 @@ sessions, concurrency via `xargs -P` (`jobs -r` doesn't report in a non-interact
 
 The result was an almost perfect correlation:
 
-| 20 inline prompts | count | produced UI |
-|---|---|---|
-| loaded the skill | 10 | **9** |
-| did not load the skill | 10 | **0** |
+| 20 inline prompts      | count | produced UI |
+| ---------------------- | ----- | ----------- |
+| loaded the skill       | 10    | **9**       |
+| did not load the skill | 10    | **0**       |
 
 (When counting fences, accept three backticks or more — that's how `segments.ts` parses. Counting only four misses
 the ones where the model wrote 3/5/6/8.)
@@ -69,23 +70,23 @@ Three other empirical corrections:
 
 Re-ran the first round's failures verbatim. All flipped, and both controls held rather than being pushed too far:
 
-| | before | after |
-|---|---|---|
-| `帮我算房贷…` | no UI, did arithmetic in bash | **UI**, bash gone |
-| `帮我看看 BMI 正常范围` | no UI (plain text) | **UI** (and without loading the skill — the resident rule works on its own) |
-| `算一下 128GB…换算` | no UI | **UI** |
-| `帮我可视化…电动车` | UI, but read an unrelated package.json first | **UI**, redundant read gone |
-| `帮我写个正则…边写边测` | wrote ` ```tsx `, lost entirely | **correct ui4a fence** |
-| `帮我做个背单词的应用` | 1013 hand-written lines | **452 lines**, using `motion/react` + `lucide-react` |
-| canvas persistence | 8/19 | **10/11**, `useState` reserved for transient UI state |
-| control `什么是闭包？` | no UI | **still no UI** ✓ |
-| control `今天星期几` | no UI | **still no UI** ✓ |
+|                         | before                                       | after                                                                       |
+| ----------------------- | -------------------------------------------- | --------------------------------------------------------------------------- |
+| `帮我算房贷…`           | no UI, did arithmetic in bash                | **UI**, bash gone                                                           |
+| `帮我看看 BMI 正常范围` | no UI (plain text)                           | **UI** (and without loading the skill — the resident rule works on its own) |
+| `算一下 128GB…换算`     | no UI                                        | **UI**                                                                      |
+| `帮我可视化…电动车`     | UI, but read an unrelated package.json first | **UI**, redundant read gone                                                 |
+| `帮我写个正则…边写边测` | wrote ` ```tsx `, lost entirely              | **correct ui4a fence**                                                      |
+| `帮我做个背单词的应用`  | 1013 hand-written lines                      | **452 lines**, using `motion/react` + `lucide-react`                        |
+| canvas persistence      | 8/19                                         | **10/11**, `useState` reserved for transient UI state                       |
+| control `什么是闭包？`  | no UI                                        | **still no UI** ✓                                                           |
+| control `今天星期几`    | no UI                                        | **still no UI** ✓                                                           |
 
 `v-bmi`'s reasoning quoted the newly added line word for word ("anything with a number the user might want to change
 is a candidate for a block") and then reversed its original "simple factual question, just answer it" call — direct
 evidence the intervention worked.
 
-### Ordering: the skill goes before you *explore*, not before you build
+### Ordering: the skill goes before you _explore_, not before you build
 
 For an **underspecified** request like `帮我比较三款云服务器的性价比`, the first version had the model run 10 searches
 and 2 bash calls before loading the skill — while the skill's answer for exactly this kind of request is "ask back
@@ -112,21 +113,22 @@ actually lost was the one that wrote the language as `tsx` (right intent, slippe
 
 After validating on the failing subset, re-ran the **complete 40** unchanged. These are the comparable numbers:
 
-| | round 1 | re-run |
-|---|---|---|
-| inline produced UI | 9/20 | **13/20** |
-| inline loaded skill | 10/20 | **13/20** |
-| inline total tool calls | 34 | **29** |
-| canvas loaded skill | 20/20 | 20/20 |
-| canvas used persistence | 8/19 | **17/19** |
-| canvas third-party imports | 27 | **42** |
-| canvas mean line count | 603 | 586 |
+|                            | round 1 | re-run    |
+| -------------------------- | ------- | --------- |
+| inline produced UI         | 9/20    | **13/20** |
+| inline loaded skill        | 10/20   | **13/20** |
+| inline total tool calls    | 34      | **29**    |
+| canvas loaded skill        | 20/20   | 20/20     |
+| canvas used persistence    | 8/19    | **17/19** |
+| canvas third-party imports | 27      | **42**    |
+| canvas mean line count     | 603     | 586       |
 
 Canvas tool calls went 49 → 59, but **17 of the increase sit in a single prompt** ("team weekly report page", 12 edits
-+ 4 reads re-checking whether a JSX member expression was legal); the other 19 barely moved. One outlier, unrelated
-to the changes.
 
-**More UI, fewer steps** — four more prompts produced UI while tool calls went *down* by five, so it wasn't bought
+- 4 reads re-checking whether a JSX member expression was legal); the other 19 barely moved. One outlier, unrelated
+  to the changes.
+
+**More UI, fewer steps** — four more prompts produced UI while tool calls went _down_ by five, so it wasn't bought
 with extra work. `帮我比较三款云服务器` alone went from 13 tool calls to 4.
 
 Case by case, the ones that still produce no UI are all judged correctly: memory-model comparison → table, CAP
@@ -200,13 +202,13 @@ such line and the model goes and "fixes" it. But the `.d.ts` are **not actually 
 and nothing more, so it buys silence, not signal. Use `npx`, not `bunx` — bun rejects pkg.pr.new's long form —
 and `@main`, not a SHA, so the instruction does not rot.
 
-**Why trigger rules read the way they do.** The model reads "fixed" as *known to me*, so every framing about
+**Why trigger rules read the way they do.** The model reads "fixed" as _known to me_, so every framing about
 variable content argued past it; the test that works is **enumerability** — three-day Tokyo itineraries is not a
 set of five. "Reading it yourself is not the card reading it — that card is a photograph" took `$dsh/fs` from 0/2
 to 2/2. A naming request is none of the original three shapes, and "asking for a few of something is asking for
 more of them" fixed the one that had produced no UI at all. A **fourth trigger shape** — an opaque expression the
 user is holding — went 3/3 with its tell stated outright (**your answer is already a table**) and its excuse
-named (*simple is what makes it cheap to build, not what makes it unwanted*).
+named (_simple is what makes it cheap to build, not what makes it unwanted_).
 
 Two rules for writing them, both bought with failures. **A trigger rule must be recognisable from the prompt
 alone**: the decision about what shape the answer takes is made once, early, and a data-gathering detour
@@ -218,7 +220,7 @@ alone, because tightening either damages what the other covers.
 
 **What a resident rule costs.** The always-on layer is 3254 tokens across 8 bold rules, the on-demand skill 6183.
 Every rule added dilutes the attention the others get and is paid on every turn, including the ones that will
-never produce UI. So the bar: recognisable from the request alone, covering a *shape* rather than a topic, and
+never produce UI. So the bar: recognisable from the request alone, covering a _shape_ rather than a topic, and
 having flipped something measurable. Everything else belongs in the skill.
 
 **Two negative results worth as much as the rules.** Card arithmetic was exact on all three prompts with
@@ -233,4 +235,3 @@ reply about it is prose, so `fence=0` twice made me conclude the browse rule had
 a 522-line file browser. Re-running the six fixed points after three trigger rules landed in one day gave 6/6:
 worth repeating whenever the resident layer grows, since it is the only thing that catches a rule eating its
 neighbours.
-

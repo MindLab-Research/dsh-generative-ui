@@ -5,6 +5,7 @@ measuring something, writing an eval, or about to trust a number; not when you a
 component.
 
 Where anything here disagrees with CLAUDE.md, CLAUDE.md wins.
+
 ## 6. What five days of measuring established
 
 `docs/measurements-log.md` is the raw session-by-session record — 8,000 lines of it, kept for
@@ -17,28 +18,28 @@ already below, add its number to that lesson and stop.
 Twenty times a metric said something plausible and false. The failures share a shape worth
 recognising before trusting any number in this project.
 
-| what looked true | what was true | the tell |
-| --- | --- | --- |
-| a rule failed, `fence=0` | it wrote a **canvas** | count canvases too |
-| a commit caused a regression | one flap in seven | repeat the *old* side as well |
-| a rule did not generalise, 0/9 | the plugin symlink was dead | check the subject ran |
-| a rule was refused, six zeros | `QUOTA: Insufficient Balance` | short well-formed output is suspicious |
-| a card's state was broken | a bare `.click()` unlocks nothing | drive it as input |
-| a card remounted while visible | the probe matched any `return (` | a helper component has those too |
-| a gate was broken, exit 0 | `cmd \| tail; echo $?` reads `tail` | never pipe when the code is the measurement |
-| sonnet refused a fixture | gateway 400, empty reply | a transcript exists before the model answers |
-| the whole eval batch timed out | the upstream stalled, `bytes=0` | `assistant/chunk` present or absent |
-| a verification run learnt the wrong rule | it ran a build from two minutes earlier | `stat -f %Sm` session vs `lib/` |
-| a `min-width` fix did nothing | `<input>` sizes from `size`, not placeholder | construct the trigger, verify it triggers |
-| the panel found a redundant border | light paints every layer `#fff` | render it before believing it |
-| a whole wave of runs stalled upstream | `$LITELLM_24000_API_KEY` was unset | a live process writing nothing |
-| the wave was not running at all | `find -newermt` errored, piped to `wc` | run the check unpiped, read its exit |
-| a card truncated with 800px to spare | the ellipsis is in the DATA | `scrollWidth > box`, not the pixels |
-| 4 of 6 sliders forgot their fill | all four are "pick a value", which must NOT fill | read what the number means |
-| the canvas paint rate fell 100% -> 86% | 5 canvases re-snapshotted 17 times, 2 of them my own harness | dedupe by (run, canvas id) first |
-| a negative control over-fires 30% of the time | two models card on it in every round, eight never do | split a control rate by model before rewording |
-| a rule banned `100vh` and the card obeyed | it wrote `78vh` — the UNIT was the defect, not the number | ban the unit, not the value you saw |
-| rule 2 changed nothing, 0.0 SE | pooled over CLICKS; per RUN it landed at p=0.014 | count what the rule's own evidence counts |
+| what looked true                              | what was true                                                | the tell                                       |
+| --------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------- |
+| a rule failed, `fence=0`                      | it wrote a **canvas**                                        | count canvases too                             |
+| a commit caused a regression                  | one flap in seven                                            | repeat the _old_ side as well                  |
+| a rule did not generalise, 0/9                | the plugin symlink was dead                                  | check the subject ran                          |
+| a rule was refused, six zeros                 | `QUOTA: Insufficient Balance`                                | short well-formed output is suspicious         |
+| a card's state was broken                     | a bare `.click()` unlocks nothing                            | drive it as input                              |
+| a card remounted while visible                | the probe matched any `return (`                             | a helper component has those too               |
+| a gate was broken, exit 0                     | `cmd \| tail; echo $?` reads `tail`                          | never pipe when the code is the measurement    |
+| sonnet refused a fixture                      | gateway 400, empty reply                                     | a transcript exists before the model answers   |
+| the whole eval batch timed out                | the upstream stalled, `bytes=0`                              | `assistant/chunk` present or absent            |
+| a verification run learnt the wrong rule      | it ran a build from two minutes earlier                      | `stat -f %Sm` session vs `lib/`                |
+| a `min-width` fix did nothing                 | `<input>` sizes from `size`, not placeholder                 | construct the trigger, verify it triggers      |
+| the panel found a redundant border            | light paints every layer `#fff`                              | render it before believing it                  |
+| a whole wave of runs stalled upstream         | `$LITELLM_24000_API_KEY` was unset                           | a live process writing nothing                 |
+| the wave was not running at all               | `find -newermt` errored, piped to `wc`                       | run the check unpiped, read its exit           |
+| a card truncated with 800px to spare          | the ellipsis is in the DATA                                  | `scrollWidth > box`, not the pixels            |
+| 4 of 6 sliders forgot their fill              | all four are "pick a value", which must NOT fill             | read what the number means                     |
+| the canvas paint rate fell 100% -> 86%        | 5 canvases re-snapshotted 17 times, 2 of them my own harness | dedupe by (run, canvas id) first               |
+| a negative control over-fires 30% of the time | two models card on it in every round, eight never do         | split a control rate by model before rewording |
+| a rule banned `100vh` and the card obeyed     | it wrote `78vh` — the UNIT was the defect, not the number    | ban the unit, not the value you saw            |
+| rule 2 changed nothing, 0.0 SE                | pooled over CLICKS; per RUN it landed at p=0.014             | count what the rule's own evidence counts      |
 
 **A canvas is counted once per turn it changes, and three of the five ways to fail are not the
 card's.** Reading r002's 17 unpainted canvases end to end: they are **5 distinct canvases**, each
@@ -64,13 +65,13 @@ looks decisive, split it is -0.025 ± 0.023 and -0.137 ± 0.081 and neither arm 
 the intent is inferred.** Five times in a day I read a defect off a shot that did not survive one
 look at the source — and the fifth time I nearly rewrote a working probe to match the misreading:
 
-| what the shot showed | what it was |
-| --- | --- |
-| a filled form with a disabled button | four `placeholder="30"` on empty fields |
-| five cards celebrating going over a limit | the user is eating UP TO a target — green was right |
-| `truncate` firing with 800px to spare | the ellipsis is a literal in the data |
-| a pending row logged as `0` | `value=""` with `placeholder="0"` — the total was correct |
-| 1100px of wasted width | a justified header reaching 704 of 720 |
+| what the shot showed                      | what it was                                               |
+| ----------------------------------------- | --------------------------------------------------------- |
+| a filled form with a disabled button      | four `placeholder="30"` on empty fields                   |
+| five cards celebrating going over a limit | the user is eating UP TO a target — green was right       |
+| `truncate` firing with 800px to spare     | the ellipsis is a literal in the data                     |
+| a pending row logged as `0`               | `value=""` with `placeholder="0"` — the total was correct |
+| 1100px of wasted width                    | a justified header reaching 704 of 720                    |
 
 A CSS ellipsis and a typed one are the same pixels; a placeholder and a value are the same pixels;
 correct green and wrong green are the same pixels. **When a shot suggests a defect whose evidence
@@ -115,8 +116,8 @@ Measured across ~300 model runs. The pattern is consistent enough to use as a ch
   corpus figure **"356 have the shape, and 3 pin it — 0.8%"**. The rule text was byte-identical
   across the two rounds; `sticky` usage fell **6.5% → 1.1%** (2.2 SE). Both sentences carry the
   same fact, and "353 of 356 let it scroll away" would carry it with the large number on the
-  defect instead. Of the four rules r006 measured, the three phrased as *most cards fail this*
-  landed or held; the one phrased as *almost none do this* is the one that regressed. **n = 1, and
+  defect instead. Of the four rules r006 measured, the three phrased as _most cards fail this_
+  landed or held; the one phrased as _almost none do this_ is the one that regressed. **n = 1, and
   registered as n = 1** — but it costs nothing to write the number on the failing side, and a base
   rate quoted at 0.8% tells the model what 99.2% of cards do. Related to but distinct from the
   negative-phrasing rule above: that one is about naming the failing SHAPE, this one is about which
@@ -127,15 +128,15 @@ Measured across ~300 model runs. The pattern is consistent enough to use as a ch
 - **Widening the skill's own description does not widen what loads it.** Naming five concrete
   shapes in `SKILL_DESCRIPTION` — a markdown table, doses that vary by age, a numbered option set,
   anything the user is logging — moved the load rate on real questions from 3/11 to 2/10: nothing,
-  or slightly worse. The description is what the model reads *while choosing among skills*; a
+  or slightly worse. The description is what the model reads _while choosing among skills_; a
   question it never classified as UI-adjacent never gets that far. The lever is the resident layer,
   which is read on every turn.
 - **Where a rule lives decides whether it is applied.** `aria-live` in `prompt.ts` alone: absent.
   The same text moved into the skill, next to the other JSX-attribute rules: present, replicated on
-  two prompts. The resident layer is read before deciding *what* to build; the skill is read while
+  two prompts. The resident layer is read before deciding _what_ to build; the skill is read while
   building.
 - **A skill rule can only reach the runs that load the skill**, which was 62% until one sentence in
-  the resident layer named what the skill carries *after* the decision to build — then 17 of 17,
+  the resident layer named what the skill carries _after_ the decision to build — then 17 of 17,
   and the residue on every screen went to zero. The skill-load rate is part of the measurement, not
   context: 4 of 4 runs that loaded it followed the rule; 0 of 2 that did not.
 - **The cleanest flip this project has measured, and what made it measurable.** The rule "if your
@@ -149,8 +150,8 @@ Measured across ~300 model runs. The pattern is consistent enough to use as a ch
     a single food costs, in a conversation that happens to be tracking calories — stayed 0 of 3
     after the change. Without that control the result reads equally well as "the model now builds a
     card whenever it sees a number".
-  - **The model quoted the mechanism back.** *"ya no necesitas que te vuelva a escribir toda la
-    lista cada vez"* — the rule's own sentence, in the model's words, in the reply that then built
+  - **The model quoted the mechanism back.** _"ya no necesitas que te vuelva a escribir toda la
+    lista cada vez"_ — the rule's own sentence, in the model's words, in the reply that then built
     the canvas. §4.5 records the same tell on `v-bmi`; it is the difference between a rule landing
     and a rate drifting.
 - **A trigger rule has a rate, not a verdict.** One run decides nothing (`98 华氏度` reads 0/1 and
@@ -193,7 +194,7 @@ which is why none are transcribed here. The distribution is the finding:
 
 **Two thirds of defective corpus cards fail on accessibility and nothing else** — 117 of 178. The
 rest is a long tail of one card each. Cards were rarely broken; they were routinely unusable
-without a mouse, because a card is written as a *picture* of an interface and the author has a
+without a mouse, because a card is written as a _picture_ of an interface and the author has a
 mouse and eyes.
 
 The largest single delta after the rules landed: `:focus-visible` appears in **0 of 378** corpus
@@ -268,14 +269,14 @@ the stream to a `partial-json` parser against a schema their own prompt declares
 
 The layers, and what each can see:
 
-| | catches | cost |
-| --- | --- | --- |
-| screens (`screens.ts`) | known defect shapes in source | 0.27ms for all of them |
-| `compile-cards.ts` | syntax the model cannot ship | ~2s / 378 cards |
-| `paint-cards.ts` (`react-dom/server`) | 7 of 9 blank-render causes | ~2s, no browser |
-| `render-cards.ts` (Chromium) | the other 2 — React #321, effects | minutes |
-| `mount-card.sh` | what a card *announces* (a11y tree) | ~15s / card |
-| `judge-cards.py` (5 vision models) | **what it looks like** | ~2min / card |
+|                                       | catches                             | cost                   |
+| ------------------------------------- | ----------------------------------- | ---------------------- |
+| screens (`screens.ts`)                | known defect shapes in source       | 0.27ms for all of them |
+| `compile-cards.ts`                    | syntax the model cannot ship        | ~2s / 378 cards        |
+| `paint-cards.ts` (`react-dom/server`) | 7 of 9 blank-render causes          | ~2s, no browser        |
+| `render-cards.ts` (Chromium)          | the other 2 — React #321, effects   | minutes                |
+| `mount-card.sh`                       | what a card _announces_ (a11y tree) | ~15s / card            |
+| `judge-cards.py` (5 vision models)    | **what it looks like**              | ~2min / card           |
 
 The expensive one is what proves the cheap one looks at the right thing. Compiling proved 375 of
 378 fine; mounting found 10 failures; a screenshot found a reference card whose 4×4 board had every
@@ -289,12 +290,12 @@ the overlapping board, three of them finding more than I had.
 
 Of their four recurring criticisms, **one survived checking**:
 
-| theme | verdict |
-| --- | --- |
-| the slider is unstyled | **right** — 43 of 52 corpus cards, and no rule existed |
+| theme                            | verdict                                                  |
+| -------------------------------- | -------------------------------------------------------- |
+| the slider is unstyled           | **right** — 43 of 52 corpus cards, and no rule existed   |
 | border + background is redundant | wrong for these tokens — light paints every layer `#fff` |
-| 720 is a dead single column | sampling — the set had nothing to put in columns |
-| dark is light inverted | false premise — cards reference tokens, not palettes |
+| 720 is a dead single column      | sampling — the set had nothing to put in columns         |
+| dark is light inverted           | false premise — cards reference tokens, not palettes     |
 
 **Wave 2 is 26 runs, not 72, and they are all one family.** `score-wave.py` counted files, and 46
 of that wave's 72 said `stale  src/ is newer than lib/` — runs that never reached a model, each
@@ -311,23 +312,23 @@ believed where a list can be checked.
 **Second run, wave 2** (24 cards, 117 scored verdicts, mean 5.45 sd 0.94). No ranking claim:
 the three generators land at 5.12–5.67 with SE ≈0.15, judge self-variance is ≈2.0, and 6 of the 8
 overflowing cards belong to the lowest-scoring family, so its mean is confounded with a defect
-that turned out to be mine. What the panel was worth was its *prose*:
+that turned out to be mine. What the panel was worth was its _prose_:
 
-| theme | verdict |
-| --- | --- |
-| `bg-layer-2` melts into the card in light, fine in dark | **right, and not a card defect** — measured `#ffffff` for all three background tokens in light. Recorded in §3.7; the model cannot know it |
-| `max-w-[34rem]` wastes 180px at 720 | **half right.** Four judges got the fact from the SOURCE while I read the same screenshot and saw a full-bleed form — the clip is taken at the host width, so unused width has no visible edge, and `shot-card.mjs` now reports `UNUSED`. But the *verdict* was wrong on the card I then looked at: five meal rows stretched full-bleed put a name and its number a screen apart, which is exactly what §Width's `max-w-[28rem]` rule exists to prevent. Unused width is a signal to look, not a defect to minimise |
+| theme                                                   | verdict                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bg-layer-2` melts into the card in light, fine in dark | **right, and not a card defect** — measured `#ffffff` for all three background tokens in light. Recorded in §3.7; the model cannot know it                                                                                                                                                                                                                                                                                                                                                                          |
+| `max-w-[34rem]` wastes 180px at 720                     | **half right.** Four judges got the fact from the SOURCE while I read the same screenshot and saw a full-bleed form — the clip is taken at the host width, so unused width has no visible edge, and `shot-card.mjs` now reports `UNUSED`. But the _verdict_ was wrong on the card I then looked at: five meal rows stretched full-bleed put a name and its number a screen apart, which is exactly what §Width's `max-w-[28rem]` rule exists to prevent. Unused width is a signal to look, not a defect to minimise |
 
 **The `text-base` fix, measured against its own control.** Re-shot and re-judged wave 2 — same 27
 cards, same source, same five models, only the rendering fixed — and split the cards by whether
 they write `text-base`:
 
-| | n | mean delta | |
-| --- | --- | --- | --- |
-| cards that write `text-base` | 12 | **+0.45 ± 0.16** | 8 up |
-| cards that do not | 10 | −0.01 ± 0.08 | 4 up |
+|                              | n   | mean delta       |      |
+| ---------------------------- | --- | ---------------- | ---- |
+| cards that write `text-base` | 12  | **+0.45 ± 0.16** | 8 up |
+| cards that do not            | 10  | −0.01 ± 0.08     | 4 up |
 
-The control group did not move at all, and several of its cards drew the *identical* score from
+The control group did not move at all, and several of its cards drew the _identical_ score from
 every judge twice. That is what makes the +0.45 readable: the panel's spread is ~2.0 and the
 pooled delta was a meaningless +0.23, but paired and split by exposure it separates cleanly.
 `scripts/judge-delta.py` does the paired read and refuses to call anything significant below 2 SE.
@@ -348,16 +349,16 @@ signal to look at, on the same footing as `UNUSED`; it is not evidence for a pro
 **Which judge, measured — the panel is four rulers, not four opinions.** Waves 0 and 1 on the
 rebuilt corpus (45 cards with all four judges, 180 scored verdicts) give a mean of 6.01 and 6.50.
 The between-wave gap is the noise floor, not a result: same prompt, different questions, 0.5 apart.
-What is stable is the *offset* — every pair holds its direction on 38 to 43 of the 45 cards:
+What is stable is the _offset_ — every pair holds its direction on 38 to 43 of the 45 cards:
 
-| pair | mean delta | sd | same direction |
-| --- | --- | --- | --- |
-| `claude-opus-5` − `grok-4.6` | −0.11 | 0.71 | 38/45 |
-| `claude-opus-5` − `gpt-5.6-sol` | −0.62 | 0.82 | 42/45 |
-| `claude-opus-5` − `gemini-3.7-flash` | −1.11 | 0.92 | 42/45 |
-| `grok-4.6` − `gpt-5.6-sol` | −0.51 | 0.69 | 43/45 |
-| `grok-4.6` − `gemini-3.7-flash` | −1.00 | 0.88 | 43/45 |
-| `gpt-5.6-sol` − `gemini-3.7-flash` | −0.49 | 0.73 | 40/45 |
+| pair                                 | mean delta | sd   | same direction |
+| ------------------------------------ | ---------- | ---- | -------------- |
+| `claude-opus-5` − `grok-4.6`         | −0.11      | 0.71 | 38/45          |
+| `claude-opus-5` − `gpt-5.6-sol`      | −0.62      | 0.82 | 42/45          |
+| `claude-opus-5` − `gemini-3.7-flash` | −1.11      | 0.92 | 42/45          |
+| `grok-4.6` − `gpt-5.6-sol`           | −0.51      | 0.69 | 43/45          |
+| `grok-4.6` − `gemini-3.7-flash`      | −1.00      | 0.88 | 43/45          |
+| `gpt-5.6-sol` − `gemini-3.7-flash`   | −0.49      | 0.73 | 40/45          |
 
 Strictness runs `claude ≈ grok < gpt < gemini`, and it is a property of the judge, not of the card.
 So a wave whose per-card spread is 2.0 is not a wave of controversial cards — reading it that way
@@ -386,7 +387,7 @@ show overflow (the lost strip is absent, not cut) and cannot show unused width. 
 myself and having five models read them is not redundant — they fail differently.
 
 **Two of wave 2's three biggest defects were in my own config, not the model.** `box-sizing` was
-missing from the scoped preflight (every text field 10px past its own edge, at *every* width — the
+missing from the scoped preflight (every text field 10px past its own edge, at _every_ width — the
 tell that it was never a breakpoint bug), and the colour named `base` was shadowing `text-base`
 (§3.7). Both times my first instinct was to write a prompt rule teaching the model to work around
 it. A defect that reproduces identically at 320, 440 and 720 is nearly always infrastructure;
@@ -399,7 +400,7 @@ applied to. No judge mentioned it in 117 verdicts; they grade composition, and c
 arithmetic on two computed colours. It is also invisible to all four probes.
 
 The cause is structural, and the host had already solved it: `accent` flips WITH the theme (dark
-gets the *lighter* blue), so any foreground that also flips with the theme moves the same
+gets the _lighter_ blue), so any foreground that also flips with the theme moves the same
 direction and the gap closes. `--dsw-alias-label-primary-foreground` flips against it — 4.23
 light / 7.11 dark — and a tinted ground (`state-business-tertiary` + `label-primary`) does better
 still at 16.04 / 9.79. `test/probes/badge-contrast.ui4a.tsx` renders all four spellings side by
@@ -438,7 +439,7 @@ reaching the element** — not how to word it better.
 ### 6.7 Traps that stayed true
 
 Audited the whole of §4 against reality. **Every rotted citation was an identifier** — a package
-name, an error code, a slot name, a number — and every entry that survived cites a *behaviour* you
+name, an error code, a slot name, a number — and every entry that survived cites a _behaviour_ you
 can reproduce with a build, a fetch, or a type query. An identifier goes stale silently; a
 behaviour cannot rot without something breaking. When writing one down: **name what you did and
 what happened, and cite the identifier only as a pointer to it.**
@@ -506,7 +507,7 @@ The six general process rules live in [CLAUDE.md](../CLAUDE.md#working-on-this-p
   rest. Until the driver is frozen too, the rule is simply **do not touch `card-driver.mjs` while a
   wave runs** — and note which harness files are safe, because most are: `wave.py` imports `cases`,
   `drive` and `judge` once at start, so Python has them cached and editing those three mid-round
-  changes nothing. Only the file that is *spawned* per run is live.
+  changes nothing. Only the file that is _spawned_ per run is live.
 
   The fix is deferred rather than forgotten, and the reason is worth keeping: implementing it means
   editing `card-driver.mjs`, which is the one file the rule forbids touching while a wave runs. It
@@ -528,13 +529,14 @@ The six general process rules live in [CLAUDE.md](../CLAUDE.md#working-on-this-p
   Also still true: **`bun run build` refuses while a wave is running** (`--force` to override). Both later breaks
   were the same shape — an unrelated edit, a reflexive rebuild, and a wave whose verdicts mix two
   prompts. Note the second-order effect the first time you meet it: with the build refused, `lib/`
-  stays at whatever it was, so a *test* failure or a smoke error right after an edit may be
+  stays at whatever it was, so a _test_ failure or a smoke error right after an edit may be
   reporting the OLD bundle. Read the build's own output before diagnosing the failure.
+
 - **A wave that cannot measure anything must refuse to start, not finish instantly.** `eval.sh`'s
   guards exit 4 in milliseconds, so waves 5-9 once reported `WAVE DONE … 72 runs` across four
   seconds — 360 files all reading `stale`, and a reflection written about them. `run-wave.py` now
   probes before spending anything, and the probe is a **real turn against each model home**, not a
-  stubbed one: the static guards only check that the credential variable is *set*, and a key that
+  stubbed one: the static guards only check that the credential variable is _set_, and a key that
   is set but rejected produces `AUTH: 401` on all 72 runs while the wave still reports DONE.
 
   **It has to keep refusing after it starts, and that half paid off first.** r007 was 24 runs in
@@ -566,6 +568,7 @@ The six general process rules live in [CLAUDE.md](../CLAUDE.md#working-on-this-p
   happens, it changes its shape, and anything downstream that recognised the old shape is now
   blind. The retry itself was resized to ~90 seconds, which is the honest split: absorb a flap,
   and let the guard abort an outage.
+
 - **An eval home reads its gateway key from an env var, and unset it hangs rather than fails.**
   `apiKeyEnv: LITELLM_24000_API_KEY` in each `~/.dsh-eval-<model>/settings.yaml`; with it unset,
   dsh starts, opens a session and sits there — process alive, connection open, nothing returned,
@@ -587,7 +590,6 @@ The six general process rules live in [CLAUDE.md](../CLAUDE.md#working-on-this-p
   of the FIXTURE, so comparing models on it measures nothing — and `later_card` ("a card at turn
   3+") is scored against conversations that mostly end at 6, which is a much weaker test of the
   "a new fork deserves its own interface" principle than it reads as.
-
 
 ### 6.85 Match the host, and measure it rather than assuming it
 
@@ -624,13 +626,13 @@ styled against a design language nobody measured. The host publishes the answer;
 **After the three rules shipped**, wave 5 measured the same corpus questions on the same three
 models — 45 verdicts:
 
-| wave | `font-medium` | `font-semibold` | `font-bold` | semibold share |
-|------|---------------|-----------------|-------------|----------------|
-| w000 | 33 | 26 | 0 | 44% |
-| w002 | 67 | 54 | 3 | 44% |
-| w003 | 117 | 80 | 2 | 40% |
-| w004 | 102 | 118 | 2 | 53% |
-| **w005** | **76** | **0** | **0** | **0%** |
+| wave     | `font-medium` | `font-semibold` | `font-bold` | semibold share |
+| -------- | ------------- | --------------- | ----------- | -------------- |
+| w000     | 33            | 26              | 0           | 44%            |
+| w002     | 67            | 54              | 3           | 44%            |
+| w003     | 117           | 80              | 2           | 40%            |
+| w004     | 102           | 118             | 2           | 53%            |
+| **w005** | **76**        | **0**           | **0**       | **0%**         |
 
 Over the same 45 cards: AI-slop icons rendered **0**, wrappers painted `bg-base` with a radius
 **0**. So all three went from a stable 40-53% (or a known-present defect) to absent — which is
@@ -678,8 +680,8 @@ Three things this cost, all worth knowing before adding a model:
 ### 6.87 Errors that reach only the reader teach the model nothing
 
 `onError` had no consumer: a card that failed to compile painted a red panel and the model never
-learned anything. Measured on a real session — the surface reported *"'modern-monaco' has no
-export named 'MonacoEditor'; module exports: Workspace, errors, hydrate, init, lazy"*, which
+learned anything. Measured on a real session — the surface reported _"'modern-monaco' has no
+export named 'MonacoEditor'; module exports: Workspace, errors, hydrate, init, lazy"_, which
 contains the fix, and the records after that point mention `MonacoEditor` six times and
 `no export named` **zero**. The reader saw the answer; the one party who could act on it did not.
 
@@ -692,13 +694,13 @@ said nothing), and **only for the transcript's last ui4a segment** — an earlie
 render keeps failing for the rest of the session and the model cannot edit a reply it has sent, so
 `isLastSegment` gates both the report and the retraction. Same predicate on both: a card that may
 not report a failure may not clear someone else's either. Verified end to end in a browser: the card failed, the `[自动]` message appeared
-16.5s later, and the model replied *"its actual exports are Workspace, errors, hydrate, init, and
-lazy … instead of using the named import I assumed existed"*.
+16.5s later, and the model replied _"its actual exports are Workspace, errors, hydrate, init, and
+lazy … instead of using the named import I assumed existed"_.
 
 ### 6.88 A repaint is not a recovery, and a cancelled report must stay reportable
 
 The reporting above shipped with two defects that cancelled each other into silence, and both were
-found by review rather than by use — which is the point: the failure mode is *nothing happening*.
+found by review rather than by use — which is the point: the failure mode is _nothing happening_.
 
 - **`partial-react` answers a render throw by repainting the LAST GOOD component**
   (`runtime.ts:416-419`, whenever `preserve` is on — which is every INLINE card, since
@@ -712,8 +714,8 @@ found by review rather than by use — which is the point: the failure mode is *
   is the normal path, so a cancelled report still burned its key: the same failure on a later edit
   reported nothing at all, twice. Claim it inside the timer.
 
-Both are the same shape as §6.4's rule about gates — *"no failures" has two causes that look
-identical* — one level down: **a callback named for the happy path will be called on the sad one
+Both are the same shape as §6.4's rule about gates — _"no failures" has two causes that look
+identical_ — one level down: **a callback named for the happy path will be called on the sad one
 too, if the recovery goes through the same code.** Ask what the library does about an error before
 deciding what its success callback means.
 
@@ -728,19 +730,17 @@ independently — `timedOut`, `signal`, `exitCode`") is the same bug class as th
   hooks)` from `@deepseek-ai/dsh-settings`, with `Config` a **schemastery** `z.object(...)` — not a
   TypeScript interface, which compiles to nothing and leaves the host with no schema to validate
   or render. The whole helper sits inside `ctx.inject(["settings"])`, so on a host without that
-  service `onChange` never fires: mount once explicitly as well, and dedup so a host that *has*
+  service `onChange` never fires: mount once explicitly as well, and dedup so a host that _has_
   settings does not mount twice. `dsh --profile headless` is such a host, and getting this wrong
   costs the entire plugin there.
 - **`ctx.approval` is the right question and the wrong seam for a card.** It answers "may this
   specific action proceed?", `tool-bash` consumes it, and it fails closed. But `request()` takes an
-  `agent` and throws outright without an open turn — *"approval.request() outside an open turn …
-  Ask from inside the turn that needs the decision."* A card's command fires on the reader's
+  `agent` and throws outright without an open turn — _"approval.request() outside an open turn …
+  Ask from inside the turn that needs the decision."_ A card's command fires on the reader's
   keystroke, long after that turn ended. `ctx.userQuestions.ask()` does work outside a turn (its
   `agent` is optional), so a per-command prompt is buildable — what stops it is that a card runs
   one command per keystroke, and a dialog per keystroke is not a safety feature. Hence a
   capability-level setting plus the session's own sandbox policy per command.
-
-
 
 ### 6.90 The canvas tab, measured
 
@@ -755,19 +755,19 @@ replacing rather than the only thing on offer at the time.
 in their own right; each is now the tab system's job rather than ours, kept here so the next reader
 recognises why the code that answered them is gone.
 
-- *File links go to the OS.* They used to: `workspaces.openPath` opened a canvas in an editor, so we
+- _File links go to the OS._ They used to: `workspaces.openPath` opened a canvas in an editor, so we
   wrapped it. Measured 2026-09 on 0.2.x: `dsh-client-ui-chat` routes file links to
   `ctx.sidebarRight.openResource(url)`, so the wrapper is deleted — the host now opens the canvas as
   a tab, which is what the wrapper was faking.
-- *Closing must leave a way back.* A panel fed by the transcript stranded every canvas it did not
+- _Closing must leave a way back._ A panel fed by the transcript stranded every canvas it did not
   show, so there was a `CanvasLauncher` listing workspace ids. Tabs persist and the file tree lists
   `.dsh/ui4a/canvases/`, so reopening is a click on the file.
-- *The panel cannot be a flex child of AppFrame.* True and load-bearing while we drew the column: the
+- _The panel cannot be a flex child of AppFrame._ True and load-bearing while we drew the column: the
   host's widths fill the viewport exactly, so an inserted column laid out offscreen. It is moot once
   the host draws the panel — the sidebar is its own flex participant.
 
 **Verified end to end on 2026-10-14, on 0.2.x.** The one thing static analysis could not settle was
-whether `sidebarRight` / `sidebarRightTabs` / `slots` reach a *third-party* client ctx at all — §4's
+whether `sidebarRight` / `sidebarRightTabs` / `slots` reach a _third-party_ client ctx at all — §4's
 `settings` is exactly the service that exists for built-ins and is withheld from us. They do, and
 the measurement is the plugin's own startup: `dsh-generative-ui/client.js` and its
 `tsx_bg.wasm` both load, the 5-second "no right Sidebar" warn **does not fire**, and the tab type
@@ -779,7 +779,7 @@ reason to register as a tab type rather than keep drawing a column.
 
 **Auto-open has two paths, and only the first one was obvious.** A canvas the transcript names — a
 `write` whose arguments carry a canvas path — is opened from `collect.ts`. But 29 canvas writes in
-the corpus are made by *executed code* (`p.write_text(src)` with the path built from a variable), so
+the corpus are made by _executed code_ (`p.write_text(src)` with the path built from a variable), so
 `collect.ts`, which classifies by argument shape, cannot see any of them; in 27 the path is a
 variable. Those go through `OPAQUE_WRITE` — the code text mentions `canvases` — and the sweep asks
 the directory listing again, opening whatever **appeared** since the last one. The first listing is

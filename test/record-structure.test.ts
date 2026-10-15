@@ -13,7 +13,12 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
  * remain — an edit anchored on a phrase that is not unique drops a section into the middle of
  * another and splits an argument in half, which is exactly what reading is worst at catching.
  */
-const DESIGN_DOC = ["CLAUDE.md", ...readdirSync(`${import.meta.dir}/../docs`).filter((f) => f.endsWith(".md") && f !== "measurements-log.md" && f !== "examples.md").map((f) => `docs/${f}`)].sort();
+const DESIGN_DOC = [
+  "CLAUDE.md",
+  ...readdirSync(`${import.meta.dir}/../docs`)
+    .filter((f) => f.endsWith(".md") && f !== "measurements-log.md" && f !== "examples.md")
+    .map((f) => `docs/${f}`),
+].toSorted();
 const record = DESIGN_DOC.map((p) => readFileSync(`${import.meta.dir}/../${p}`, "utf8")).join("\n");
 const sections = [...record.matchAll(/^### (.*?) \((\d{4}-\d{2}-\d{2})\)$/gm)].map((m) => ({ title: m[1], date: m[2] }));
 

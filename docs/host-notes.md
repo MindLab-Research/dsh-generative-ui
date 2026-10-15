@@ -26,16 +26,16 @@ Dev pins moved to `0.2.0-rc.1` as a set (the manifest is a version SET, not ten 
 
 Two user-supplied transcripts, same machine, same plugin, different preset:
 
-| | `standard` | `minimal` |
-| --- | --- | --- |
-| system prompt | 27524 chars | **45 chars** |
-| tools | 25, including `skill` | **2** (`bash`, `str_replace_editor`) |
-| `ui4a` in the request header | 6 | **0** |
-| `canvas` in the request header | 8 | **0** |
+|                                | `standard`            | `minimal`                            |
+| ------------------------------ | --------------------- | ------------------------------------ |
+| system prompt                  | 27524 chars           | **45 chars**                         |
+| tools                          | 25, including `skill` | **2** (`bash`, `str_replace_editor`) |
+| `ui4a` in the request header   | 6                     | **0**                                |
+| `canvas` in the request header | 8                     | **0**                                |
 
 `config/agent-presets/minimal/agent.cordis.yml` says why, in its own comment: the persona carries
-`complete: true`, and *"the persona is the complete system prompt, so global identity, Web
-orientation, tool guidance, and **later assembly listeners cannot add prompt text**"*. Our resident
+`complete: true`, and _"the persona is the complete system prompt, so global identity, Web
+orientation, tool guidance, and **later assembly listeners cannot add prompt text**"_. Our resident
 section is exactly a later assembly listener (`ctx.systemPrompt.section()`), so it is dropped. The
 skill is unreachable for a second, independent reason: the `skill` TOOL comes from the preset's own
 `tool-skill` row, which `standard` has and `minimal` does not.
@@ -72,4 +72,3 @@ for a user; the copy above is the same thing done by hand.
 
 Nothing to fix in the plugin: `minimal` is doing exactly what it says. Worth knowing before
 debugging a report that "the plugin does nothing" — ask which 模式 the session was on first.
-

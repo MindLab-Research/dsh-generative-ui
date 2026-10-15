@@ -9,13 +9,13 @@ Where anything here disagrees with [CLAUDE.md](../CLAUDE.md), CLAUDE.md wins.
 
 Check which one you're copying from first — these repos solve different problems:
 
-| For | Copy from |
-| --- | --- |
-| React singleton bridge, import-map, own compiler, path contract | `../ui4a-playground/src/{runtime,fs}/` |
-| wasm warmup, esm.sh fallback that avoids a second React | `../genui-canvas/src/{genui-runtime,components/genui}/` |
-| CSS scoping + theme ancestor hoisting | `Ori-Replication/obsidian-ui4a-renderer`'s `src/styling.ts` |
-| dsh plugin skeleton, how to split the two configs (it uses tsdown, we use `Bun.build` — see §0) | `liuup/dsh-latex-tools` |
-| How to organize a large client plugin | `omdsh-dev/DSH-better-sidebar` |
+| For                                                                                             | Copy from                                                   |
+| ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| React singleton bridge, import-map, own compiler, path contract                                 | `../ui4a-playground/src/{runtime,fs}/`                      |
+| wasm warmup, esm.sh fallback that avoids a second React                                         | `../genui-canvas/src/{genui-runtime,components/genui}/`     |
+| CSS scoping + theme ancestor hoisting                                                           | `Ori-Replication/obsidian-ui4a-renderer`'s `src/styling.ts` |
+| dsh plugin skeleton, how to split the two configs (it uses tsdown, we use `Bun.build` — see §0) | `liuup/dsh-latex-tools`                                     |
+| How to organize a large client plugin                                                           | `omdsh-dev/DSH-better-sidebar`                              |
 
 **A ported file keeps drifting after you port it.** `segments.ts` and `compiler.ts` both came from the playground
 and both later grew fixes there that we did not have — the fence tolerances the model actually needs, and normalizing
@@ -27,4 +27,3 @@ used `?.` and turned a failure into a pass.
 **Don't copy** `../macaron-claude-code/web`'s zero-isolation approach (global UnoCSS runtime + global reset) — while
 vendoring, it stubbed `useGenUIStyleScope` into a no-op, which pollutes the shell of any host that has its own design
 system.
-

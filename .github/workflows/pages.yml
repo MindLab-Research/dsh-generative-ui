@@ -75,7 +75,7 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v5
 
-  # The same site on the Vercel project behind dsh-generative-ui.macaron.im. Not the Vercel GitHub
+  # The same site on the Vercel project (preview-job test) behind dsh-generative-ui.macaron.im. Not the Vercel GitHub
   # App — this repository cannot join it, since that installation needs an organization owner and a
   # member only ever gets `request`. `vercel.json` still owns the build, and running it here is what
   # keeps the deployed bytes this run's instead of a second build on Vercel's own toolchain.

@@ -30,8 +30,10 @@ import { claimInlineFences } from "./runtime/inline-fence.ts";
 import { parseUi4aSegments, type Ui4aSegment } from "./runtime/segments.ts";
 import { warmCompiler } from "./runtime/compiler.ts";
 import { chatNodes, perNode, selectedSessionId, type ChatNodeView } from "./session.ts";
-import { CANVAS_TAB_ID, canvasTabDefinition } from "./canvas/definition.ts";
+import { CANVAS_BROWSER_ID, CANVAS_TAB_ID, canvasBrowserDefinition, canvasTabDefinition } from "./canvas/definition.ts";
 import { CanvasBody } from "./canvas/body.tsx";
+import { CanvasBrowser } from "./canvas/browser.tsx";
+import { NS, en, zh } from "./canvas/locales.ts";
 import { canvasAddress, startCanvasAutoOpen } from "./canvas/auto-open.ts";
 import { toolCallsOf, type CallBlock, type ToolCallView } from "./canvas/collect.ts";
 import { listCanvasIds } from "./canvas/read.ts";
@@ -184,9 +186,17 @@ export function apply(ctx: ClientContext): void {
     // this dodges a client-side type gap, not the runtime inject check, which still applies).
     // `inject` is on the service wrapper rather than on `SlotCore` itself.
     const slots = (scoped as unknown as { slots: SlotCore & SlotsInject }).slots;
+    // `byId` is keyed by the branded `SessionId`; an address or a tab's standard props carry a
+    // plain string that names one, so the lookup widens on the way in and nothing else does.
+    const cwdOf = (id: string) => {
+      const byId = (scoped.sessions as unknown as ISessions).list.getSnapshot().byId as Record<string, { cwd?: string } | undefined>;
+      return byId[id]?.cwd;
+    };
     // Order matters: `openResource` throws on an address no type claims, so the type has to be
     // registered before anything can try to open one.
+    scoped.effect(() => scoped.locale.register(NS, { zh, en }), "dsh-generative-ui: canvas copy");
     scoped.effect(() => scoped.sidebarRightTabs.register(canvasTabDefinition), "dsh-generative-ui: canvas tab type");
+    scoped.effect(() => scoped.sidebarRightTabs.register(canvasBrowserDefinition(scoped.locale.bind(NS))), "dsh-generative-ui: canvas browser type");
     scoped.effect(
       () =>
         // The seat is declared at runtime by the sidebar, so registering early throws
@@ -200,12 +210,7 @@ export function apply(ctx: ClientContext): void {
               key: CANVAS_TAB_ID,
               registrant: "dsh-generative-ui: canvas tab body",
               inject: () => ({
-                // `byId` is keyed by the branded `SessionId`; an address carries a plain string
-                // that names one, so the lookup widens on the way in and nothing else does.
-                cwdOf: (id: string) => {
-                  const byId = (scoped.sessions as unknown as ISessions).list.getSnapshot().byId as Record<string, { cwd?: string } | undefined>;
-                  return byId[id]?.cwd;
-                },
+                cwdOf,
                 onCardError: (message: string, phase: string) => reportCardError(sendToModel, message, phase),
                 onCardRendered: cardRendered,
               }),
@@ -214,6 +219,22 @@ export function apply(ctx: ClientContext): void {
           ),
         ),
       "dsh-generative-ui: canvas tab body",
+    );
+    scoped.effect(
+      () =>
+        slots.inject("sidebar.right.pane.tab", () =>
+          slots.register(
+            {
+              name: "sidebar.right.pane.tab",
+              key: CANVAS_BROWSER_ID,
+              registrant: "dsh-generative-ui: canvas browser",
+              locale: NS,
+              inject: () => ({ cwdOf }),
+            },
+            CanvasBrowser,
+          ),
+        ),
+      "dsh-generative-ui: canvas browser",
     );
     scoped.effect(
       () =>

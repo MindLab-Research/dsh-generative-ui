@@ -10,6 +10,8 @@ import { parseFileAddress } from "@deepseek-ai/dsh-util-workspace-path";
 // This import is also what merges `sidebar.right.pane.tab` into `SlotMap` (§2.7).
 import type { SidebarRightTabDefinition } from "@deepseek-ai/dsh-client-ui-sidebar-right/client";
 import type { SlotMap } from "@deepseek-ai/dsh-client-ui-slots";
+import { GuideArtworkBrowser } from "@deepseek-ai/dsh-client-ui-primitives";
+import type { CanvasKey } from "./locales.ts";
 import { canvasIdOf } from "../../contract.ts";
 
 /** What `openTab` would name; canvases are opened by address, so this is only a discriminator. */
@@ -81,3 +83,30 @@ export const canvasTabDefinition: SidebarRightTabDefinition = {
  */
 type Assert<T extends true> = T;
 type _SidebarSeatIsMerged = Assert<"sidebar.right.pane.tab" extends keyof SlotMap ? true : false>;
+
+/**
+ * The canvas browser: a *page* type, which is a different thing from the file type above.
+ *
+ * A type is either a resource type (`patterns` — it recognizes addresses) or a page type (no
+ * `patterns` — it is opened by kind), and a guide capsule always opens its contributor **by kind**
+ * at `sidebar://<kind>`. So a capsule cannot point at the file type: its address would never match
+ * `*.ui4a.tsx`, and `openResource` on an address no type claims is a wiring mistake that throws.
+ * Hence a second type whose job is the list, and which opens a canvas through `openResource` when
+ * one is picked.
+ */
+export const CANVAS_BROWSER_KIND = "ui4a-canvases";
+/** Distinct from `CANVAS_TAB_ID`: the seat key is the definition's `id`, so two types need two. */
+export const CANVAS_BROWSER_ID = "dsh-generative-ui/canvases";
+
+/**
+ * @param t - namespace-bound translate, read fresh on every label call so a language change
+ *   reaches the capsule without a re-registration.
+ * @returns the definition to register.
+ */
+export const canvasBrowserDefinition = (t: (key: CanvasKey) => string): SidebarRightTabDefinition => ({
+  id: CANVAS_BROWSER_ID,
+  kind: CANVAS_BROWSER_KIND,
+  title: () => t("guide.title"),
+  // `order: 20` puts it after `sidebar-files`' workspace capsule, which is `order: 10`.
+  guide: [{ id: "canvases", order: 20, title: () => t("guide.title"), description: () => t("guide.description"), icon: GuideArtworkBrowser }],
+});

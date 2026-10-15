@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { CANVAS_TAB_ID, canvasIdOfAddress, canvasTabDefinition, isCanvasAddress } from "../src/client/canvas/definition.ts";
+import { CANVAS_BROWSER_ID, CANVAS_BROWSER_KIND, CANVAS_TAB_ID, canvasBrowserDefinition, canvasIdOfAddress, canvasTabDefinition, isCanvasAddress } from "../src/client/canvas/definition.ts";
 import { sessionFileAddress, absoluteFileAddress } from "@deepseek-ai/dsh-util-workspace-path";
 
 const SID = "s1";
@@ -63,4 +63,24 @@ test("the static face is the one the tab system needs", () => {
   // Unset on purpose: a canvas's content identity is its address, and the registry makes two
   // opens of one address the same tab. `multiple` is for page types opened by kind.
   expect(canvasTabDefinition.multiple).toBeUndefined();
+});
+
+test("the browser is a page type with a guide capsule", () => {
+  const t = (key: string) => key;
+  const browser = canvasBrowserDefinition(t as never);
+  // A page type recognizes no address: a guide capsule opens its contributor BY KIND at
+  // `sidebar://<kind>`, which would never match `*.ui4a.tsx`. Pointing a capsule at the file
+  // type would open an address no type claims and throw.
+  expect(browser.patterns).toBeUndefined();
+  expect(browser.kind).toBe(CANVAS_BROWSER_KIND);
+  // Two types, two ids — the seat is dispatched with the definition's `id`, so sharing one
+  // would send both bodies the other's tabs.
+  expect(browser.id).toBe(CANVAS_BROWSER_ID);
+  expect(browser.id).not.toBe(canvasTabDefinition.id);
+  expect(browser.guide).toHaveLength(1);
+  // `sidebar-files` contributes its workspace capsule at `order: 10`; sitting after it is the
+  // difference between "next to the thing you'd look for it near" and "at the bottom".
+  expect(browser.guide![0]!.order).toBeGreaterThan(10);
+  expect(browser.guide![0]!.title()).toBe("guide.title");
+  expect(typeof browser.guide![0]!.icon).toBe("function");
 });

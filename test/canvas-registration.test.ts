@@ -8,7 +8,7 @@
  */
 import { afterEach, expect, test } from "bun:test";
 import { apply } from "../src/client/index.ts";
-import { CANVAS_KIND, CANVAS_TAB_ID, canvasTabDefinition } from "../src/client/canvas/definition.ts";
+import { CANVAS_BROWSER_ID, CANVAS_TAB_ID, canvasTabDefinition } from "../src/client/canvas/definition.ts";
 import { restoreGlobals } from "./globals.ts";
 
 type Registered = { type?: unknown; seat?: string; options?: Record<string, unknown> };
@@ -81,12 +81,20 @@ test("the tab type is registered, and the body under its id rather than its kind
   const type = recorded.find((entry) => entry.type !== undefined)?.type;
   expect(type).toBe(canvasTabDefinition);
 
-  const body = recorded.find((entry) => entry.seat === "sidebar.right.pane.tab");
+  // Two types now contribute a body to this seat, so look up by `key` — the first hit is not
+  // necessarily the file type's.
+  const body = recorded.find((entry) => entry.seat === "sidebar.right.pane.tab" && entry.options?.key === CANVAS_TAB_ID);
   expect(body?.options?.name).toBe("sidebar.right.pane.tab");
   // The whole failure mode: the seat is dispatched with the definition's `id`. Naming the kind
   // here registers successfully and receives nothing, forever.
   expect(body?.options?.key).toBe(CANVAS_TAB_ID);
-  expect(body?.options?.key).not.toBe(CANVAS_KIND);
+  expect(body?.options?.key).not.toBe("ui4a-canvas");
+
+  const browser = recorded.find((entry) => entry.seat === "sidebar.right.pane.tab" && entry.options?.key === CANVAS_BROWSER_ID);
+  expect(browser?.options?.name).toBe("sidebar.right.pane.tab");
+  // The browser is the one that declares the locale namespace, so `t` reaches its body.
+  expect(browser?.options?.locale).toBe("ui4aCanvas");
+  expect(typeof browser?.options?.inject).toBe("function");
 });
 
 test("the body's face resolves cwd for the address's own session", () => {

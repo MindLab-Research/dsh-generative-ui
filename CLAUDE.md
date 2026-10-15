@@ -288,6 +288,17 @@ matches the URI *path* at any depth, so this picks up
 `extension`, so we take those files off it — which is the point, since a canvas opened as a text
 preview is a source listing where a running app should be.
 
+**Two types, because a guide capsule opens its contributor BY KIND.** A type is either a resource
+type (`patterns` — it recognizes addresses) or a page type (no `patterns` — opened by kind at
+`sidebar://<kind>`), and the guide page's capsules always do the latter. So the capsule cannot
+point at the file type: its address would never match `*.ui4a.tsx`, and `openResource` on an
+address no type claims is a wiring mistake that throws. The browser is therefore a second, page
+type (`ui4a-canvases`) whose body lists the workspace's canvases and opens one through the same
+`openResource` the transcript uses. Two types need two `id`s — the seat is dispatched with the
+definition's `id`, and sharing one would hand each body the other's tabs. The copy on the capsule
+is localized (`locales.ts`): the guide draws no copy of its own, and a hardcoded language drops a
+foreign word into a localized column.
+
 **Every way into the canvas is already routed by the host.** `dsh-client-ui-chat` sends transcript
 file links to `ctx.sidebarRight.openResource(url)`; the file tree opens rows the same way; the 产物
 chips go through it too. We only supply the *viewer*. The one thing still ours is **auto-open when

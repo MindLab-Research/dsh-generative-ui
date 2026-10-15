@@ -57,7 +57,13 @@ export function installRuntime(next: Runtime, modules: Record<string, object>) {
 }
 
 /** `genui dev` has no server render, so the map arrives after the module script; Chromium merges late maps. */
-const resolves = (spec: string) => { try { return import.meta.resolve(spec) === IMPORT_MAP.imports[spec]; } catch { return false; } };
+const resolves = (spec: string) => {
+  try {
+    return import.meta.resolve(spec) === IMPORT_MAP.imports[spec];
+  } catch {
+    return false;
+  }
+};
 
 export function ensureImportMap() {
   // The built page's map is server-rendered and already live. Under genui dev React inserts that tag

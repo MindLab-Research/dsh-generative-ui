@@ -33,18 +33,31 @@ const MOUNT = "data-ui4a-mount";
 const PREVIEW = "data-ui4a-preview";
 
 /** Unmounting a root during React's own commit throws; defer it like every other teardown here. */
-const dropPreview = (claim: { preview: { host: HTMLElement; root: Root } | null }) => {
+const dropPreview = (claim: { preview: Preview | null }) => {
   const preview = claim.preview;
   if (preview === null) return;
   claim.preview = null;
+  clearTimeout(preview.timer);
   queueMicrotask(() => {
     preview.root.unmount();
     preview.host.remove();
   });
 };
 
+/**
+ * How long a claimed card gets to paint before its source preview is rendered.
+ *
+ * The preview is not free: shiki tokenizes synchronously during React's render, and on a 7–8KB card
+ * that was a 310ms long task — measured on a session switch, where the cards themselves paint
+ * 20–25ms after mount. Rendering it eagerly made the reader watch source for exactly as long as the
+ * highlighting took. A warm card beats this delay and never shows source; a cold one still does.
+ */
+export const PREVIEW_DELAY_MS = 300;
+
+type Preview = { host: HTMLElement; root: Root; shown: boolean; timer?: ReturnType<typeof setTimeout> };
+
 /** `reserved` is the segment code this claim owns, so no other block can be matched to it — see `sweep`. */
-type Claim = { block: HTMLElement; mount: HTMLElement; root: Root; code: string; reserved: string; complete: boolean; rendered: string; painted: MutationObserver | null; preview: { host: HTMLElement; root: Root } | null };
+type Claim = { block: HTMLElement; mount: HTMLElement; root: Root; code: string; reserved: string; complete: boolean; rendered: string; painted: MutationObserver | null; preview: Preview | null };
 
 /**
  * Whether the card has actually painted something a reader can see.
@@ -204,7 +217,7 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
     // reports asynchronously, so a block would be claimed before its first entry ever arrives and
     // the deferral would never happen at all.
     const box = block.getBoundingClientRect();
-    const limit = (globalThis.innerHeight || 0) || 0;
+    const limit = globalThis.innerHeight || 0 || 0;
     // A zero-height box means the block is not laid out yet (display:none, or an ancestor still
     // hidden). That is not "far away", and treating it as such parks a card that is about to be
     // visible, so measure it again next sweep instead of parking it.
@@ -213,6 +226,13 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
     parked.add(block);
     nearby.observe(block);
     return true;
+  };
+
+  const renderPreview = (claim: Claim) => {
+    const preview = claim.preview;
+    if (!preview?.shown) return;
+    claim.block.style.display = "none";
+    preview.root.render(createElement(CodeBlock, { code: claim.code, lang: "tsx", copyLabel: t("copy"), copiedLabel: t("copied") }));
   };
 
   const release = (claim: Claim, restore: boolean) => {
@@ -309,8 +329,15 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
       const previewHost = document.createElement("div");
       previewHost.setAttribute(PREVIEW, "");
       block.parentElement?.insertBefore(previewHost, block);
-      block.style.display = "none";
-      const claim: Claim = { block, mount, root: createRoot(mount), code: "", reserved: segment.code, complete: false, rendered: "", painted: null, preview: { host: previewHost, root: createRoot(previewHost) } };
+      // The host's block stays visible until something replaces it — the preview once
+      // PREVIEW_DELAY_MS passes, or the card the moment it paints. Hiding it at claim time would
+      // leave a gap where the source was, which is exactly the blank this preview exists to avoid.
+      const preview: Preview = { host: previewHost, root: createRoot(previewHost), shown: false };
+      const claim: Claim = { block, mount, root: createRoot(mount), code: "", reserved: segment.code, complete: false, rendered: "", painted: null, preview };
+      preview.timer = setTimeout(() => {
+        preview.shown = true;
+        renderPreview(claim);
+      }, PREVIEW_DELAY_MS);
       // The source stays visible until the card paints. Checked at most once per frame and
       // torn down the moment it fires: a streaming card mutates thousands of times, and
       // `textContent` walks the whole subtree, so a per-mutation check would be
@@ -323,6 +350,7 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
           if (!hasPainted(mount)) return;
           claim.painted?.disconnect();
           claim.painted = null;
+          claim.block.style.display = "none";
           dropPreview(claim);
         });
       });
@@ -384,14 +412,14 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
       claim.root.render(render({ code, streaming: !complete, last: () => isLastSegment(segments(), code) }));
       // The preview follows the SEGMENT, not the block: mid-stream the snapshot runs ahead of
       // what markdown has painted, so this is the newer text and the one the reader wants while
-      // waiting. Dropped the moment the card paints.
-      claim.preview?.root.render(createElement(CodeBlock, { code, lang: "tsx", copyLabel: t("copy"), copiedLabel: t("copied") }));
+      // waiting. Dropped the moment the card paints, and not rendered at all before PREVIEW_DELAY_MS.
+      renderPreview(claim);
     }
   };
 
   const stop = observeTranscript(sweep);
   const stopLocale = subscribeLocale(() => {
-    for (const claim of claims.values()) claim.preview?.root.render(createElement(CodeBlock, { code: claim.code, lang: "tsx", copyLabel: t("copy"), copiedLabel: t("copied") }));
+    for (const claim of claims.values()) renderPreview(claim);
   });
 
   return () => {

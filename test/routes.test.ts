@@ -1,10 +1,10 @@
 /**
  * The plugin's HTTP routes, against a real directory.
  *
- * The listing is the launcher's only source of truth for a canvas this session did not write —
- * including one written by executed code, which `collect.ts` cannot see at all (see the
- * `OPAQUE_WRITE` note in `client/canvas/index.ts`). Nothing tested it until that fix landed,
- * so "the listing already knows" was an assumption about a route with no coverage.
+ * The listing is the only source of truth for a canvas written by executed code, which
+ * `collect.ts` cannot see at all (see `OPAQUE_WRITE` in `client/canvas/auto-open.ts` — it is
+ * what asks this route again). Nothing tested it until that landed, so "the listing already
+ * knows" was an assumption about a route with no coverage.
  */
 import { afterAll, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -56,9 +56,9 @@ describe("canvas listing", () => {
     expect((await call(`cwd=${encodeURIComponent(cwd)}`, new Set())).status).toBe(403);
   });
 
-  // The claim the OPAQUE_WRITE fix rests on: a canvas that appears on disk mid-session, named
-  // by nothing in any tool call, is visible to a second listing. Without this the fix is an
-  // assumption — re-listing is only worth anything if the listing sees what arrived after it.
+  // The claim the OPAQUE_WRITE relist rests on: a canvas that appears on disk mid-session,
+  // named by nothing in any tool call, is visible to a second listing. Without this the relist
+  // is an assumption — asking again is only worth anything if the answer sees what arrived.
   // Its own directory: this test adds a file permanently, and the shared `cwd` is asserted
   // exhaustively by the listing test above. Sharing it passes in file order and fails under
   // `--randomize` about one run in three — the suite was passing on alphabetical luck.

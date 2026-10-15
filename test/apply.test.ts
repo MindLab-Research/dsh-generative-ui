@@ -86,7 +86,10 @@ test("with commands on, the route is registered", () => {
  * or restricted profile looks like.
  */
 test("a profile without `shell` loses only the command route", () => {
-  const { effects } = applyWith(ALL.filter((name) => name !== "shell"), { allowExec: true });
+  const { effects } = applyWith(
+    ALL.filter((name) => name !== "shell"),
+    { allowExec: true },
+  );
   expect(effects).not.toContain("dsh-generative-ui: commands");
   expect(effects).toContain("dsh-generative-ui: workspace files");
   expect(effects).toContain("dsh-generative-ui: model stream");

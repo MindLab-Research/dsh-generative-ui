@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
-import { readFileSync, statSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 /**
  * `eval.sh` is the instrument every prompt measurement goes through, and it has been wrong in ways
@@ -23,13 +25,37 @@ test("a hung run is reported separately from a dead one", () => {
   // and look at either. `run-fixtures.sh` still matches both with `crash*`.
   expect(script).toContain("crash/nosession");
   expect(script).toContain("crash/unfinished");
+  expect(script).toContain('sess=""');
+  expect(script).toContain('sess=$(ls -td');
+  expect(script).toContain('session.v4.jsonl.zstd');
+  expect(script).toContain('transcript="$sess/session.v4.jsonl.zstd"');
   // and with distinct exit codes, since callers branch on them
   expect(script).toMatch(/exit 3/);
   expect(script).toMatch(/exit 2/);
 });
 
 test("the reply path is printed, so a caller can read the card", () => {
-  expect(script).toContain("reply=$out");
+  expect(script).toContain("reply=$visible");
+  expect(script).toContain("raw=$out");
+});
+
+test("the measured reply comes from visible assistant text blocks", () => {
+  expect(script).toContain('bun "$here/scripts/visible-reply.ts" - > "$visible"');
+  expect(script).toContain("fences=$(awk");
+  expect(script).toContain('"$visible")');
+  expect(script).toContain('"$visible.canvases"');
+});
+
+test("a frozen eval plugin carries the progressive skill references", () => {
+  expect(readFileSync("eval/wave.py", "utf8")).toContain('"skill"');
+});
+
+test("the trigger runner invokes the Bash evaluator and counts only complete four-backtick cards", () => {
+  const triggers = readFileSync("scripts/triggers.sh", "utf8");
+  expect(triggers).toContain('bash "$d/eval.sh"');
+  expect(triggers).toContain("reply=$(print -r --");
+  expect(script).toContain('if ($0 == "````ui4a/tsx")');
+  expect(script).toContain('if ($0 == "````" && open)');
 });
 
 // A rule in the SKILL can only be measured on a run that loaded it. Three conclusions were written
@@ -105,9 +131,14 @@ test.skipIf(!hasDsh || waveRunning)(
     // outlasts the alarm makes the branch under test the alarm, not dsh. `perl -esleep(30)` rather
     // than `sleep 30`: this environment refuses a foreground `sleep`, and the refusal exits fast
     // enough to reproduce the very flake being fixed.
+    const evalHome = mkdtempSync(join(tmpdir(), "dsh-eval-harness-"));
+    mkdirSync(join(evalHome, "profiles/headless/node_modules"), { recursive: true });
+    symlinkSync(process.cwd(), join(evalHome, "profiles/headless/node_modules/dsh-generative-ui"));
+    writeFileSync(join(evalHome, "settings.yaml"), "");
     const proc = Bun.spawnSync(["bash", "scripts/eval.sh", "写一个非常复杂的看板应用"], {
-      env: { ...process.env, EVAL_TIMEOUT: "1", EVAL_CMD: "perl -esleep(30)", ...(varName === "" ? {} : { [varName]: "test-only-never-sent" }) },
+      env: { ...process.env, DSH_HOME: evalHome, EVAL_TIMEOUT: "1", EVAL_CMD: "perl -esleep(30)", ...(varName === "" ? {} : { [varName]: "test-only-never-sent" }) },
     });
+    rmSync(evalHome, { recursive: true, force: true });
     expect(proc.exitCode).toBe(3);
     // `toStartWith`, not `toContain`: an earlier version let SIGALRM kill the subshell, and the
     // shell announces that — `95054 Alarm clock: 14  perl -e …` arrives ahead of the verdict, so

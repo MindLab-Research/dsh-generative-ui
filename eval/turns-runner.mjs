@@ -27,13 +27,22 @@ export const Config = z.object({});
 
 /** Everything one turn produced, read off the session events the turn appended. */
 function summarize(events, firstSeq) {
-  let started = false, text = "", reason, tools = [];
+  let started = false,
+    text = "",
+    reason,
+    tools = [];
   for (const event of events) {
     if (event.seq < firstSeq) continue;
-    if (event.type === "turn/start") { started = true; continue; }
+    if (event.type === "turn/start") {
+      started = true;
+      continue;
+    }
     if (!started) continue;
     if (event.type === "assistant/message") {
-      const joined = event.data.message.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+      const joined = event.data.message.content
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("");
       if (joined !== "") text = joined;
     }
     // The skill load and every file write live here, not in the reply — `skill=no` is the one
@@ -50,23 +59,36 @@ const json = (res, code, body) => {
   res.end(payload);
 };
 
-const readBody = (req) => new Promise((resolve, reject) => {
-  let raw = "";
-  req.on("data", (c) => { raw += c; });
-  req.on("end", () => { try { resolve(raw === "" ? {} : JSON.parse(raw)); } catch (e) { reject(e); } });
-  req.on("error", reject);
-});
+const readBody = (req) =>
+  new Promise((resolve, reject) => {
+    let raw = "";
+    req.on("data", (c) => {
+      raw += c;
+    });
+    req.on("end", () => {
+      try {
+        resolve(raw === "" ? {} : JSON.parse(raw));
+      } catch (e) {
+        reject(e);
+      }
+    });
+    req.on("error", reject);
+  });
 
 async function start(ctx, io) {
   await ctx.get("loader")?.await();
-  const agents = ctx.get("agents"), defaultModel = ctx.get("agentDefaultModel"), sessions = ctx.get("sessions");
+  const agents = ctx.get("agents"),
+    defaultModel = ctx.get("agentDefaultModel"),
+    sessions = ctx.get("sessions");
   if (agents === undefined || defaultModel === undefined || sessions === undefined) return;
   const selection = defaultModel.currentSelection();
   const { agent } = await agents.create({
     sessionId: SessionId(`session-${randomUUID()}`),
     meta: { cwd: process.cwd() },
     agentOptions: { provider: selection.provider, model: selection.model },
-    setup: (agentCtx) => { installModelSelection(agentCtx, { current: selection, assembled: undefined }); },
+    setup: (agentCtx) => {
+      installModelSelection(agentCtx, { current: selection, assembled: undefined });
+    },
   });
   await agent.whenIdle();
 

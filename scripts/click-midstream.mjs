@@ -21,7 +21,17 @@ const CHUNKS = Number(process.argv[4] ?? 24);
 // esm.sh probe for an unregistered import settles whenever the network says so. Clicking "as soon
 // as possible" lands in the first window and cannot see past it.
 const CLICK_AT = Number(process.argv[5] ?? 0);
-const resolveFrom = (dir) => { const url = new URL(`${dir}/package.json`, import.meta.url); if (!existsSync(url)) return null; try { const r = createRequire(url); r.resolve("playwright"); return r } catch { return null } };
+const resolveFrom = (dir) => {
+  const url = new URL(`${dir}/package.json`, import.meta.url);
+  if (!existsSync(url)) return null;
+  try {
+    const r = createRequire(url);
+    r.resolve("playwright");
+    return r;
+  } catch {
+    return null;
+  }
+};
 const pwRequire = ["..", "../../macaron-genui-demo"].map(resolveFrom).find(Boolean);
 const { chromium } = await pwRequire("playwright");
 
@@ -29,21 +39,29 @@ const code = readFileSync(cardPath, "utf8");
 const repo = new URL("..", import.meta.url).pathname;
 const harness = spawn("bun", ["scripts/surface-harness.ts", String(PORT)], { cwd: repo, stdio: "ignore" });
 process.on("exit", () => harness.kill());
-for (let i = 0; i < 80; i++) { try { if ((await fetch(`http://127.0.0.1:${PORT}/surface.js`)).ok) break } catch {} await new Promise(r => setTimeout(r, 250)) }
+for (let i = 0; i < 80; i++) {
+  try {
+    if ((await fetch(`http://127.0.0.1:${PORT}/surface.js`)).ok) break;
+  } catch {}
+  await new Promise((r) => setTimeout(r, 250));
+}
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.goto(`http://127.0.0.1:${PORT}/`);
 await page.evaluate(async () => {
   const { GenUISurface } = await import("/surface.js");
-  const host = document.createElement("div"); host.id = "h"; document.body.appendChild(host);
+  const host = document.createElement("div");
+  host.id = "h";
+  document.body.appendChild(host);
   globalThis.__root = globalThis.ReactDOM.createRoot(host);
   globalThis.__S = GenUISurface;
   globalThis.__push = (c, streaming) => globalThis.__root.render(globalThis.React.createElement(GenUISurface, { code: c, streaming }));
 });
 
 const step = Math.ceil(code.length / CHUNKS);
-let clickedAt = null, openAfterClick = null;
+let clickedAt = null,
+  openAfterClick = null;
 // A disclosure counts as open when its panel has rendered content.
 const openCount = () => page.evaluate(() => document.querySelectorAll('[id^="headlessui-disclosure-panel"]').length);
 
@@ -82,8 +100,6 @@ await page.waitForTimeout(2500);
 const finalOpen = await openCount();
 const finalAria = await page.evaluate(() => document.querySelector('button[id^="headlessui-disclosure-button"]')?.getAttribute("aria-expanded"));
 console.log(`  流式结束后：第一个按钮 aria-expanded = ${finalAria}，展开面板数 = ${finalOpen}`);
-console.log(clickedAt === null ? "\n→ 整个流式过程中没等到可点的 disclosure"
-  : finalOpen >= (openAfterClick ?? 0) && (openAfterClick ?? 0) > 0
-    ? "\n→ 点击保住了：流式期间点开的面板到最后仍是开的"
-    : "\n→ 复现了：流式期间点开的面板被后续帧擦掉了");
-await browser.close(); harness.kill();
+console.log(clickedAt === null ? "\n→ 整个流式过程中没等到可点的 disclosure" : finalOpen >= (openAfterClick ?? 0) && (openAfterClick ?? 0) > 0 ? "\n→ 点击保住了：流式期间点开的面板到最后仍是开的" : "\n→ 复现了：流式期间点开的面板被后续帧擦掉了");
+await browser.close();
+harness.kill();

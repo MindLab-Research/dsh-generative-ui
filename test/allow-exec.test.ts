@@ -99,7 +99,11 @@ test("no placeholder survives into either build", () => {
 test("the handler carries no switch of its own — the route is the switch", () => {
   expect(serveExec.toString()).not.toContain("allowExec");
   const source = require("node:fs").readFileSync("src/index.ts", "utf8") as string;
-  expect(source).toContain('if (allowExec) scoped.inject(["shell", "sandboxPolicy"]');
+  // Whitespace-insensitive on purpose. This asserts a *shape*, and a formatter is entitled to
+  // break `if (allowExec) scoped.inject(...)` across lines — which is exactly what a reflow did,
+  // and the assertion then failed on a tree that had not changed behaviour at all. A source-text
+  // check that depends on where a line ends is a check about the formatter (§6.4).
+  expect(source.replace(/\s+/g, " ")).toContain('if (allowExec) scoped.inject(["shell", "sandboxPolicy"]');
 });
 
 // The switch must not become a way to lose the plugin. `installSettingsSection` lives entirely

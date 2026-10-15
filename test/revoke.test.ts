@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { needsResolve, revokeAll } from "../src/client/canvas/CanvasPanel.tsx";
+import { needsResolve, revokeAll } from "../src/client/canvas/subpages.ts";
 
 /**
  * Blob URLs for a canvas's sibling modules. Two paths revoke the same array — the effect's

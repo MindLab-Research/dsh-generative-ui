@@ -1,6 +1,6 @@
 # Pre-registered reads
 
-Written *before* the round's data exists. A round changes several rules at once, and after the
+Written _before_ the round's data exists. A round changes several rules at once, and after the
 numbers land there is always a story that fits them — this file is what stops that story from being
 written backwards. Each entry names the metric, the direction, and what would count as the change
 having failed.
@@ -17,11 +17,11 @@ Frozen at `rounds/r005/plugin`, verified to contain all three rules before the f
 
 ### What changed
 
-| # | Change | Where | Evidence it was written from |
-|---|---|---|---|
-| 1 | Ask every turn whether the answer wants an interface, not once at turn 0 | `prompt.ts` (resident) | 93 of 101 loaders decided at turn 0, 7 at turn 1, 1 at turn 2, **0 later**; 20 of 20 never-loaders produced 0 cards across 179 turns |
-| 2 | Three shapes that hang off the column edge — `<svg width>`, an unwrapped `<pre>`, a `min-w-` table | `skill.ts` | 12 of 60 sampled cards overflowed at 380px, worst 705px |
-| 3 | A title or control above a long list is `sticky` | `skill.ts` | **356 of 766 cards have a heading or control above a list; 3 pin it (0.8%)** — every case, every model. The rule IS in r005's frozen plugin; only this count was measured afterwards |
+| #   | Change                                                                                             | Where                  | Evidence it was written from                                                                                                                                                         |
+| --- | -------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Ask every turn whether the answer wants an interface, not once at turn 0                           | `prompt.ts` (resident) | 93 of 101 loaders decided at turn 0, 7 at turn 1, 1 at turn 2, **0 later**; 20 of 20 never-loaders produced 0 cards across 179 turns                                                 |
+| 2   | Three shapes that hang off the column edge — `<svg width>`, an unwrapped `<pre>`, a `min-w-` table | `skill.ts`             | 12 of 60 sampled cards overflowed at 380px, worst 705px                                                                                                                              |
+| 3   | A title or control above a long list is `sticky`                                                   | `skill.ts`             | **356 of 766 cards have a heading or control above a list; 3 pin it (0.8%)** — every case, every model. The rule IS in r005's frozen plugin; only this count was measured afterwards |
 
 Not testable here: the `external` retry fix. The eval mounts each card once and never retries, so the
 failure it repairs (a second React on attempt ≥ 1 → `Minified React error #31`) cannot occur in this
@@ -65,20 +65,20 @@ harness. Its evidence is a real session, not this round. **Do not credit r005 wi
 Every registered read came back positive and none reached 2 SE. Before writing that down as "the
 rules did nothing", the obvious question: **could this comparison have detected them?**
 
-| Round | complete + timeout | error |
-|---|---|---|
-| r003 | 160 | 0 |
-| r004 | **105** | **115** |
-| r005 | 179 and rising | 36 left, re-running |
+| Round | complete + timeout | error               |
+| ----- | ------------------ | ------------------- |
+| r003  | 160                | 0                   |
+| r004  | **105**            | **115**             |
+| r005  | 179 and rising     | 36 left, re-running |
 
 r004 lost 115 of its 220 cells to the environment, so the paired set is capped at 105 and came out
 at 85. From the observed per-pair spread:
 
-| Read | effect | sd across pairs | n needed for 2 SE | n available |
-|---|---|---|---|---|
-| panel `overall` | +0.319 | 2.30 | **209** | 85 |
-| `hierarchy` | +0.370 | 2.53 | **186** | 85 |
-| `interaction` | +0.354 | 2.89 | **266** | 85 |
+| Read            | effect | sd across pairs | n needed for 2 SE | n available |
+| --------------- | ------ | --------------- | ----------------- | ----------- |
+| panel `overall` | +0.319 | 2.30            | **209**           | 85          |
+| `hierarchy`     | +0.370 | 2.53            | **186**           | 85          |
+| `interaction`   | +0.354 | 2.89            | **266**           | 85          |
 
 So the panel half of this comparison was undecidable from the moment r004 finished. Not "the effect
 was too small" — an effect of exactly this size, perfectly real, would still have printed a number
@@ -104,11 +104,11 @@ started working" when part of it is simply the first round that could see.
 **And the obvious fix — more judges — would do nothing.** Splitting r005's 217 verdicts into
 within-run and between-run variance settles where the noise actually lives:
 
-| Dimension | sd between judges on one run | sd between runs | judge noise in the mean of 4 | real run-to-run |
-|---|---|---|---|---|
-| `overall` | 0.82 | 2.26 | 0.41 | **2.22** |
-| `hierarchy` | 1.00 | 2.07 | 0.50 | **2.00** |
-| `trigger` | 0.82 | 2.92 | 0.41 | **2.89** |
+| Dimension   | sd between judges on one run | sd between runs | judge noise in the mean of 4 | real run-to-run |
+| ----------- | ---------------------------- | --------------- | ---------------------------- | --------------- |
+| `overall`   | 0.82                         | 2.26            | 0.41                         | **2.22**        |
+| `hierarchy` | 1.00                         | 2.07            | 0.50                         | **2.00**        |
+| `trigger`   | 0.82                         | 2.92            | 0.41                         | **2.89**        |
 
 The panel agrees with itself. Four judges reduce their own disagreement to 0.41-0.50, and **97-99%
 of what is left is the models genuinely producing different conversations run to run**. With an
@@ -119,11 +119,11 @@ be, at double the price. Do not spend the round's budget widening the panel.
 **Nor is a composite score.** The other free-looking idea — average the five dimensions instead of
 reading `overall`, on the theory that per-dimension noise partly cancels — makes it worse:
 
-| estimator | r004→r005 effect | SE multiple |
-|---|---|---|
-| `overall` alone | +0.434 ± 0.235 | **1.85** |
-| mean of the five dimensions | +0.378 ± 0.244 | 1.55 |
-| mean of all six | +0.388 ± 0.241 | 1.61 |
+| estimator                   | r004→r005 effect | SE multiple |
+| --------------------------- | ---------------- | ----------- |
+| `overall` alone             | +0.434 ± 0.235   | **1.85**    |
+| mean of the five dimensions | +0.378 ± 0.244   | 1.55        |
+| mean of all six             | +0.388 ± 0.241   | 1.61        |
 
 Two reasons, both visible in the per-dimension table: the dimensions are strongly correlated, so
 averaging removes little noise, and `clarify` is a null (+0.115, 0.45 SE) that dilutes the signal
@@ -133,13 +133,13 @@ stop looking for a cleverer summary of the same 105 verdicts.**
 ### Read #1 came back, and it retired its own sharp predictor (2026-08-29)
 
 The registered read for the per-turn decision rule was the skill-load rate, with a sharper backup:
-*"whether ANY run loads it after turn 2, which happened 0 times in 101 runs before. One such run is
-qualitative proof the rule landed; none means it did not."*
+_"whether ANY run loads it after turn 2, which happened 0 times in 101 runs before. One such run is
+qualitative proof the rule landed; none means it did not."_
 
-| | r003 | r004 | r005 |
-|---|---|---|---|
+|                                 | r003              | r004             | r005              |
+| ------------------------------- | ----------------- | ---------------- | ----------------- |
 | runs that load the skill at all | 124 / 155 (80.0%) | 85 / 105 (81.0%) | 147 / 175 (84.0%) |
-| first load on turn 0 / 1 / 2 | 118 / 5 / **1** | 78 / 7 / **0** | 141 / 5 / **1** |
+| first load on turn 0 / 1 / 2    | 118 / 5 / **1**   | 78 / 7 / **0**   | 141 / 5 / **1**   |
 
 Paired on the 85 common cells, the rate is **+0.059 ± 0.045 — 1.3 SE**, short of the threshold.
 
@@ -163,10 +163,10 @@ looking at the round BEFORE the one you drew the baseline from.
 control above it in the same parent — so "above" is a sibling relation rather than a regex guess.
 Three numbers on the same instrument, and they disagree in a way that matters:
 
-| Read | r004 | r005 (partial) |
-|---|---|---|
-| pooled, any card containing `sticky` | 1.9% | **7.4%** |
-| paired by (case, model), per-card | 1.2% | 4.6% — **+0.047 ± 0.027, 1.7 SE** |
+| Read                                            | r004    | r005 (partial)                       |
+| ----------------------------------------------- | ------- | ------------------------------------ |
+| pooled, any card containing `sticky`            | 1.9%    | **7.4%**                             |
+| paired by (case, model), per-card               | 1.2%    | 4.6% — **+0.047 ± 0.027, 1.7 SE**    |
 | paired, restricted to cards that HAVE the shape | 0 / 251 | 2 / 245 — **+0.017 ± 0.017, 1.0 SE** |
 
 The pooled number is four times the paired one and neither clears 2 SE. Reading the hits explains
@@ -188,17 +188,17 @@ Corpus counts over r003+r004's 766 cards, measured after r005 had already starte
 column is the round that can actually move each one — getting this wrong is how a round later takes
 credit for a rule that shipped before it.
 
-| Metric | Baseline | Rule that targets it | Read in |
-|---|---|---|---|
-| cards with a heading/control above a list that pin it | **3 / 356 (0.8%)** | sticky trigger | **r005** — the rule is in its frozen plugin |
-| `hover:` and a selected-state variant colliding on one property | **308 in 193 cards** | pressed-and-hovered pair | r006 |
-| runs where the reader clicked and nothing ever sent | **108 / 161 (67%)** | one control ends the step | r006 |
-| `useEffect` timers with no cleanup | **0 / 39** | none — already correct, and a crude regex said 212 | never |
-| cards carrying a `@container` breakpoint | **591 / 766 (77%)** | already landed; was the top panel criticism at 76% | already read |
-| cards stacking three box recipes | **216 / 755 (29%)**; four or more **41 (5.4%)**, worst 5 | countable nesting check | r006 |
-| submissions that left the card looking untouched | **36 / 105 (34%)** | record-then-show, three statements | r006 |
-| submissions recorded but lost on reload | **20 / 105 (19%)** | `usePersistedState`, not `useState` | r006 |
-| reloads that re-fired the turn by themselves | **0 / 105** | none — the opposite mistake does not happen | never |
+| Metric                                                          | Baseline                                                 | Rule that targets it                               | Read in                                     |
+| --------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------- |
+| cards with a heading/control above a list that pin it           | **3 / 356 (0.8%)**                                       | sticky trigger                                     | **r005** — the rule is in its frozen plugin |
+| `hover:` and a selected-state variant colliding on one property | **308 in 193 cards**                                     | pressed-and-hovered pair                           | r006                                        |
+| runs where the reader clicked and nothing ever sent             | **108 / 161 (67%)**                                      | one control ends the step                          | r006                                        |
+| `useEffect` timers with no cleanup                              | **0 / 39**                                               | none — already correct, and a crude regex said 212 | never                                       |
+| cards carrying a `@container` breakpoint                        | **591 / 766 (77%)**                                      | already landed; was the top panel criticism at 76% | already read                                |
+| cards stacking three box recipes                                | **216 / 755 (29%)**; four or more **41 (5.4%)**, worst 5 | countable nesting check                            | r006                                        |
+| submissions that left the card looking untouched                | **36 / 105 (34%)**                                       | record-then-show, three statements                 | r006                                        |
+| submissions recorded but lost on reload                         | **20 / 105 (19%)**                                       | `usePersistedState`, not `useState`                | r006                                        |
+| reloads that re-fired the turn by themselves                    | **0 / 105**                                              | none — the opposite mistake does not happen        | never                                       |
 
 ### r005 mid-flight, after the TCC block (2026-08-29)
 
@@ -222,17 +222,16 @@ later as a finished result:
   This is the same trap as `cards overflowing at 380` earlier today, caught by the same rule:
   **a counter whose denominator differs between the rounds is not a result.**
 
-
 ## The prompt budget, and why nothing was trimmed (2026-08-29)
 
 Every round so far has only ADDED rules, and the payload the model carries shows it:
 
-| round | prompt + skill bytes | vs previous | largest block (the skill) |
-|---|--:|--:|--:|
-| r003 | 121,622 | — | 58,896 |
-| r004 | 124,345 | +2.2% | 61,272 |
-| r005 | 130,061 | +4.6% | 63,578 |
-| r006 (current tree) | 136,156 | +4.7% | 68,759 |
+| round               | prompt + skill bytes | vs previous | largest block (the skill) |
+| ------------------- | -------------------: | ----------: | ------------------------: |
+| r003                |              121,622 |           — |                    58,896 |
+| r004                |              124,345 |       +2.2% |                    61,272 |
+| r005                |              130,061 |       +4.6% |                    63,578 |
+| r006 (current tree) |              136,156 |       +4.7% |                    68,759 |
 
 That is +12% in three rounds and +16.7% on the skill. A loop that only adds eventually stops
 working, so two things were checked before deciding to carry it:
@@ -259,14 +258,14 @@ from them or it will be mistaken for them.
 
 ### What changed
 
-| # | Change | Where | Baseline it is aimed at |
-|---|---|---|---|
-| 1 | `aria-pressed:hover:*` in the button recipe | `skill.ts` | **308 collisions in 193 cards** — `:is()` makes `hover` and the pressed variant both `(0,2,0)`, `hover` is written last, so the selection repaints neutral under the pointer |
-| 2 | Exactly one control ends the step | `skill.ts` | **108 of 161 clicking runs (67%) never sent anything**, 468 dead clicks |
-| 3 | The nesting check made countable — walk up and count ancestors repeating border+rounded+padding | `prompt.ts` | **216 of 755 (29%)** stack three, **41 (5.4%)** stack four or more, worst 5 — read off the syntax tree after two cheaper methods gave 33% and 60.7% |
-| 4 | Record *and render* — three statements, `usePersistedState` | `skill.ts` | **36 of 105 (34%)** looked untouched after submitting, **20 (19%)** lost it on reload |
-| 5 | Hand-rolled `<pre>` named as the thing to stop doing | `skill.ts` | **182 of 194 cards showing code hand-roll a `<pre>` (94%)**; only 4 use `shiki`, and they are the same blocks as the widest overflows |
-| 6 | `drive.py` keeps the turns when the transport drops | `eval/` | not a prompt rule; it stops a dropped channel from being scored as a model that produced nothing |
+| #   | Change                                                                                          | Where       | Baseline it is aimed at                                                                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `aria-pressed:hover:*` in the button recipe                                                     | `skill.ts`  | **308 collisions in 193 cards** — `:is()` makes `hover` and the pressed variant both `(0,2,0)`, `hover` is written last, so the selection repaints neutral under the pointer |
+| 2   | Exactly one control ends the step                                                               | `skill.ts`  | **108 of 161 clicking runs (67%) never sent anything**, 468 dead clicks                                                                                                      |
+| 3   | The nesting check made countable — walk up and count ancestors repeating border+rounded+padding | `prompt.ts` | **216 of 755 (29%)** stack three, **41 (5.4%)** stack four or more, worst 5 — read off the syntax tree after two cheaper methods gave 33% and 60.7%                          |
+| 4   | Record _and render_ — three statements, `usePersistedState`                                     | `skill.ts`  | **36 of 105 (34%)** looked untouched after submitting, **20 (19%)** lost it on reload                                                                                        |
+| 5   | Hand-rolled `<pre>` named as the thing to stop doing                                            | `skill.ts`  | **182 of 194 cards showing code hand-roll a `<pre>` (94%)**; only 4 use `shiki`, and they are the same blocks as the widest overflows                                        |
+| 6   | `drive.py` keeps the turns when the transport drops                                             | `eval/`     | not a prompt rule; it stops a dropped channel from being scored as a model that produced nothing                                                                             |
 
 ### The fixture also changed, and that is a confound
 
@@ -329,15 +328,15 @@ sides reached it, so r006 runs with no r005 counterpart are dropped rather than 
 Same exercise as the panel power check, on the deterministic counters. Per-pair spreads are r005's;
 the minimum detectable effect is `2·sd/√n` at the n each counter will realistically have.
 
-| Counter | pairs it will have | per-pair sd | smallest move it can resolve | r004 baseline | rule |
-|---|---|---|---|---|---|
-| clicks that fired the turn | ~120 | 0.312 | **5.7pp** | 11.5% | 2 |
-| cards per turn | ~200 | 0.346 | 4.9pp | 47.8% | 1 (r005's) |
-| cards that painted | ~130 | 0.182 | 3.2pp | 91.6% | — |
-| overflowing at 380px | ~110 | 0.297 | 5.7pp | 13.3% | 5 |
-| preview-then-commit | ~200 | 0.422 | 6.0pp | 17.6% | 2 |
-| **committed but not recorded** | **~35** | 0.530 | **18pp** | 42.5% | 4 |
-| **recorded but lost on reload** | **~35** | 0.461 | **16pp** | 27.5% | 4 |
+| Counter                         | pairs it will have | per-pair sd | smallest move it can resolve | r004 baseline | rule       |
+| ------------------------------- | ------------------ | ----------- | ---------------------------- | ------------- | ---------- |
+| clicks that fired the turn      | ~120               | 0.312       | **5.7pp**                    | 11.5%         | 2          |
+| cards per turn                  | ~200               | 0.346       | 4.9pp                        | 47.8%         | 1 (r005's) |
+| cards that painted              | ~130               | 0.182       | 3.2pp                        | 91.6%         | —          |
+| overflowing at 380px            | ~110               | 0.297       | 5.7pp                        | 13.3%         | 5          |
+| preview-then-commit             | ~200               | 0.422       | 6.0pp                        | 17.6%         | 2          |
+| **committed but not recorded**  | **~35**            | 0.530       | **18pp**                     | 42.5%         | 4          |
+| **recorded but lost on reload** | **~35**            | 0.461       | **16pp**                     | 27.5%         | 4          |
 
 **Rule 4 is the one at risk, and not because of the round size.** Its denominator is turns where a
 click actually SENT something, and only **16-24% of runs have one** (r003 18%, r004 24%, r005 16%).
@@ -348,10 +347,10 @@ is that most clicking never commits, which is rule 2's target.
 reader clicked, **117 (68%) never sent anything** — and reading the card sources rather than the
 click log says why:
 
-| | count | share of dead |
-|---|---|---|
-| the card's source contains **no `sendMessage` call at all** | **90** | **77%** |
-| it has one, and the reader never reached it | 27 | 23% |
+|                                                             | count  | share of dead |
+| ----------------------------------------------------------- | ------ | ------------- |
+| the card's source contains **no `sendMessage` call at all** | **90** | **77%**       |
+| it has one, and the reader never reached it                 | 27     | 23%           |
 
 Three quarters of them cannot send because nothing in the card is wired to send. The reader clicks
 `RESTful (JSON)`, `下一步 →`, `2. 尺度缩放 / √d` — real controls that flip internal state and
@@ -398,20 +397,20 @@ was registered as the condition for calling the round invalid.
 
 ### Cleared 2 SE
 
-| Read | before → after | delta | SE |
-|---|---|---|---|
-| cards that persist an answer (rule 4) | | **+0.195 ± 0.044** | 4.4 |
-| …the same, truncated to the first 8 turns | | **+0.213 ± 0.061** | 3.5 |
-| committed but not recorded (rule 4) | 42.5% → | **−0.245 ± 0.096** | 2.6 |
-| recorded but lost on reload (rule 4) | 27.5% → | **−0.156 ± 0.073** | 2.1 |
-| cards with a hover/pressed collision (rule 1) | 38.0% → 24.4% | **−0.198 ± 0.046** | 4.3 |
-| panel `interaction`, clean pairs | | **+0.527 ± 0.186** | 2.8 |
-| panel `overall`, clean pairs | | **+0.329 ± 0.130** | 2.5 |
-| preview-then-commit | | +0.074 ± 0.028 | 2.6 |
-| cards that painted | | +0.045 ± 0.020 | 2.3 |
+| Read                                          | before → after | delta              | SE  |
+| --------------------------------------------- | -------------- | ------------------ | --- |
+| cards that persist an answer (rule 4)         |                | **+0.195 ± 0.044** | 4.4 |
+| …the same, truncated to the first 8 turns     |                | **+0.213 ± 0.061** | 3.5 |
+| committed but not recorded (rule 4)           | 42.5% →        | **−0.245 ± 0.096** | 2.6 |
+| recorded but lost on reload (rule 4)          | 27.5% →        | **−0.156 ± 0.073** | 2.1 |
+| cards with a hover/pressed collision (rule 1) | 38.0% → 24.4%  | **−0.198 ± 0.046** | 4.3 |
+| panel `interaction`, clean pairs              |                | **+0.527 ± 0.186** | 2.8 |
+| panel `overall`, clean pairs                  |                | **+0.329 ± 0.130** | 2.5 |
+| preview-then-commit                           |                | +0.074 ± 0.028     | 2.6 |
+| cards that painted                            |                | +0.045 ± 0.020     | 2.3 |
 
 Rule 4 surviving the 8-turn truncation is the load-bearing part: the effect is not the two extra
-turns `floor: 10` bought. And rule 4 is the rule whose *mechanism* was corrected the day before —
+turns `floor: 10` bought. And rule 4 is the rule whose _mechanism_ was corrected the day before —
 from "nobody writes the third line" (false: 91 of 93 render the value) to "they render it as a
 highlight and say nothing in words".
 
@@ -432,11 +431,11 @@ nothing. The four new cases agree: `orbit-3d` sent 2 of 35 clicks, `game-tune` 6
 >
 > Read over the population the rule's own evidence uses — runs, not clicks — the same 113 pairs say:
 >
-> | read | r005 → r006 | delta | sign test |
-> |---|---|---|---|
-> | `preview-then-commit`, the shape `/goal` asks for | | **+0.074 ± 0.028** | 27↑/11↓ **p = 0.014** |
-> | `runs that ended a step` | 32.7% → 42.5% | +0.097 ± 0.047 | 20↑/9↓ p = 0.061 |
-> | `clicks that fired the turn` (what was read above) | 13.1% → 13.0% | −0.001 ± 0.029 | — |
+> | read                                               | r005 → r006   | delta              | sign test             |
+> | -------------------------------------------------- | ------------- | ------------------ | --------------------- |
+> | `preview-then-commit`, the shape `/goal` asks for  |               | **+0.074 ± 0.028** | 27↑/11↓ **p = 0.014** |
+> | `runs that ended a step`                           | 32.7% → 42.5% | +0.097 ± 0.047     | 20↑/9↓ p = 0.061      |
+> | `clicks that fired the turn` (what was read above) | 13.1% → 13.0% | −0.001 ± 0.029     | —                     |
 >
 > **The right number was already in the table above**, listed under "Cleared 2 SE" as a generic win
 > while the conclusion was drawn from the row beside it. Rule 2 worked; the read did not.
@@ -467,12 +466,12 @@ nothing else.
 
 ### Baselines for r007, from the four new cases (10 runs each, unpaired by design)
 
-| case | mean turns | cards per turn | clicks sent | reached its shape |
-|---|---|---|---|---|
-| `orbit-3d` | 8.6 | 51% | 2 / 35 | 7 of 10 used 3D or animation |
-| `log-dig` | 11.7 | 39% | 12 / 43 | 2 read the fixture log, 1 called `$dsh/exec` |
-| `game-tune` | 9.1 | 66% | 6 / 41 | 1 used animation |
-| `shift-plan` | 9.6 | 56% | 10 / 23 | — |
+| case         | mean turns | cards per turn | clicks sent | reached its shape                            |
+| ------------ | ---------- | -------------- | ----------- | -------------------------------------------- |
+| `orbit-3d`   | 8.6        | 51%            | 2 / 35      | 7 of 10 used 3D or animation                 |
+| `log-dig`    | 11.7       | 39%            | 12 / 43     | 2 read the fixture log, 1 called `$dsh/exec` |
+| `game-tune`  | 9.1        | 66%            | 6 / 41      | 1 used animation                             |
+| `shift-plan` | 9.6        | 56%            | 10 / 23     | —                                            |
 
 ## r007 — pre-registered 08-31
 
@@ -482,14 +481,14 @@ r006's read ends "Registered for r007 as a single-variable round: restore that s
 nothing else." That was written without checking what was already committed. By the time r007 was
 composed the tree held **seven** prompt/skill commits made after r006's freeze (`117452d`):
 
-| commit | what it moves |
-|---|---|
-| `8f980b5` | nesting figures: the shipped 33% and its seven-deep example were both wrong (29% / 5.4%, max 5) |
-| `b87b49b` | rule 1: the other three selected-state spellings |
-| `f723e46` | rule 2: rewritten as a grep — 77% have no `sendMessage` at all |
-| `3924bc8` | rule 4: mechanism corrected — 91 of 93 DO render the value |
-| `95fbccc` | rule 5: `<code>` is the element that overflows, a third of all of them |
-| `7d9638b` `bc26009` | canvas/inline: ask whether they wanted a file, not whether the content looks keepable |
+| commit              | what it moves                                                                                   |
+| ------------------- | ----------------------------------------------------------------------------------------------- |
+| `8f980b5`           | nesting figures: the shipped 33% and its seven-deep example were both wrong (29% / 5.4%, max 5) |
+| `b87b49b`           | rule 1: the other three selected-state spellings                                                |
+| `f723e46`           | rule 2: rewritten as a grep — 77% have no `sendMessage` at all                                  |
+| `3924bc8`           | rule 4: mechanism corrected — 91 of 93 DO render the value                                      |
+| `95fbccc`           | rule 5: `<code>` is the element that overflows, a third of all of them                          |
+| `7d9638b` `bc26009` | canvas/inline: ask whether they wanted a file, not whether the content looks keepable           |
 
 Five of those correct statements the shipped prompt makes that measurement showed to be false.
 **Holding a known-false number in the prompt to protect an experiment is not a trade this project
@@ -503,12 +502,12 @@ r006's regression note blamed "concrete anecdote replaced by aggregate". Re-read
 against the four rules whose outcome r006 measured gives a sharper candidate — **which side of the
 comparison the small number lands on**:
 
-| rule | how r006 phrased its evidence | number sits on | r006 outcome |
-|---|---|---|---|
-| 4, persist | "36 (34%) left the card unchanged … 20 (19%) lost it on reload — 53%" | the defect | **+0.195**, 4.4 SE |
-| 1, collisions | "raised in 22% of its verdicts" | the defect | **−0.198**, 4.3 SE |
-| 2, ends the step | "108 of them — 67% — never once got a result back out" | the defect | flat |
-| sticky | "356 have the shape, and **3 pin it — 0.8%**" | **the behaviour asked for** | **regressed**, 2.2 SE |
+| rule             | how r006 phrased its evidence                                         | number sits on              | r006 outcome          |
+| ---------------- | --------------------------------------------------------------------- | --------------------------- | --------------------- |
+| 4, persist       | "36 (34%) left the card unchanged … 20 (19%) lost it on reload — 53%" | the defect                  | **+0.195**, 4.4 SE    |
+| 1, collisions    | "raised in 22% of its verdicts"                                       | the defect                  | **−0.198**, 4.3 SE    |
+| 2, ends the step | "108 of them — 67% — never once got a result back out"                | the defect                  | flat                  |
+| sticky           | "356 have the shape, and **3 pin it — 0.8%**"                         | **the behaviour asked for** | **regressed**, 2.2 SE |
 
 Same corpus, same fact, opposite rhetoric: "3 of 356 pin it" makes pinning look like a three-instance
 curiosity, where "353 of 356 let it scroll away" puts the large number on the defect. `b48e64c` also
@@ -525,10 +524,10 @@ Both halves go back: polarity flipped, bolded token restored, corpus statistic k
    exist and the r006 read above quoted the looser one. Both are registered so the read cannot pick
    afterwards:
 
-   | instrument | population | r005 → r006 | r007 clears at |
-   |---|---|---|---|
-   | `sticky.mjs --paired` (**the one that decides**) | pinned / cards with a heading-above-a-list | 3.2% → **0.0%** | **≥ 2.0%** |
-   | grep for the token, all cards | any `sticky` / all cards | 6.5% → 1.1% | ≥ 4.0% |
+   | instrument                                       | population                                 | r005 → r006     | r007 clears at |
+   | ------------------------------------------------ | ------------------------------------------ | --------------- | -------------- |
+   | `sticky.mjs --paired` (**the one that decides**) | pinned / cards with a heading-above-a-list | 3.2% → **0.0%** | **≥ 2.0%**     |
+   | grep for the token, all cards                    | any `sticky` / all cards                   | 6.5% → 1.1%     | ≥ 4.0%         |
 
    The AST instrument is the one that matches the rule, and it is the harsher read: **on the 121
    shared cells r006 pinned nothing at all** — its 16 pinned cards are entirely in cells r005 never
@@ -536,6 +535,7 @@ Both halves go back: polarity flipped, bolded token restored, corpus statistic k
    that moved this off the floor and r007 is asking whether the sentence r005 had is why. Below 2 SE
    of movement on the AST read, the polarity hypothesis is dead and the r006 regression was
    something else — most likely the 9KB of growth, which r007 does not undo.
+
 2. **Rule 2 is read on `preview-then-commit` and `runs that ended a step`, never again on
    `clicks that fired the turn`.** The premise this prediction was first written on — "rewritten
    twice and measured flat" — was a population error, corrected above: rule 2 landed in r006 at
@@ -593,11 +593,11 @@ handful of unstable cells to repeat, and dropping the noisy ones would be select
 What that sd buys at ~250 pairs is **SE ≈ 0.145**, so the panel can only see effects of about 0.3
 and up. The counters are two to three times better on the same round:
 
-| read | r005 → r006 | SNR |
-|---|---|---|
-| panel `overall`, all pairs | +0.208 ± 0.156 | 1.3 SE |
-| panel `overall`, clean pairs | +0.329 ± 0.130 | 2.5 SE |
-| `cards that persist an answer` | +0.195 ± 0.044 | **4.4 SE** |
+| read                                   | r005 → r006    | SNR        |
+| -------------------------------------- | -------------- | ---------- |
+| panel `overall`, all pairs             | +0.208 ± 0.156 | 1.3 SE     |
+| panel `overall`, clean pairs           | +0.329 ± 0.130 | 2.5 SE     |
+| `cards that persist an answer`         | +0.195 ± 0.044 | **4.4 SE** |
 | `cards with a hover/pressed collision` | −0.198 ± 0.046 | **4.3 SE** |
 
 Bringing the panel to the counters' power needs each cell run **twice** (sd 2.30 → 1.63, SE → 0.11),
@@ -618,11 +618,11 @@ It needs no new probe. The harness already shoots each card before the reader to
 after, so an inert control is a byte-identical PNG pair. `eval/inert.py` reads it, and the number is
 **stable and untouched by either round**:
 
-| | clicking turns | inert | paired |
-|---|---|---|---|
-| r005 | 352 | 60 (17.0%) | |
-| r006 | 517 | 74 (14.3%) | |
-| the 105 shared cells | 309 → 343 | 15.9% → **16.0%** | −0.016 ± 0.039, **not 2 SE** |
+|                      | clicking turns | inert             | paired                       |
+| -------------------- | -------------- | ----------------- | ---------------------------- |
+| r005                 | 352            | 60 (17.0%)        |                              |
+| r006                 | 517            | 74 (14.3%)        |                              |
+| the 105 shared cells | 309 → 343      | 15.9% → **16.0%** | −0.016 ± 0.039, **not 2 SE** |
 
 The apparent r005→r006 improvement is the case mix, not a change: on the same cells it is flat.
 About **one clicking turn in six** hands the reader a control that does nothing, and it is spread
@@ -644,12 +644,12 @@ Found from a screenshot, not from a counter: a band of empty space above every c
 scoped preflight normalises `box-sizing`, list markers and form controls, but **not headings or
 paragraphs** — so the browser's own margins were still standing. Measured on the surface:
 
-| tag | UA margin, top and bottom |
-|---|---|
-| h1 / h2 / h3 / h4 | 21.4 / 19.9 / 18.7 / 21.3px |
-| p, blockquote, figure | 16px |
-| pre | 13px |
-| **ul** | **0** |
+| tag                   | UA margin, top and bottom   |
+| --------------------- | --------------------------- |
+| h1 / h2 / h3 / h4     | 21.4 / 19.9 / 18.7 / 21.3px |
+| p, blockquote, figure | 16px                        |
+| pre                   | 13px                        |
+| **ul**                | **0**                       |
 
 `ul` reading 0 is what makes the rest evidence rather than a guess: the existing line works, and
 these tags were simply not in it. A card's first child is almost always a heading, so it pushed
@@ -667,7 +667,7 @@ by it.
 
 The live-region rule quotes **"0 of 64 corpus cards announce their results"** and **"8 of 23"** —
 both the same small-number-on-the-desired-behaviour shape as `sticky`, and both left alone. A new
-counter in `eval/sweep.py` measures *presence* of any live region on a fetching card (r005 1 of 15,
+counter in `eval/sweep.py` measures _presence_ of any live region on a fetching card (r005 1 of 15,
 r006 6 of 33) and that is a **floor on the defect, not the defect rate**: it cannot tell a live
 region on the results container from one on an unrelated toast, and 149 of r006's 943 cards carry
 `aria-live` for other reasons. Rewriting a claim this instrument cannot check would be restating a

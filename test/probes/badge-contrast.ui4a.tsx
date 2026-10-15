@@ -28,7 +28,9 @@ export default function BadgeContrast() {
     <div className="grid gap-2 p-4 rounded-xl" style={{ background: "var(--dsw-alias-bg-layer-1)" }}>
       {V.map(([name, bg, fg]) => (
         <div key={name} className="flex items-center gap-3">
-          <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: bg, color: fg }}>nuevo</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: bg, color: fg }}>
+            nuevo
+          </span>
           <span className="text-xs text-muted">{name}</span>
         </div>
       ))}

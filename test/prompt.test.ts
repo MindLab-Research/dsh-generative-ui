@@ -16,7 +16,9 @@ import { inlinePrompt } from "../src/prompt.ts";
 const PROMPT = inlinePrompt(true);
 // Same reason every `skillBody(…, true)` below passes the flag: these phrases live in sections a
 // host without commands does not get.
-import { skillBody } from "../src/skill.ts";
+import { skillBody, skillEntry, skillResourceBase } from "../src/skill.ts";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 /**
  * Every rule here exists because a real corpus card failed without it. Matched on a short
@@ -25,13 +27,29 @@ import { skillBody } from "../src/skill.ts";
  */
 const RULES = [
   ["the fence language", `\`${FENCE_LANG}\`, never \`tsx\``],
+  ["the final fence protocol pass", "Do a protocol pass before sending"],
+  ["the single user-visible inline fence", "exactly one four-backtick"],
+  ["persistence for editable cards", "Every editable inline card gets the same source check"],
+  ["the persisted hook import", "Never import it from `react`"],
+  ["live displayed values", "Displayed numbers stay live"],
+  ["consistent units and formula scale", "Keep units and formulas on the same scale"],
+  ["contrast-safe status text and controls", "Status text and filled controls need tested contrast"],
+  ["the choice-card ending", "A choice card has one honest ending"],
+  ["durable canvas phrases", "之后每次复用"],
+  ["the uncommitted choice state", "A choice card starts uncommitted"],
+  ["the linked-field first paint", "A linked field is never blank on first paint"],
+  ["the single-value conversion", "A single unit conversion is still a card"],
+  ["the once-per-turn skill call", "The skill call is once per turn"],
+  ["the post-skill build/check path", "use the tools needed to build or check the card"],
   ["export named after an import", "Never name it after something you imported"],
-  ["useState vs useMemo", "holds state"],
+  ["useState vs useMemo", "holds transient UI state"],
   ["Fragment must be imported", "Import every name you write"],
   ["a regex or glob in JSX text", "brace in JSX text is an expression"],
   ["px inside a style object", "is JavaScript, not CSS"],
   ["an arrow after &&", "chain into an arrow function"],
   ["empty is not undefined", "not a guard against empty"],
+  ["workspace capability shape", "`stat` export"],
+  ["expression surface choice", "Expression questions are inline-only"],
   ["no literal colours", "**Never write a literal colour**"],
   ["a non-zero exit resolves", "do not catch it"],
   // Shown as code, not described. The adherence count found rules stated in prose landing at
@@ -74,15 +92,25 @@ test("the prompt is whole", () => {
  * the code block back to prose fails rather than quietly undoing the measurement.
  */
 const SKILL_RULES = [
+  ["the one-value conversion gate", "when the user gives only one input"],
+  ["the candidate source check", "Source-check the card before sending"],
+  ["the choice resend guard", "guard against a second send"],
+  ["the initial choice state", "must not claim that the user already chose one"],
+  ["the null preview choice", "Start `pick` at `null`"],
+  ["live explanatory values", "A displayed explanation is state too"],
+  ["contrast guidance", "Contrast is part of the selected state"],
+  ["the linked-field initialization", "do not initialize the derived field to `\"\"`"],
+  ["the reference read arguments", "`file_path` is the only valid argument"],
   ["abort the previous streamText", "const ctrl = (running.current = new AbortController())"],
   ["abort the previous bash when polling", "ctrl.abort(); clearInterval(timer)"],
   ["honour prefers-reduced-motion (transition)", "motion-reduce:transition-none"],
   ["honour prefers-reduced-motion (keyframes)", "motion-reduce:animate-none"],
-  ["keyboard-reachable controls", '<button aria-label="复制" onClick={copy}>'],
+  ["keyboard-reachable controls", '<button type="button" aria-label="复制" onClick={copy}>'],
   ["a superseded async run returns", "if (id !== runId.current) return"],
   ["the shared cause behind the control rules", "treating its controls as decoration"],
   ["calling a repeated piece instead of rendering it", '<ol>{row(1, "Ferry Building", photos[0])}'],
   ["a map in a child React never renders", 'box = el.appendChild(document.createElement("div"))'],
+  ["the checker leads back to the live panel", "write the canvas and look at the panel"],
 ] as const;
 
 for (const [name, phrase] of SKILL_RULES) {
@@ -92,10 +120,15 @@ for (const [name, phrase] of SKILL_RULES) {
 }
 
 const SECTIONS = [
+  "Authoring order",
+  "Trigger gate",
   "Is this a UI at all",
   "Inline or canvas",
   "Ask with an interface when the request is underspecified",
-  "Say something before it and something after",
+  "Frame the final handoff",
+  "Emit the inline block with the exact fence",
+  "Read the relevant reference before writing TSX",
+  "Checker import maps",
   "Framing",
   "Layout",
   "Sound",
@@ -117,6 +150,20 @@ test("the skill body carries every section, in order", () => {
       .filter((line) => line.startsWith("## "))
       .map((line) => line.slice(3)),
   ).toEqual(SECTIONS);
+});
+
+test("the registered entrypoint routes to real files without loading their bodies", () => {
+  const entry = skillEntry("types.json", "standalone.json", true);
+  expect(entry).toContain("references/layout.md");
+  expect(entry).toContain("references/commands.md");
+  expect(entry).not.toContain("## Layout");
+  expect(entry).not.toContain("## Running a command");
+  for (const [, relative] of entry.matchAll(/\]\((references\/[^)]+\.md)\)/g)) {
+    const path = join(skillResourceBase.path, relative);
+    expect(existsSync(path)).toBe(true);
+    expect(readFileSync(path, "utf8").length).toBeGreaterThan(100);
+  }
+  expect(skillEntry(undefined, undefined, false)).not.toContain("references/commands.md");
 });
 
 // The two maps have genuinely different lifetimes, and the body is built for all four
@@ -199,9 +246,24 @@ const RULE_FOR_SCREEN: Record<string, string | string[]> = {
  * as unscreenable; the point is that dropping one in requires saying so.
  */
 const UNSCREENABLE = [
+  "Routing gate:",
+  "Hard output protocol",
   "Four backticks",
   "The info string is",
   "Write the React import before you write the data",
+  "Do a protocol pass before sending",
+  "Intermediate response rule",
+  "Canvas handoff rule",
+  "Every editable inline card gets the same source check",
+  "Displayed numbers stay live",
+  "Keep units and formulas on the same scale",
+  "Status text and filled controls need tested contrast",
+  "A choice card has one honest ending",
+  "A choice card starts uncommitted",
+  "A linked field is never blank on first paint",
+  "A single unit conversion is still a card",
+  "Workspace capability shape",
+  "Expression questions are inline-only",
 
   "A question does not have to say",
   "A conversion is never asked once",

@@ -37,7 +37,10 @@ export type Case = {
 /** React Aria nests the range input in a visually-hidden div inside the thumb; the thumb is two levels up. */
 /** `src` with everything from `from` up to `to` removed, and every line starting with one of `tags`. */
 const without = (src: string, from: string, to: string, tags: string[]) =>
-  (src.slice(0, src.indexOf(from)) + src.slice(src.indexOf(to))).split("\n").filter((l) => !tags.some((t) => l.trimStart().startsWith(t))).join("\n");
+  (src.slice(0, src.indexOf(from)) + src.slice(src.indexOf(to)))
+    .split("\n")
+    .filter((l) => !tags.some((t) => l.trimStart().startsWith(t)))
+    .join("\n");
 
 /** The atom in three passes: the nucleus alone, then the shells, then the dust — each a real edit of the last. */
 const ATOM = [without(orbit, "function Shell", "export default", ["<Shell", "<Dust"]), without(orbit, "function Dust", "export default", ["<Dust"]), orbit];
@@ -80,7 +83,10 @@ export const CASES: Case[] = [
     point: "The slider works before the card is finished — the model is still typing the totals below it.",
     session: "Tokyo trip budget",
     prompt: "how much is 4 nights in Tokyo?",
-    tools: [["context", "Context injection", "skill-catalog"], ["skill", "Skill", "generative-ui"]],
+    tools: [
+      ["context", "Context injection", "skill-catalog"],
+      ["skill", "Skill", "generative-ui"],
+    ],
     lead: "Depends on where you sleep — drag it and see:",
     file: "budget.ui4a.tsx",
     source: budget,
@@ -107,7 +113,10 @@ export const CASES: Case[] = [
     point: "`@react-three/fiber` from esm.sh. Two follow-ups rewrite the file while the atom keeps spinning — nothing restarts.",
     session: "Atom model",
     prompt: "make me a little atom model I can keep open",
-    tools: [["skill", "Skill", "generative-ui"], ["edit", "Write", ".dsh/ui4a/canvases/orbit.ui4a.tsx"]],
+    tools: [
+      ["skill", "Skill", "generative-ui"],
+      ["edit", "Write", ".dsh/ui4a/canvases/orbit.ui4a.tsx"],
+    ],
     turns: [
       { prompt: "give it electron shells", edit: "orbit.ui4a.tsx · add three shells", reply: "Three shells on their own tilts — the nucleus never stopped.", source: ATOM[1] },
       { prompt: "and some dust drifting around it", edit: "orbit.ui4a.tsx · add two dust layers", reply: "Two layers, drifting opposite ways.", source: ATOM[2] },

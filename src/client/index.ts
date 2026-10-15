@@ -1,6 +1,6 @@
 /**
- * Browser half: renders ui4a TSX the model writes, inline in the transcript and in a
- * canvas panel beside it.
+ * Browser half: renders ui4a TSX the model writes, inline in the transcript and as canvas tabs
+ * in the host's right Sidebar.
  * @module dsh-generative-ui/client
  */
 import { createElement } from "react";
@@ -10,6 +10,16 @@ import type {} from "@deepseek-ai/dsh-client-ui-session/client";
 import type {} from "@deepseek-ai/dsh-client-ui-layout/client";
 import type {} from "@deepseek-ai/dsh-client-ui-conversation/client";
 import type {} from "@deepseek-ai/dsh-client-locale/client";
+// Type-only, and load-bearing twice over. `sidebar-right` declares `sidebar.right.pane.tab` into
+// SlotMap through this package's `declare module`, and a merge only happens for packages some file
+// actually imports — drop the line and the seat key vanishes while `tsc` stays green (§2.7). It
+// must stay type-only: `sidebar-right` is not in PLATFORM_MODULES, so a value import would bundle
+// a second copy of the registry instead of reaching the host's `reflect.provide` singleton.
+import type {} from "@deepseek-ai/dsh-client-ui-sidebar-right/client";
+import type { SlotCore } from "@deepseek-ai/dsh-client-ui-slots";
+
+/** The slot service's declared-but-untyped half: `inject` defers a registration until the seat exists. */
+type SlotsInject = { inject<T>(name: string, body: () => T): () => void };
 import { GenUISurface } from "./runtime/GenUISurface.tsx";
 import { cancelPendingReport, cardRendered, reportCardError } from "./runtime/report-error.ts";
 import { disposeCompiler } from "./runtime/compiler.ts";
@@ -20,9 +30,11 @@ import { claimInlineFences } from "./runtime/inline-fence.ts";
 import { parseUi4aSegments, type Ui4aSegment } from "./runtime/segments.ts";
 import { warmCompiler } from "./runtime/compiler.ts";
 import { chatNodes, perNode, selectedSessionId, type ChatNodeView } from "./session.ts";
-import { mountCanvasHost } from "./canvas/index.ts";
+import { CANVAS_TAB_ID, canvasTabDefinition } from "./canvas/definition.ts";
+import { CanvasBody } from "./canvas/body.tsx";
+import { canvasAddress, startCanvasAutoOpen } from "./canvas/auto-open.ts";
 import { toolCallsOf, type CallBlock, type ToolCallView } from "./canvas/collect.ts";
-import { canvasIdOf } from "../contract.ts";
+import { listCanvasIds } from "./canvas/read.ts";
 import { CARD_ERROR_PATH } from "../contract-assets.ts";
 
 export const inject = ["sessions", "locale"];
@@ -156,43 +168,84 @@ export function apply(ctx: ClientContext): void {
     }).catch((error: unknown) => console.error("[dsh-generative-ui] card error report failed", error));
   };
 
-  // Mounted inside the effect, not beside it: `mountCanvasHost` reaches for MutationObserver
-  // straight away, and doing that during registration is exactly what smoke rejects.
-  let showCanvas: ((id: string) => void) | null = null;
-  ctx.effect(() => {
-    const host = mountCanvasHost({ calls, cwd, sessionId, onCardError: (message, phase) => reportCardError(sendToModel, message, phase), onCardRendered: cardRendered });
-    showCanvas = host.show;
-    return () => {
-      showCanvas = null;
-      host.dispose();
-    };
-  }, "dsh-generative-ui: canvas column");
-
-  // The transcript's file links and the "产物" chips call `workspaces.openPath`, which hands
-  // the path to the OS — so clicking a canvas the model just wrote opened it in an editor
-  // rather than in the panel three inches to the right. Wrapping the method routes canvases
-  // to the panel and forwards everything else untouched.
-  ctx.inject(["workspaces"], (scoped) => {
-    scoped.effect(() => {
-      const workspaces = scoped.get("workspaces") as { openPath?: (path: string) => Promise<void> };
-      // Wrapping someone else's method is a bet on its shape. Losing that bet here would
-      // throw during registration and take the whole plugin down, so a host without it
-      // simply keeps its own behaviour.
-      if (typeof workspaces.openPath !== "function") return () => {};
-      const original = workspaces.openPath.bind(workspaces);
-      workspaces.openPath = async (path: string) => {
-        const id = canvasIdOf(path);
-        // No panel mounted (headless, or torn down): the OS opener is still the right answer.
-        if (id === null || showCanvas === null) return original(path);
-        showCanvas(id);
-      };
-      // Restore rather than delete: another plugin may have wrapped it after us, and
-      // deleting the own-property would expose theirs — or the prototype's — instead.
-      return () => {
-        workspaces.openPath = original;
-      };
-    }, "dsh-generative-ui: canvas links open the panel");
+  // Canvases are a tab type in the host's right Sidebar (§3.6) — the tab strip, close control,
+  // width drag, float/dock, and "which ones are open" are all the host's, and this is the whole
+  // of what remains ours: say what a canvas file is, draw one, and open it when the model writes
+  // it. A nested fiber and not a static inject: every name in `inject` is a hard dependency, and
+  // a host without the sidebar should lose the canvas panel, not the plugin — inline cards and
+  // the prompt still matter there.
+  let sidebarArrived = false;
+  ctx.inject(["slots", "sidebarRightTabs", "sidebarRight"], (scoped) => {
+    sidebarArrived = true;
+    // `slots` is not merged onto cordis's `Context` by any package's `declare module` — nothing
+    // in the tree declares it, so the property is genuinely absent from the type while present at
+    // runtime. Narrowed to the service's own class rather than left as `any`, so `register`'s
+    // generics still check the seat name and the composed props (§4's `as unknown as` precedent:
+    // this dodges a client-side type gap, not the runtime inject check, which still applies).
+    // `inject` is on the service wrapper rather than on `SlotCore` itself.
+    const slots = (scoped as unknown as { slots: SlotCore & SlotsInject }).slots;
+    // Order matters: `openResource` throws on an address no type claims, so the type has to be
+    // registered before anything can try to open one.
+    scoped.effect(() => scoped.sidebarRightTabs.register(canvasTabDefinition), "dsh-generative-ui: canvas tab type");
+    scoped.effect(
+      () =>
+        // The seat is declared at runtime by the sidebar, so registering early throws
+        // `slot "..." is not declared` (§2.4). `inject` is a factory: the framework resolves the
+        // session and calls it, which is what lets the body read under the address's own session
+        // rather than whichever one the reader happens to have on screen.
+        slots.inject("sidebar.right.pane.tab", () =>
+          slots.register(
+            {
+              name: "sidebar.right.pane.tab",
+              key: CANVAS_TAB_ID,
+              registrant: "dsh-generative-ui: canvas tab body",
+              inject: () => ({
+                // `byId` is keyed by the branded `SessionId`; an address carries a plain string
+                // that names one, so the lookup widens on the way in and nothing else does.
+                cwdOf: (id: string) => {
+                  const byId = (scoped.sessions as unknown as ISessions).list.getSnapshot().byId as Record<string, { cwd?: string } | undefined>;
+                  return byId[id]?.cwd;
+                },
+                onCardError: (message: string, phase: string) => reportCardError(sendToModel, message, phase),
+                onCardRendered: cardRendered,
+              }),
+            },
+            CanvasBody,
+          ),
+        ),
+      "dsh-generative-ui: canvas tab body",
+    );
+    scoped.effect(
+      () =>
+        startCanvasAutoOpen({
+          calls,
+          sessionId: currentSession,
+          cwd,
+          list: listCanvasIds,
+          open: (session, id) => {
+            try {
+              scoped.sidebarRight.openResource(canvasAddress(session, id));
+            } catch (error) {
+              // `openResource` treats an address no type will claim as a wiring mistake and
+              // throws. One bad path must not take the transcript observer down with it.
+              console.error("[dsh-generative-ui] could not open canvas", id, error);
+            }
+          },
+        }),
+      "dsh-generative-ui: canvas auto-open",
+    );
   });
+  // The nested callback above is the success signal; this is only its absence. Same shape as the
+  // AppFrame timeout it replaces — one warning turns "the canvases do nothing" into a starting
+  // point instead of a mystery. Inside an effect and off the bare global rather than `window`:
+  // the plugin loads in a document, but `apply()` is also called by tests and by smoke, and a
+  // bare `window` there is a throw that takes the whole registration down.
+  ctx.effect(() => {
+    const timer = setTimeout(() => {
+      if (!sidebarArrived) console.warn("[dsh-generative-ui] no right Sidebar on this host — canvases have nowhere to render.");
+    }, 5_000);
+    return () => clearTimeout(timer);
+  }, "dsh-generative-ui: canvas tab availability");
   ctx.effect(
     () =>
       claimInlineFences({

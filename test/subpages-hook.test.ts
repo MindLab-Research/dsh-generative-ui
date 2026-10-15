@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { useSubPages } from "../src/client/canvas/CanvasPanel.tsx";
+import { useSubPages } from "../src/client/canvas/subpages.ts";
 
 /**
  * `useSubPages` decides whether a canvas's source is rendered as written or rewritten with its

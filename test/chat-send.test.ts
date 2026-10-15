@@ -18,7 +18,7 @@ const applyWithSessions = (current: string | undefined, scope: (id: string) => u
   const base: Record<string, unknown> = {
     uiSession: { adapter: { current: { getSnapshot: () => ({ key: current }) } } },
     sessions: { list: { getSnapshot: () => ({ byId: { s1: { cwd: "/workspace" } } }) }, scope },
-    get: (name: string) => name === "uiSession" ? base.uiSession : undefined,
+    get: (name: string) => (name === "uiSession" ? base.uiSession : undefined),
     effect: (run: () => unknown, label?: string) => {
       if (label?.includes("canvas column")) return; // needs a DOM; not the subject
       try {
@@ -29,10 +29,12 @@ const applyWithSessions = (current: string | undefined, scope: (id: string) => u
     },
     inject: (_want: readonly string[], callback: (scoped: unknown) => void) => callback(scoped),
   };
-  const scoped: unknown = new Proxy(base, { get: (t, k) => {
-    if (k === "uiSession") throw new Error('cannot get property "uiSession" without inject');
-    return k in t ? t[k as string] : stub();
-  } });
+  const scoped: unknown = new Proxy(base, {
+    get: (t, k) => {
+      if (k === "uiSession") throw new Error('cannot get property "uiSession" without inject');
+      return k in t ? t[k as string] : stub();
+    },
+  });
   const realError = console.error;
   console.error = (...args: unknown[]) => void errors.push(args.join(" "));
   try {

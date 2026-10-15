@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createGenerator } from "@unocss/core";
 import { presetWind4 } from "@unocss/preset-wind4";
 import { unoConfig } from "../src/client/runtime/uno-config.ts";
+import { skillBody } from "../src/skill.ts";
 
 const generate = async (tokens: string[], scope = ".ui4a-root") => {
   const uno = await createGenerator(unoConfig(scope));
@@ -88,6 +89,23 @@ test("box-sizing is border-box inside the scope, and not outside it", async () =
   expect(css).not.toMatch(/(^|[};])\s*\*[^{]*\{[^}]*box-sizing/m);
 });
 
+// Wind4's `border` emits `border-width` and nothing else, expecting the vendor reset to have set
+// `border-style: solid`. With `preflights: { reset: false }` nothing did, so `bg-layer border
+// border-line` — the spelling the skill tells every card to write — computed `border-width: 0px` /
+// `border-style: none` in a real dsh web (measured 2026-10-11, via `getComputedStyle` on a mounted
+// card). In light theme, where all three layer tokens are `#fff`, that is a box with neither fill
+// nor edge. `divide-*` and `ring-*` set the style themselves and the form-control rule below
+// carried its own `border: 0 solid`, so both hid it.
+test("the border reset is restored inside the scope, and not outside it", async () => {
+  const { css } = await generate(["border", "border-line"]);
+  // The utility half was always there, and on its own paints nothing.
+  expect(css).toContain("border-width:1px");
+  expect(css).toMatch(/\.ui4a-root[^{]*\*[^{]*\{[^}]*border:\s*0\s*solid/);
+  // At zero specificity, so a card's own element rule (`td { border-bottom: … }`) still wins.
+  expect(css).toMatch(/:where\(\.ui4a-root \*[^{]*\{\s*border:\s*0 solid/);
+  expect(css).not.toMatch(/(^|[};])\s*\*[^{]*\{[^}]*border:\s*0\s*solid/m);
+});
+
 // A colour name that collides with a Wind4 utility WINS, silently. `base` did: `text-base` is the
 // body font size and the commonest way to write body text, and with a colour called `base` it
 // resolved to `color: var(--dsw-alias-bg-base)` — #ffffff in light theme. Measured live on a wave-2
@@ -138,7 +156,14 @@ test("a merged vendor rule is split so Chromium keeps the half it understands", 
 test("the first streaming frame emits the preflight block", async () => {
   // A stub rather than a DOM library: the module touches exactly `createElement`, two
   // `setAttribute`s, `head.appendChild` and `textContent`, and the repo has no jsdom.
-  const style = { attrs: {} as Record<string, string>, textContent: "", setAttribute(k: string, v: string) { this.attrs[k] = v; }, remove() {} };
+  const style = {
+    attrs: {} as Record<string, string>,
+    textContent: "",
+    setAttribute(k: string, v: string) {
+      this.attrs[k] = v;
+    },
+    remove() {},
+  };
   const previous = (globalThis as { document?: unknown }).document;
   (globalThis as { document?: unknown }).document = { createElement: () => style, head: { appendChild: (n: unknown) => n } };
   try {
@@ -161,9 +186,7 @@ test("the first streaming frame emits the preflight block", async () => {
 // and the card renders unstyled — the failure §2.5 records, which no screen and no compile
 // catches. A recipe shown as code has to be spellable before it is worth showing.
 test("the tokens the prompt's own recipes write all generate", async () => {
-  const tokens = ["divide-y", "divide-line", "first:pt-0", "last:pb-0", "flex-wrap",
-                  "hover:bg-hover", "aria-pressed:bg-accent", "aria-pressed:text-white", "aria-pressed:border-transparent",
-                  "isolate", "relative", "sticky", "top-0", "z-10", "max-h-[30rem]", "overflow-y-auto", "border-b", "bg-layer"];
+  const tokens = ["divide-y", "divide-line", "first:pt-0", "last:pb-0", "flex-wrap", "hover:bg-hover", "aria-pressed:bg-accent", "aria-pressed:text-white", "aria-pressed:border-transparent", "isolate", "relative", "sticky", "top-0", "z-10", "max-h-[30rem]", "overflow-y-auto", "border-b", "bg-layer"];
   const { css, matched } = await generate(tokens);
   expect([...matched].toSorted()).toEqual(tokens.toSorted());
   expect(css).toContain('[aria-pressed="true"]');
@@ -202,8 +225,7 @@ test("the selected-and-hovered pair generates; `not-` generates nothing", async 
   // spellings too, so all three have to generate or the rule covers half the corpus and looks like
   // it covers all of it. `aria-current:hover:` is the one this preset does NOT match — it appears
   // zero times in the corpus, and it is asserted here so the skill never starts recommending it.
-  for (const token of ["data-[state=active]:hover:bg-accent", "checked:hover:bg-accent",
-                       "aria-selected:hover:bg-accent"]) {
+  for (const token of ["data-[state=active]:hover:bg-accent", "checked:hover:bg-accent", "aria-selected:hover:bg-accent"]) {
     const { matched: some } = await generate([token]);
     expect([...some]).toContain(token);
   }
@@ -225,7 +247,7 @@ test("the selected-and-hovered pair generates; `not-` generates nothing", async 
  * elided content.
  */
 test("every class in a code example generates a rule", async () => {
-  const src = await Promise.all(["../src/prompt.ts", "../src/skill.ts"].map((f) => Bun.file(new URL(f, import.meta.url)).text()));
+  const src = [await Bun.file(new URL("../src/prompt.ts", import.meta.url)).text(), skillBody("types.json", "standalone.json", true)];
   const tokens = new Set<string>();
   // Not the ones quoted INSIDE backticks: those are prose naming a class, and the prose here
   // names broken ones on purpose — `className="r"` is quoted from a real card that wrote
@@ -243,4 +265,69 @@ test("every class in a code example generates a rule", async () => {
     if (matched.size === 0) unmatched.push(token);
   }
   expect(unmatched.toSorted()).toEqual([]);
+});
+
+/**
+ * A utility that references a variable the sheet never defined is not "unstyled until later" — it
+ * computes to NOTHING and the layout is wrong while the reader watches.
+ *
+ * Two halves, and they pull in opposite directions:
+ *
+ * 1. The variables have to reach the sheet DURING the stream. Wind4's `theme` layer is on demand,
+ *    and it is a PREFLIGHT — so the empty-token first frame carries none of it, and a later frame
+ *    generating with `preflights: false` emits `padding: calc(var(--spacing) * 3)` against a sheet
+ *    where `--spacing` does not exist. Every `p-3`/`gap-2`/`rounded-2xl` computes to nothing until
+ *    the settled pass rewrites the sheet.
+ * 2. But the layer must not be appended per frame. `trackedTheme` is a module-level set inside
+ *    presetWind4, cleared only on `configResolved`, so `getLayer("theme")` returns the union of
+ *    every variable this generator has EVER seen — not a per-call delta. Measured on
+ *    `test/cards/utility-classes` streamed in 40-byte chunks: 96 `:root, :host` blocks and 16KB of
+ *    a 42KB sheet, while only 8 of the 103 generating frames had actually changed the layer.
+ *    That is the same "repeated block grows without bound" shape the box-sizing assertion above
+ *    exists to stop.
+ */
+test("streaming frames define the theme variables, and do not re-append the theme layer", async () => {
+  const style = {
+    attrs: {} as Record<string, string>,
+    textContent: "",
+    setAttribute(k: string, v: string) {
+      this.attrs[k] = v;
+    },
+    remove() {},
+  };
+  const previous = (globalThis as { document?: unknown }).document;
+  (globalThis as { document?: unknown }).document = { createElement: () => style, head: { appendChild: (n: unknown) => n } };
+  const roots = () => (style.textContent.match(/:root,\s*:host\s*\{/g) ?? []).length;
+  try {
+    const uno = await import("../src/client/runtime/uno.ts");
+    uno.disposeUnoStyles();
+
+    // Half 1: the definition must land in the SAME frame as the utility that needs it. Assert on
+    // the DEFINITION and not on `var(--spacing)` — the broken path emitted the reference happily,
+    // which is exactly what made it look styled.
+    await uno.ensureUnoStyles(`<div className="p-3 gap-2 rounded-2xl" />`, true);
+    expect(style.textContent).toMatch(/--spacing\s*:/);
+    expect(style.textContent).toMatch(/--radius-2xl\s*:/);
+
+    // Half 2: many more frames, each introducing tokens. If the theme layer is appended per frame
+    // this grows with the frame count; it may only grow when the layer itself changed.
+    const before = roots();
+    expect(before).toBe(1);
+    for (let i = 0; i < 20; i++) await uno.ensureUnoStyles(`<div className="mt-${i + 1} p-${i + 1}" />`, true);
+    expect(roots()).toBe(before);
+
+    // The gate must not be "write once": a genuinely NEW variable still has to get out. `rounded-lg`
+    // is the probe — `rounded-full` is not, it computes to `calc(infinity * 1px)` and tracks no
+    // theme key at all (found by running this assertion).
+    await uno.ensureUnoStyles(`<div className="rounded-lg" />`, true);
+    expect(style.textContent).toMatch(/--radius-lg\s*:/);
+    expect(roots()).toBe(before + 1);
+
+    // …and the settled pass collapses back to exactly one, since it replaces rather than appends.
+    await uno.ensureUnoStyles(`<div className="p-3 gap-2 rounded-2xl rounded-full" />`, false);
+    expect(roots()).toBe(1);
+    uno.disposeUnoStyles();
+  } finally {
+    (globalThis as { document?: unknown }).document = previous;
+  }
 });

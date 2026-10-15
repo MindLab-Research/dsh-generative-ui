@@ -41,11 +41,9 @@ if (OUTDIR === "lib" && !Bun.argv.includes("--force")) {
   }
 }
 
-// The panel stylesheet is a real .css file (editors, linters and formatters understand it)
-// but reaches the browser as a string the plugin injects itself, because a client bundle is
-// one JS factory with no stylesheet channel of its own.
-const cssSource = await Bun.file(resolve(import.meta.dir, "../src/client/canvas/panel.css")).text();
-await Bun.write(resolve(import.meta.dir, "../src/client/canvas/panel-css.ts"), `/* Generated from panel.css by scripts/build.ts — edit the .css, not this file. */\nexport const PANEL_CSS = ${JSON.stringify(cssSource)};\n`);
+// The panel stylesheet used to be compiled here into a string the plugin injected itself —
+// `panel.css` → `panel-css.ts`. The canvas tab has no chrome of its own any more (CLAUDE.md
+// §3.6), so there is nothing left to compile and no stylesheet this bundle ships.
 
 /**
  * Two outputs, one package.
@@ -103,8 +101,8 @@ const client = await Bun.build({
   // Pinned, because otherwise the bundle depends on the CALLER'S environment. Bun picks the JSX
   // runtime from NODE_ENV and the `define` below does not reach the transform — it rewrites
   // strings in the code. Measured: `NODE_ENV=production bun run build` emits 0
-  // `require("react/jsx-dev-runtime")`, `NODE_ENV=test` emits 3 (GenUISurface, CanvasPanel,
-  // CanvasLauncher). `bun test` sets NODE_ENV=test for its children, and one test shells out to
+  // `require("react/jsx-dev-runtime")`, `NODE_ENV=test` emits one per `.tsx` in the bundle.
+  // `bun test` sets NODE_ENV=test for its children, and one test shells out to
   // `bun run build` — so running the test suite left `lib/` in a state where the shell's module
   // table has no `react/jsx-dev-runtime`, the client half failed to load, and dsh web showed
   // "Failed to load plugins" over a blank page. It cost two wrong diagnoses before the pattern
@@ -146,6 +144,6 @@ for (const [label, result] of [
 // not carry, and the symptom is an unrelated TypeError blamed on the card that happened to be
 // rendering. Cheap enough to run on every build.
 const clientSource = await Bun.file(`${OUTDIR}/client.js`).text();
-for (const marker of ["react-dom-server.browser.development", "react/jsx-dev-runtime\")"]) {
+for (const marker of ["react-dom-server.browser.development", 'react/jsx-dev-runtime")']) {
   if (clientSource.includes(marker)) throw new Error(`client bundle carries a React development build (${marker}) — check NODE_ENV handling in this file`);
 }

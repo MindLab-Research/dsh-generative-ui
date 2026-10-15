@@ -95,3 +95,31 @@ jobs:
       - run: vercel pull --yes --environment=production
       - run: vercel build --prod
       - run: vercel deploy --prebuilt --prod
+
+  # The same build as a preview on a pull request, so a reviewer can open the change instead of
+  # reading it, with the URL kept in one comment that each push rewrites. Same-repository branches
+  # only: a `pull_request` run hands the head's own workflow file these secrets, so a fork must not
+  # reach this job.
+  vercel-preview:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun add -g vercel@64
+      - run: vercel pull --yes --environment=preview
+      - run: vercel build
+      - id: deploy
+        run: echo "url=$(vercel deploy --prebuilt --yes | tail -1)" >> "$GITHUB_OUTPUT"
+      - run: |
+          gh pr comment "${{ github.event.number }}" --edit-last --create-if-none \
+            --body "Preview: ${{ steps.deploy.outputs.url }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

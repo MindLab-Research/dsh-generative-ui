@@ -10,6 +10,9 @@ on:
       # The build IS `bun run site` — the script string in package.json. Editing it without this
       # line would change the build and not redeploy, silently.
       - "package.json"
+      # The same build, named for the second host instead of the Pages one; editing it changes what
+      # deploys without touching anything above.
+      - "vercel.json"
       - "src/skill.ts"
       - "src/contract.ts"
       - "types/standalone/**"
@@ -22,6 +25,7 @@ on:
       - "website/**"
       - "scripts/site.ts"
       - "package.json"
+      - "vercel.json"
       - "src/skill.ts"
       - "src/contract.ts"
       - "types/standalone/**"
@@ -70,3 +74,24 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # The same site on the Vercel project behind dsh-generative-ui.macaron.im. Not the Vercel GitHub
+  # App — this repository cannot join it, since that installation needs an organization owner and a
+  # member only ever gets `request`. `vercel.json` still owns the build, and running it here is what
+  # keeps the deployed bytes this run's instead of a second build on Vercel's own toolchain.
+  vercel:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun add -g vercel@64
+      - run: vercel pull --yes --environment=production
+      - run: vercel build --prod
+      - run: vercel deploy --prebuilt --prod

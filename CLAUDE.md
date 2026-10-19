@@ -18,6 +18,8 @@ The rendering stack is `partial-tsx` + `partial-react` + `@esm.sh/tsx`, the same
 
 ## 0. Toolchain
 
+`bun run lint` scans the maintained `src`, `test`, `scripts`, `eval`, `website`, and `types` directories explicitly. Local worktrees and sibling checkouts nested at the repository root must not change its diagnostics.
+
 **This package uses bun** (`bun install` / `bun run build`). dsh's pnpm only governs the profile directory — `dsh plugin --profile web add link:<path>` is dsh forwarding to pnpm, and it does not care how we install our own deps as long as `lib/*.js` exists.
 
 `package.json`'s `prepare: bun scripts/build.ts` cannot be removed: installing from git gets you source with no `lib/`, and the plugin then silently fails to load.

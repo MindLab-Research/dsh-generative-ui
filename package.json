@@ -65,7 +65,7 @@
     "smoke": "bun scripts/smoke.ts",
     "check": "bun run lint && bun run typecheck && bun run test && bun run test:shuffled && bun run audit && bun run replay && bun run cards && bun run paint && bun run build && bun run smoke && bun run loads",
     "check:ci": "bun run lint && bun run typecheck && bun run test && bun run test:shuffled && bun run audit && bun run replay && bun run cards && bun run paint && bun run build && bun run smoke",
-    "lint": "oxlint",
+    "lint": "oxlint src test scripts eval website types",
     "fmt": "oxfmt",
     "gen:standalone": "bun scripts/gen-standalone.ts",
     "audit": "bun scripts/fresh-rates.ts 2>/dev/null | head -1 > /tmp/fresh-total.txt; python3 scripts/audit-record.py && bun scripts/corpus-rates.ts 2>/dev/null | python3 scripts/audit-rates.py",

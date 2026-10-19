@@ -107,6 +107,80 @@ test("the binding blobs are built once and revoked on release", () => {
   expect(bindingImports()).not.toBe(first);
 });
 
+test("session shims are distinct and share a stable internal module", async () => {
+  const a = bindingImports("a");
+  const b = bindingImports("b");
+  expect(bindingImports("a")).toBe(a);
+  expect(a["$dsh/fs"]).not.toBe(b["$dsh/fs"]);
+  const aSource = await (await fetch(a["$dsh/fs"])).text();
+  const bSource = await (await fetch(b["$dsh/fs"])).text();
+  expect(aSource).toContain('bind("a")');
+  expect(bSource).toContain('bind("b")');
+  const internal = aSource.match(/from "(blob:[^"]+)"/)![1];
+  expect(bSource).toContain(internal);
+  expect((await fetch(internal)).ok).toBe(true);
+});
+
+test("AI and web requests use the bound owner's workspace", async () => {
+  release = registerUi4aHost({ cwd: (owner) => (owner === "a" ? "/a" : "/b"), sessionId: () => "b", send() {} });
+  const urls: URL[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://local");
+    urls.push(url);
+    return url.pathname.endsWith("search") ? Response.json({ sources: [], truncated: false }) : new Response("answer");
+  }) as typeof fetch;
+  const canvas = bind("a");
+  for await (const _chunk of canvas.ai.streamText("hi")) {
+    /* consume the response */
+  }
+  await canvas.web.search("hi");
+  expect(urls).toHaveLength(2);
+  expect(urls.every((url) => url.searchParams.get("cwd") === "/a")).toBe(true);
+});
+
+test("a retained canvas keeps its owner and reads that owner's current access mode", async () => {
+  const sessions = new Map([
+    ["a", { cwd: "/a", writable: false }],
+    ["b", { cwd: "/b", writable: true }],
+  ]);
+  let selected = "a";
+  const sent: string[] = [];
+  release = registerUi4aHost({
+    sessionId: () => selected,
+    cwd: (owner) => sessions.get(owner ?? selected)?.cwd,
+    send: (_text, owner) => {
+      const id = owner ?? selected;
+      if (!sessions.has(id)) throw new Error("owning session is unavailable");
+      sent.push(id);
+    },
+  });
+  const urls: URL[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input), "http://local");
+    urls.push(url);
+    const owner = url.searchParams.get("session")!;
+    if (init?.method === "POST" && url.pathname === FS_PATH && !sessions.get(owner)?.writable) return Response.json({ error: "FS_SANDBOX_DENIED" }, { status: 403 });
+    return Response.json({ content: "ok", stdout: "ok" });
+  }) as typeof fetch;
+  const canvas = bind("a");
+  selected = "b";
+  await canvas.fs.readFile("file.txt");
+  await expect(canvas.fs.writeFile("file.txt", "x")).rejects.toThrow("FS_SANDBOX_DENIED");
+  await canvas.exec.bash("pwd");
+  canvas.chat.sendMessage("hi");
+  expect(sent).toEqual(["a"]);
+  expect(urls.every((url) => url.searchParams.get("cwd") === "/a" && url.searchParams.get("session") === "a")).toBe(true);
+  sessions.get("a")!.writable = true;
+  sessions.get("a")!.cwd = "/b";
+  await canvas.fs.writeFile("file.txt", "x");
+  expect(urls.at(-1)!.searchParams.get("session")).toBe("a");
+  expect(urls.at(-1)!.searchParams.get("cwd")).toBe("/b");
+  sessions.delete("a");
+  await expect(canvas.fs.readFile("file.txt")).rejects.toThrow("needs a session workspace");
+  expect(() => canvas.exec.bash("pwd")).toThrow("needs a session workspace");
+  expect(() => canvas.chat.sendMessage("hi")).toThrow("owning session is unavailable");
+});
+
 // The teardown returned by `registerUi4aHost` must not unbind a host that replaced it.
 test("releasing a stale host does not unbind the current one", () => {
   const stale = hostWith("/a");

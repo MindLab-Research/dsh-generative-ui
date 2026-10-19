@@ -381,8 +381,10 @@ The mechanism, ported from `ui4a-playground/src/runtime/bindings.ts`: the real i
 is ordinary TypeScript in our bundle, registered under `$dsh/internal`, and each
 `$dsh/<group>` is a few-line blob shim that imports it and re-exports that group's members.
 The indirection exists because **a blob URL cannot carry a query string** — anything the
-module needs to know about its caller has to be compiled into the body. The playground binds
-per surface for that reason; we have one global host, so one shim set is enough.
+module needs to know about its caller has to be compiled into the body. Shims are cached per
+owning session, and surfaces (including compiled sub-pages) use that session's import map.
+The shared host resolves the named session's current workspace and policy on every call; it
+must never fall back to the selected session when the owner disappears. React remains shared.
 
 **`conversation` is scope-addressed, and the scope is a fresh context.** Reading it off the
 plugin's own context rejects with `requires a session scope — address one via

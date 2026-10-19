@@ -90,9 +90,10 @@ export function apply(ctx: ClientContext): void {
   };
 
   /** The current session's workspace, which canvas file reads resolve against. */
-  const cwd = (): string | undefined => {
-    const id = currentSession();
-    return id === undefined ? undefined : sessions.list.getSnapshot().byId[id]?.cwd;
+  const cwd = (owner?: string): string | undefined => {
+    const id = owner ?? currentSession();
+    const byId = sessions.list.getSnapshot().byId;
+    return id === undefined ? undefined : byId[id as keyof typeof byId]?.cwd;
   };
 
   /**
@@ -134,10 +135,13 @@ export function apply(ctx: ClientContext): void {
       const release = registerUi4aHost({
         cwd,
         sessionId,
-        send: (text) => {
-          const id = currentSession();
-          const session = id === undefined ? undefined : (scoped.sessions as unknown as ISessions).scope(id);
-          if (session === undefined) return void console.error("[dsh-generative-ui] $dsh/chat: no session to send into");
+        send: (text, owner) => {
+          const id = owner ?? currentSession();
+          const store = scoped.sessions as unknown as ISessions;
+          const byId = store.list.getSnapshot().byId;
+          const ownerId = id as keyof typeof byId | undefined;
+          const session = ownerId === undefined || byId[ownerId] === undefined ? undefined : store.scope(ownerId);
+          if (session === undefined) throw new Error("[dsh-generative-ui] $dsh/chat: owning session is unavailable");
           // The scoped context is minted by the host and carries its own inject set, so our
           // outer declaration does not reach it — reading `conversation` off it directly
           // throws `cannot get property "conversation" without inject`. One more inject on
@@ -275,7 +279,7 @@ export function apply(ctx: ClientContext): void {
         subscribeLocale: (refresh) => ctx.locale.subscribe(refresh),
         // The SAME gate on both callbacks. A card that may not report a failure may not retract
         // one either — see `cardRendered`.
-        render: ({ code, streaming, last }) => createElement(GenUISurface, { code, streaming, onError: (error, phase) => reportCardError(sendToModel, error.message, phase, last), onRendered: (restored) => cardRendered(restored, last) }),
+        render: ({ code, streaming, last }) => createElement(GenUISurface, { key: sessionId(), sessionId: sessionId(), code, streaming, onError: (error, phase) => reportCardError(sendToModel, error.message, phase, last), onRendered: (restored) => cardRendered(restored, last) }),
       }),
     "dsh-generative-ui: inline fences",
   );

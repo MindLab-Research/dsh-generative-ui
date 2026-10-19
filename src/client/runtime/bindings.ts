@@ -17,10 +17,10 @@ import { usePersistedState } from "./state.ts";
 
 /** What the plugin's client half lends to generated code. Registered once, at apply. */
 export type Ui4aHost = {
-  /** Sends a prompt into the current session, exactly as the composer would. */
-  send: (text: string) => void;
-  /** The current session's workspace, which the AI route authorizes against. */
-  cwd: () => string | undefined;
+  /** Sends into the named owner; previews without an owner may use the current session. */
+  send: (text: string, sessionId?: string) => void;
+  /** Resolve the named session's current workspace; an unknown owner must return undefined. */
+  cwd: (sessionId?: string) => string | undefined;
   /** The open session, so a write runs under the access mode the composer shows. */
   sessionId: () => string;
 };
@@ -49,7 +49,7 @@ export function registerUi4aHost(next: Ui4aHost): () => void {
  * A function rather than a constant so the host can be swapped (or torn down) without the
  * already-imported blob modules going stale — they close over `bind`, not over a host.
  */
-export function bind() {
+export function bind(sessionId?: string) {
   const chat = {
     /**
      * Drives the next turn from inside a card. The text is what the user would have typed:
@@ -58,7 +58,7 @@ export function bind() {
      */
     sendMessage: (text: string) => {
       if (host === null) throw new Error("[dsh-generative-ui] no host bound");
-      host.send(text);
+      host.send(text, sessionId);
     },
   };
   const ai = {
@@ -71,7 +71,7 @@ export function bind() {
      */
     streamText: (options: Ui4aStreamOptions | string): AsyncIterable<string> => {
       if (host === null) throw new Error("[dsh-generative-ui] no host bound");
-      const workspace = host.cwd();
+      const workspace = host.cwd(sessionId);
       if (workspace === undefined) throw new Error("[dsh-generative-ui] $dsh/ai needs a session workspace");
       const request = typeof options === "string" ? { prompt: options } : options;
       return streamFrom(workspace, request, request.signal);
@@ -80,7 +80,7 @@ export function bind() {
 
   const fs = {
     /** The file's text. Throws when it does not exist or the session may not read it. */
-    readFile: (path: string) => request<{ content: string }>("GET", path).then((body) => body.content),
+    readFile: (path: string) => request<{ content: string }>("GET", path, undefined, undefined, sessionId).then((body) => body.content),
     /**
      * Directory entries: the name, whether it is a file or a directory, and a file's size.
      *
@@ -88,7 +88,7 @@ export function bind() {
      * tree — it would have to probe every entry with a second call to find out whether it
      * can be descended into. The host has all three already; we used to drop two of them.
      */
-    readdir: (path: string) => request<{ entries: Ui4aDirEntry[] }>("GET", path, undefined, "list=1").then((body) => body.entries),
+    readdir: (path: string) => request<{ entries: Ui4aDirEntry[] }>("GET", path, undefined, "list=1", sessionId).then((body) => body.entries),
     /**
      * The file's bytes, for anything that is not text.
      *
@@ -96,7 +96,7 @@ export function bind() {
      * every byte above 0x7f replaced by U+FFFD — corrupt, and silently so. Anything handed to
      * `decodeAudioData`, a MIDI parser or an image decoder has to come through here.
      */
-    readBytes: (path: string) => request<{ base64: string }>("GET", path, undefined, "bytes=1").then((body) => decodeBase64(body.base64)),
+    readBytes: (path: string) => request<{ base64: string }>("GET", path, undefined, "bytes=1", sessionId).then((body) => decodeBase64(body.base64)),
     /**
      * Writes the file, subject to the session's own access mode.
      *
@@ -107,7 +107,7 @@ export function bind() {
     // `Promise<void>`, not the `Promise<undefined>` a bare `.then(() => undefined)` infers:
     // what a caller may do with the result is the contract, and `types/chat.d.ts` says void.
     writeFile: async (path: string, content: string): Promise<void> => {
-      await request<{ written: string }>("POST", path, content);
+      await request<{ written: string }>("POST", path, content, undefined, sessionId);
     },
   };
 
@@ -121,9 +121,9 @@ export function bind() {
      */
     bash: (command: string, options?: { signal?: AbortSignal }): Promise<Ui4aExecResult> => {
       if (host === null) throw new Error("[dsh-generative-ui] no host bound");
-      const workspace = host.cwd();
+      const workspace = host.cwd(sessionId);
       if (workspace === undefined) throw new Error("[dsh-generative-ui] $dsh/exec needs a session workspace");
-      return execRequest(workspace, host.sessionId(), command, options?.signal);
+      return execRequest(workspace, sessionId ?? host.sessionId(), command, options?.signal);
     },
   };
 
@@ -137,7 +137,7 @@ export function bind() {
      */
     search: (query: string, options?: { maxResults?: number; signal?: AbortSignal }): Promise<Ui4aSearchResult> => {
       if (host === null) throw new Error("[dsh-generative-ui] no host bound");
-      const workspace = host.cwd();
+      const workspace = host.cwd(sessionId);
       if (workspace === undefined) throw new Error("[dsh-generative-ui] $dsh/web needs a session workspace");
       return searchRequest(workspace, query, options);
     },
@@ -175,11 +175,11 @@ async function searchRequest(cwd: string, query: string, options?: { maxResults?
 }
 
 /** Talks to the fs route, carrying the workspace and the session whose policy applies. */
-async function request<T>(method: "GET" | "POST", path: string, content?: string, extra?: string): Promise<T> {
+async function request<T>(method: "GET" | "POST", path: string, content?: string, extra?: string, sessionId?: string): Promise<T> {
   if (host === null) throw new Error("[dsh-generative-ui] no host bound");
-  const workspace = host.cwd();
+  const workspace = host.cwd(sessionId);
   if (workspace === undefined) throw new Error("[dsh-generative-ui] $dsh/fs needs a session workspace");
-  const query = `cwd=${encodeURIComponent(workspace)}&session=${encodeURIComponent(host.sessionId())}&path=${encodeURIComponent(path)}${extra === undefined ? "" : `&${extra}`}`;
+  const query = `cwd=${encodeURIComponent(workspace)}&session=${encodeURIComponent(sessionId ?? host.sessionId())}&path=${encodeURIComponent(path)}${extra === undefined ? "" : `&${extra}`}`;
   const response = await fetch(`${FS_PATH}?${query}`, content === undefined ? { method } : { method, headers: { "content-type": "application/json" }, body: JSON.stringify({ content }) });
   const body = (await response.json().catch(() => ({}))) as { error?: string };
   // A denial is not an outage. Naming it lets the card say "this session is read-only"
@@ -244,11 +244,13 @@ async function* streamFrom(cwd: string, request: Ui4aStreamOptions, signal?: Abo
   }
 }
 
-/** Blob URLs for every `$dsh/*` module, built once and reused by every surface. */
-let cached: Record<string, string> | null = null;
+/** Blob URLs are shared by surfaces with the same owner, never across different sessions. */
+const cached = new Map<string | undefined, Record<string, string>>();
+const internalNamespace = { bind };
 
-export function bindingImports(): Record<string, string> {
-  if (cached !== null) return cached;
+export function bindingImports(sessionId?: string): Record<string, string> {
+  const existing = cached.get(sessionId);
+  if (existing !== undefined) return existing;
   // Registered here rather than in `registerUi4aHost`: what goes in the registry is `bind` itself,
   // which does not depend on the host *value*. Hanging it off host registration meant a page with
   // no host — a preview, a harness, the first frame of a session, any profile without
@@ -256,7 +258,7 @@ export function bindingImports(): Record<string, string> {
   // reported `Unresolvable imports` and every one after it rendered silently blank. Verified: with
   // this moved, a `$dsh/state` card mounts and persists with nothing else registered, and a
   // `$dsh/chat` card lays out correctly and only throws `no host bound` when the button is pressed.
-  registerModules({ [INTERNAL]: { bind } });
+  registerModules({ [INTERNAL]: internalNamespace });
   const internal = moduleUrl(INTERNAL);
   const imports: Record<string, string> = {};
   const bound = bind();
@@ -266,16 +268,16 @@ export function bindingImports(): Record<string, string> {
   for (const [group, members] of Object.entries(bound)) {
     const names = Object.keys(members);
     // One `export const` per name: ESM export names must be statically visible.
-    const source = [`import { bind } from ${JSON.stringify(internal)};`, `const g = bind().${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
+    const source = [`import { bind } from ${JSON.stringify(internal)};`, `const g = bind(${JSON.stringify(sessionId) ?? ""}).${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
     imports[capabilityModule(group)] = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
   }
-  cached = imports;
+  cached.set(sessionId, imports);
   return imports;
 }
 
 export function releaseBindings(): void {
-  for (const url of Object.values(cached ?? {})) URL.revokeObjectURL(url);
-  cached = null;
+  for (const imports of cached.values()) for (const url of Object.values(imports)) URL.revokeObjectURL(url);
+  cached.clear();
 }
 
 /**
@@ -287,7 +289,7 @@ export function releaseBindings(): void {
  * syntax error in one fails the way an unresolvable import does — the whole module graph
  * dies and the card renders blank with no console error.
  */
-export function localImports(): Record<string, string> {
+export function localImports(sessionId?: string): Record<string, string> {
   registerRuntimeModules();
-  return { ...registryImports(), ...bindingImports() };
+  return { ...registryImports(), ...bindingImports(sessionId) };
 }

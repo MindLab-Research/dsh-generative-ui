@@ -96,6 +96,7 @@ for (const kind of ["ai", "search"] as const) {
           llm: {
             async *stream() {
               calls++;
+              yield { type: "text-delta", text: "unexpected" };
             },
           },
         },

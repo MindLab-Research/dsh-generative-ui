@@ -333,6 +333,16 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
   const preserveStateRef = useRef(preserveState);
   /** Retries spent on the current code. Reset by a successful paint and by every new frame. */
   const retriesRef = useRef(0);
+  const aliveRef = useRef(false);
+  const revisionRef = useRef(0);
+  const probeRef = useRef(0);
+  const retrySequenceRef = useRef(0);
+  const asyncErrorRef = useLatest((reason: unknown) => {
+    if (!aliveRef.current) return;
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    if (streamingRef.current) strandedRef.current = { error, phase: "compile" };
+    else onErrorRef.current?.(error, "compile");
+  });
   /**
    * Re-deliver the current code after a dependency failed to fetch.
    *
@@ -347,21 +357,31 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
   const retryRef = useLatest(() => {
     if (renderer === null || code === "") return;
     const attempt = retriesRef.current;
-    void mergeFallbackImports(localImports(), code).then((imports) => {
-      // Only the fetched esm.sh entries need busting; the local blob URLs are already fresh.
-      // From the second attempt the bundled build is dropped as well: if the first failure was a
-      // bundle-side 500 (see `unbundleFetchedImports`) no amount of cache-busting can clear it.
-      const fresh = attempt > 0 ? unbundleFetchedImports(imports) : imports;
-      renderer.setImportMap({ imports: bustFetchedImports(fresh, attempt) });
-      renderer.clear({ preserveVisualState: true });
-      renderer.render(code);
-    });
+    const revision = revisionRef.current;
+    const retry = ++retrySequenceRef.current;
+    void mergeFallbackImports(localImports(), code)
+      .then((imports) => {
+        if (!aliveRef.current || revision !== revisionRef.current || retry !== retrySequenceRef.current) return;
+        // Only a retry that will actually apply may supersede the ordinary import probe.
+        probeRef.current++;
+        // Only the fetched esm.sh entries need busting; the local blob URLs are already fresh.
+        // From the second attempt the bundled build is dropped as well: if the first failure was a
+        // bundle-side 500 (see `unbundleFetchedImports`) no amount of cache-busting can clear it.
+        const fresh = attempt > 0 ? unbundleFetchedImports(imports) : imports;
+        renderer.setImportMap({ imports: bustFetchedImports(fresh, attempt) });
+        renderer.clear({ preserveVisualState: true });
+        renderer.render(code);
+      })
+      .catch((error: unknown) => {
+        if (revision === revisionRef.current && retry === retrySequenceRef.current) asyncErrorRef.current(error);
+      });
   });
 
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
     let disposed = false;
+    aliveRef.current = true;
     let attached: GenUIRenderer | null = null;
     void GenUIRenderer.create(host, {
       compiler: compiler(),
@@ -383,12 +403,20 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
             // and a surface can unmount well inside that (a canvas tab closed, a message scrolled
             // out of the host's window). Firing after that runs the whole import-probe chain
             // against a renderer that has already been detached.
-            schedule: (ms) => void retryTimers.current.add(setTimeout(() => retryRef.current(), ms)),
+            schedule: (ms) => {
+              const timer = setTimeout(() => {
+                retryTimers.current.delete(timer);
+                retryRef.current();
+              }, ms);
+              retryTimers.current.add(timer);
+            },
             report: () => onErrorRef.current?.(error, phase),
           });
         },
         onRendered: () => {
           retriesRef.current = 0;
+          for (const timer of retryTimers.current) clearTimeout(timer);
+          retryTimers.current.clear();
           // partial-react repaints the LAST GOOD component after a render throw (`preserve` is on
           // for every inline card), so this fires for a card whose new code is broken. The throw
           // set `threwRef` a tick earlier; consuming it here is what tells the caller that this
@@ -401,14 +429,21 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           onRenderedRef.current?.(restored);
         },
       },
-    }).then((created) => {
-      // A fast unmount can land before `create` settles; detaching there would leak the root.
-      if (disposed) return void created.detach();
-      attached = created;
-      setRenderer(created);
-    });
+    })
+      .then((created) => {
+        // A fast unmount can land before `create` settles; detaching there would leak the root.
+        if (disposed) return void created.detach();
+        attached = created;
+        setRenderer(created);
+      })
+      .catch((error: unknown) => {
+        if (!disposed) asyncErrorRef.current(error);
+      });
     return () => {
       disposed = true;
+      aliveRef.current = false;
+      revisionRef.current++;
+      probeRef.current++;
       // Detach from the local handle, not from a state updater: React skips the updater
       // for an unmounted fiber whenever the queue is not empty, and a renderer that is
       // never detached keeps its React root and its module URL alive for the tab's life.
@@ -433,26 +468,37 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
 
   useEffect(() => {
     if (renderer === null) return;
+    const revision = ++revisionRef.current;
+    for (const timer of retryTimers.current) clearTimeout(timer);
+    retryTimers.current.clear();
     // Anything the model imports beyond the registered react family (recharts, motion, …) has no
     // entry in the import map, and an unresolvable bare specifier fails the whole module import —
     // the surface just stays blank. `mergeFallbackImports` probes esm.sh and fills those in.
     const signature = importSignature(code);
     if (signature !== importedRef.current) {
       importedRef.current = signature;
+      const probe = ++probeRef.current;
       // A later frame's probe can settle first; without this the map reverts to an older import set.
-      void mergeFallbackImports(localImports(), code).then((imports) => {
-        const settle = probeOutcome(signature, importedRef.current, streamingRef.current, deliveredRef.current, code);
-        if (settle === "stale") return;
-        renderer.setImportMap({ imports });
-        if (settle === "redeliver") renderer.render(deliveredRef.current);
-      });
+      void mergeFallbackImports(localImports(), code)
+        .then((imports) => {
+          if (!aliveRef.current || probe !== probeRef.current) return;
+          const settle = probeOutcome(signature, importedRef.current, streamingRef.current, deliveredRef.current, code);
+          if (settle === "stale") return;
+          renderer.setImportMap({ imports });
+          if (settle === "redeliver") renderer.render(deliveredRef.current);
+        })
+        .catch((error: unknown) => {
+          if (probe === probeRef.current) asyncErrorRef.current(error);
+        });
     }
     retriesRef.current = 0;
     // Generated classes exist only in the code that just arrived, so their CSS is produced here
     // rather than at build time. Not awaited: the sheet is appended to `<head>` and applies to
     // whatever is already mounted, so a card paints unstyled for at most a frame instead of
     // holding up every delivery behind a generator that has to boot on the first call.
-    void ensureUnoStyles(code, streaming);
+    void ensureUnoStyles(code, streaming).catch((error: unknown) => {
+      if (revision === revisionRef.current) asyncErrorRef.current(error);
+    });
     if (!deliver(renderer, deliveryFor(code, deliveredRef.current, streaming))) {
       // Nothing was delivered, so nothing will recompile and no error will be raised — but the
       // buffer on screen may already have failed while streaming. This is the only moment that

@@ -83,8 +83,8 @@
     "@esm.sh/tsx": "^1.5.3",
     "@unocss/core": "^66.8.1",
     "@unocss/preset-wind4": "^66.8.1",
-    "partial-react": "~0.0.8",
-    "partial-tsx": "~0.0.5"
+    "partial-react": "~0.0.10",
+    "partial-tsx": "~0.0.7"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2 || ^4.0.5-0",

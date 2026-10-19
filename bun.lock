@@ -8,8 +8,8 @@
         "@esm.sh/tsx": "^1.5.3",
         "@unocss/core": "^66.8.1",
         "@unocss/preset-wind4": "^66.8.1",
-        "partial-react": "~0.0.8",
-        "partial-tsx": "~0.0.5",
+        "partial-react": "~0.0.10",
+        "partial-tsx": "~0.0.7",
       },
       "devDependencies": {
         "@babel/parser": "^8.0.4",
@@ -665,9 +665,9 @@
 
     "oxlint": ["oxlint@1.88.0", "", { "optionalDependencies": { "@oxlint/binding-android-arm-eabi": "1.88.0", "@oxlint/binding-android-arm64": "1.88.0", "@oxlint/binding-darwin-arm64": "1.88.0", "@oxlint/binding-darwin-x64": "1.88.0", "@oxlint/binding-freebsd-x64": "1.88.0", "@oxlint/binding-linux-arm-gnueabihf": "1.88.0", "@oxlint/binding-linux-arm-musleabihf": "1.88.0", "@oxlint/binding-linux-arm64-gnu": "1.88.0", "@oxlint/binding-linux-arm64-musl": "1.88.0", "@oxlint/binding-linux-ppc64-gnu": "1.88.0", "@oxlint/binding-linux-riscv64-gnu": "1.88.0", "@oxlint/binding-linux-riscv64-musl": "1.88.0", "@oxlint/binding-linux-s390x-gnu": "1.88.0", "@oxlint/binding-linux-x64-gnu": "1.88.0", "@oxlint/binding-linux-x64-musl": "1.88.0", "@oxlint/binding-openharmony-arm64": "1.88.0", "@oxlint/binding-win32-arm64-msvc": "1.88.0", "@oxlint/binding-win32-ia32-msvc": "1.88.0", "@oxlint/binding-win32-x64-msvc": "1.88.0" }, "peerDependencies": { "oxlint-tsgolint": ">=7.0.2003", "vite-plus": "*" }, "optionalPeers": ["oxlint-tsgolint", "vite-plus"], "bin": { "oxlint": "bin/oxlint" } }, "sha512-uIcFgw8BmqvFRGzH5+r7d2zJMEexwNSrEmM6WQNnGh3VkO0XYTEFoyxyNE6tjKMUib9Cue4XJA2DoWruO5D6aw=="],
 
-    "partial-react": ["partial-react@0.0.8", "", { "dependencies": { "@esm.sh/tsx": "^1.5.3", "partial-tsx": "~0.0.5" }, "peerDependencies": { "react": "^18.3.0 || ^19.0.0", "react-dom": "^18.3.0 || ^19.0.0" } }, "sha512-fXK0SiBEsc3qyCMZ5un9vSnpO43FoiWHdxgZfUlHcpsO7+X0ej+bEeIdJyIlvMc3WByP9dDkyfc3SxZZCU2wzg=="],
+    "partial-react": ["partial-react@0.0.10", "", { "dependencies": { "@esm.sh/tsx": "^1.5.3", "partial-tsx": "~0.0.7" }, "peerDependencies": { "react": "^18.3.0 || ^19.0.0", "react-dom": "^18.3.0 || ^19.0.0" } }, "sha512-h6e2sA/SGxcB+or3j6ydrmG4D6lB2nkovaER6yYNhEQkRv+rkR0ilZRMz0B/vh5AqA/dOAVL7cLc8AwepaASqg=="],
 
-    "partial-tsx": ["partial-tsx@0.0.5", "", {}, "sha512-yLXHqf0uvOGF5WMc1B4F9a6aeProtguYgioao8Ck9D6bVXJfxRWxuGzZDC0Jg7qeez/0bbCHjNfAfcGjdQiqMg=="],
+    "partial-tsx": ["partial-tsx@0.0.7", "", {}, "sha512-WRYBOKfK33F3BFC/XICjqSSLCrtRlB5yphvpTxhKsznMYkw1VroK9DYp+wgmWG06CXXD8BsBOF2FBh82TkvCiA=="],
 
     "picomatch": ["picomatch@4.0.7", "", {}, "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="],
 

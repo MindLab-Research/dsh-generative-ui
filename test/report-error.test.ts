@@ -5,6 +5,24 @@ beforeEach(forgetReportedErrors);
 
 type Report = { message: string; phase: string } | null;
 
+test("a superseded card's paint cannot cancel a pending report", async () => {
+  const sent: Report[] = [];
+  const delivered = new Promise<void>((resolve) => {
+    reportCardError(
+      (report) => {
+        sent.push(report);
+        resolve();
+      },
+      "newest card broke",
+      "render",
+      () => true,
+    );
+  });
+  cardRendered(false, () => false);
+  await delivered;
+  expect(sent).toEqual([{ message: "newest card broke", phase: "render" }]);
+});
+
 // The whole point: before this existed, `onError` had no consumer and a card that failed to
 // compile was a red panel the reader saw and the model never did. Measured on a real session —
 // the surface printed `has no export named 'MonacoEditor'; module exports: Workspace, errors,

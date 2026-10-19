@@ -363,19 +363,20 @@ has something to resolve against and `box-sizing: border-box` keeps that 100% in
 
 ## 3.65 `$dsh/*`: what generated code can call back into
 
-The playground gives generated code four capability modules under `$ui4a/`. Here the prefix
+The playground gives generated code capability modules under `$ui4a/`. Here the prefix
 is **`$dsh/`**: what these expose is the harness — its conversation, its model, its
 filesystem — and none of it belongs to the ui4a rendering contract that the fence language
-and the canvas paths define. A card that imports one only runs inside dsh. `contract.ts`
+and the canvas paths define. Host-backed calls require dsh; `$dsh/state` is local-only. `contract.ts`
 owns the prefix; nothing else should spell it out.
 
 | Module | Here | Why |
 | --- | --- | --- |
 | `$dsh/chat` | **implemented** | `ctx.conversation.send(text)` is a public client service |
 | `$dsh/fs` | **implemented** | Forwards to the host's `ctx.fs` carrying the session's `ctx.sandboxPolicy`. `readdir` gives `{name, type, size}` (the host had all three; we used to forward only the name, so a card could not draw a tree without probing) and `readBytes` exists because `readFile` UTF-8-decodes — a `.mid` or a wav read as text is silently corrupt |
-| `$dsh/state` | **declined** | it would be a naming convention over `$dsh/fs`, which a card can already call directly; private UI state belongs in `localStorage` and the skill teaches that |
-| `$dsh/ai` | **implemented** | not through a client gateway — there is none — but through a route on our Node half onto `ctx.llm.stream()`, on the session's own model selection, so the card never sees a key |
+| `$dsh/state` | **implemented** | `usePersistedState` stores private UI state in `localStorage`; it needs no host filesystem or session service |
+| `$dsh/ai` | **implemented** | not through a client gateway — there is none — but through a route on our Node half onto `ctx.llm.stream()`, using `agentDefaultModel.currentSelection()`, so the card never sees a key |
 | `$dsh/exec` | **implemented**, ours | not in the playground's set under that name — its `bash` lives inside `$ui4a/fs`. Split out here because running a command is not reading a file, and because the two carry different risks. `ctx.shell` takes the same `sandboxPolicy` `$dsh/fs` resolves, so it opens no door the model's own bash tool has not |
+| `$dsh/web` | **implemented** | `search` forwards to the host's web provider; it does not expose the host's page-fetch capability |
 
 The mechanism, ported from `ui4a-playground/src/runtime/bindings.ts`: the real implementation
 is ordinary TypeScript in our bundle, registered under `$dsh/internal`, and each

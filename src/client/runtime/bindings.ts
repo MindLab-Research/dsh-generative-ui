@@ -2,12 +2,10 @@
  * The `$dsh/*` capability modules generated code may import.
  *
  * These are real TypeScript that lives in our bundle; generated code reaches them through
- * a per-surface blob shim, because a blob URL cannot carry a query string and the surface
- * identity therefore has to be compiled into the module body.
+ * shared blob shims registered in the document import map.
  *
- * Ported from ui4a-playground, minus what this host cannot back: there is no browser-side
- * filesystem service in dsh (`dsh-fs` is the Node half only) and no client-facing model
- * gateway, so `$dsh/fs` and `$dsh/ai` have no implementation here yet.
+ * Filesystem, model, command and search calls reach plugin-owned Node routes; chat uses the
+ * client conversation service, and persisted state uses localStorage without a host service.
  */
 import { moduleUrl, registerModules, registryImports } from "./registry.ts";
 import { AI_STREAM_PATH, EXEC_PATH, FS_PATH, WEB_SEARCH_PATH } from "../../contract-assets.ts";
@@ -195,7 +193,7 @@ export type Ui4aExecResult = { stdout: string; stderr: string; exitCode: number 
 /** Talks to the exec route. Separate from `request` because the shape and the failure mode differ. */
 async function execRequest(cwd: string, sessionId: string, command: string, signal?: AbortSignal): Promise<Ui4aExecResult> {
   const query = `cwd=${encodeURIComponent(cwd)}&session=${encodeURIComponent(sessionId)}`;
-  // Aborting really kills the command: the route hangs its own controller off `req.on("close")`,
+  // Aborting really kills the command: the route watches premature response-socket closure,
   // so dropping the request is what a polling card needs to not stack runs on a slow one.
   const response = await fetch(`${EXEC_PATH}?${query}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }), signal });
   const body = (await response.json().catch(() => ({}))) as Ui4aExecResult & { error?: string };
@@ -210,11 +208,10 @@ export type Ui4aDirEntry = { name: string; type?: "file" | "directory"; size?: n
 export type Ui4aStreamOptions = { prompt: string; system?: string; signal?: AbortSignal };
 
 /**
- * Decodes the route's plain-text stream into characters.
+ * Decodes the route's plain-text stream into text chunks.
  *
- * Character-at-a-time rather than chunk-at-a-time because that is what the consumer wants:
- * generated cards append to a buffer and re-parse it, and a card that grows by whole network
- * chunks reads as stuttering rather than typing.
+ * Preserve multi-byte characters across network boundaries, yielding one decoded chunk rather
+ * than forcing generated cards to re-render for every character.
  */
 async function* streamFrom(cwd: string, request: Ui4aStreamOptions, signal?: AbortSignal): AsyncIterable<string> {
   // Aborting stops the model too, not just the reading: the route drops its own generation when

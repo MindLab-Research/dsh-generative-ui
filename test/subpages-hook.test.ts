@@ -1,7 +1,19 @@
 import { expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { useSubPages } from "../src/client/canvas/subpages.ts";
+import { resolvedSubPageCode, useSubPages } from "../src/client/canvas/subpages.ts";
+
+test("only the exact workspace and source revision may reuse resolved sub-pages", () => {
+  const source = 'import A from "./a";';
+  const changed = 'import B from "./b";';
+  expect(source.length).toBe(changed.length);
+  const resolved = { cwd: "/one", id: "card", source, code: 'import A from "blob:a";', urls: ["blob:a"] };
+  expect(resolvedSubPageCode(resolved, "/one", "card", source)).toBe(resolved.code);
+  expect(resolvedSubPageCode(resolved, "/one", "card", changed)).toBe(changed);
+  expect(resolvedSubPageCode(resolved, "/two", "card", source)).toBe(source);
+  expect(resolvedSubPageCode(resolved, "/one", "other", source)).toBe(source);
+  expect(resolvedSubPageCode(null, "/one", "card", changed)).toBe(changed);
+});
 
 /**
  * `useSubPages` decides whether a canvas's source is rendered as written or rewritten with its

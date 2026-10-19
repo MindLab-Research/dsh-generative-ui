@@ -145,8 +145,19 @@ export const revokeAll = (urls: string[]): void => {
  * rewrite lands the original source is rendered, which fails exactly as it does today rather
  * than blanking a canvas that was working.
  */
+type ResolvedSubPages = { cwd: string; id: string; source: string; code: string; urls: string[] };
+
+export const resolvedSubPageCode = (resolved: ResolvedSubPages | null, cwd: string | undefined, id: string, source: string) => (resolved !== null && resolved.cwd === cwd && resolved.id === id && resolved.source === source ? resolved.code : source);
+
 export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined) {
-  const [resolved, setResolved] = useState<{ key: string; code: string } | null>(null);
+  const [resolved, setResolved] = useState<ResolvedSubPages | null>(null);
+  // A committed revision owns its URLs until its replacement commits, not until fetching starts.
+  useEffect(
+    () => () => {
+      if (resolved !== null) revokeAll(resolved.urls);
+    },
+    [resolved],
+  );
   // Destructured so the effect depends on scalars: the caller rebuilds `canvas` on every
   // sweep, and depending on the object would re-run the whole resolve for an unchanged canvas.
   const id = canvas?.id;
@@ -156,24 +167,28 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined)
   useEffect(() => {
     if (cwd === undefined || id === undefined || code === undefined) return;
     if (!needsResolve(code, streaming)) return;
-    const key = `${id}:${code.length}`;
     let live = true;
+    let retained = false;
     const urls: string[] = [];
     const compile = async (filename: string, source: string) => (await compiler().compile(source, { filename })).code;
-    void inlineSubPages(code, canvasPath(id), (specifier, from) => readCanvasChild(cwd, id, specifier, from), compile, urls).then((next) => {
-      // Resolved after teardown: nobody will ever render these, so revoke them here — the
-      // disposer already ran and cannot see urls the pass appended after it.
-      if (!live) return void revokeAll(urls);
-      setResolved({ key, code: next });
-    });
+    void inlineSubPages(code, canvasPath(id), (specifier, from) => readCanvasChild(cwd, id, specifier, from), compile, urls)
+      .then((next) => {
+        // Resolved after teardown: nobody will ever render these, so revoke them here — the
+        // disposer already ran and cannot see urls the pass appended after it.
+        if (!live) return void revokeAll(urls);
+        retained = true;
+        setResolved({ cwd, id, source: code, code: next, urls });
+      })
+      .catch((error: unknown) => {
+        revokeAll(urls);
+        if (live) console.error("[dsh-generative-ui] could not resolve canvas sub-pages", error);
+      });
     return () => {
       live = false;
-      // The surface holds the previous code, so its blobs stay reachable until it re-renders;
-      // revoking on the next resolve rather than here would leak one set per edit.
-      revokeAll(urls);
+      if (!retained) revokeAll(urls);
     };
   }, [cwd, id, code, streaming]);
 
   if (id === undefined || code === undefined) return "";
-  return resolved !== null && resolved.key === `${id}:${code.length}` ? resolved.code : code;
+  return resolvedSubPageCode(resolved, cwd, id, code);
 }

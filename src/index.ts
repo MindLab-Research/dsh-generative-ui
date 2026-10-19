@@ -465,8 +465,11 @@ export async function serveWebSearch(ctx: WebCtx, liveWorkspaces: () => Readonly
   try {
     // Same reason the exec route does it: a card that searches as the reader types has no other
     // way to cancel, and the seam forwards the signal to the provider.
+    if (res.destroyed) return;
     const controller = new AbortController();
-    req.on("close", () => controller.abort());
+    res.on("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
     const result = await ctx.web.search({ query, maxResults: maxResults ?? SEARCH_MAX_RESULTS }, controller.signal);
     return json(200, { content: result.content, sources: result.sources, truncated: result.truncated });
   } catch (error) {
@@ -528,8 +531,11 @@ export async function serveAi(ctx: LlmCtx, liveWorkspaces: () => ReadonlySet<str
   const selection = ctx.agentDefaultModel.currentSelection();
   // Abort the model call when the reader navigates away or the card unmounts; without this
   // a closed tab leaves a generation running and billing.
+  if (res.destroyed) return;
   const controller = new AbortController();
-  req.on("close", () => controller.abort());
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
 
   res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" });
   try {

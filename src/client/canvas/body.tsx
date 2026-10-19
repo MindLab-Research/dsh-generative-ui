@@ -6,11 +6,12 @@
  */
 import { useEffect, useState } from "react";
 import { parseFileAddress } from "@deepseek-ai/dsh-util-workspace-path";
-import type { PropsRuntime } from "@deepseek-ai/dsh-client-ui-slots";
+import type { PropsRuntime, TranslateNS } from "@deepseek-ai/dsh-client-ui-slots";
 import { GenUISurface } from "../runtime/GenUISurface.tsx";
 import { canvasIdOfAddress } from "./definition.ts";
 import { readCanvasFile } from "./read.ts";
 import { useSubPages } from "./subpages.ts";
+import { CanvasReadStatus } from "./read-status.tsx";
 
 /**
  * The registrant's business face, bound per tab occurrence.
@@ -30,9 +31,9 @@ export type CanvasInjected = {
   readonly onCardRendered: (restored: boolean) => void;
 };
 
-export type CanvasBodyProps = PropsRuntime<"sidebar.right.pane.tab"> & CanvasInjected;
+export type CanvasBodyProps = PropsRuntime<"sidebar.right.pane.tab"> & CanvasInjected & { t: TranslateNS<"ui4aCanvas"> };
 
-export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: CanvasBodyProps) {
+export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered, t }: CanvasBodyProps) {
   const { tab } = useTabInfo();
   const address = tab.contentId;
   const id = canvasIdOfAddress(address);
@@ -41,13 +42,28 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: C
   // only agree when the reader happens to be looking at the session that wrote the canvas.
   const cwd = parsed?.scope === "session" ? cwdOf(parsed.sessionId) : undefined;
   const [body, setBody] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     if (cwd === undefined || id === null) return;
     let live = true;
-    void readCanvasFile(cwd, id).then((code) => {
-      if (live) setBody(code);
-    });
+    setError(null);
+    setLoading(true);
+    void readCanvasFile(cwd, id)
+      .then((code) => {
+        if (live) {
+          setBody(code);
+          setLoading(false);
+        }
+      })
+      .catch((reason: unknown) => {
+        if (live) {
+          setError(reason);
+          setLoading(false);
+        }
+      });
     return () => {
       live = false;
     };
@@ -55,7 +71,7 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: C
     // `edit` marks the canvas stale — so a patch is re-read here without the transcript having
     // to carry the new body. `visible` deliberately does not appear: with `keepMounted` the body
     // survives a hide, and re-reading on every return would drop state for nothing.
-  }, [cwd, id, tab.navigation.revision]);
+  }, [cwd, id, tab.navigation.revision, retry]);
 
   // Disk is the source, so a body read here is always settled. Under the default PTC mode the
   // first frame the transcript shows is settled too (§3.6); off-PTC a top-level `write` briefly
@@ -63,6 +79,8 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: C
   const resolved = useSubPages(cwd, body === null || id === null ? undefined : { id, code: body, streaming: false });
 
   if (id === null) return null;
+  if (error !== null) return <CanvasReadStatus t={t} error={error} retry={() => setRetry((n) => n + 1)} />;
+  if (body === null) return <CanvasReadStatus t={t} retry={loading ? undefined : () => setRetry((n) => n + 1)} />;
   // A canvas is inset; an inline card is not. The card is told to fill whatever holds it, so
   // the two surfaces have to differ HERE rather than in every generated component — inline sits
   // in the transcript and must share the prose's left edge, while a canvas in a panel with its

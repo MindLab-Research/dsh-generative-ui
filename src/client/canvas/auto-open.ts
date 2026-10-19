@@ -93,12 +93,14 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
     if (root === undefined || list === undefined) return;
     if (settledOpaque === listedAt) return;
     listedAt = settledOpaque;
-    void list(root).then((ids) => {
-      const known = listed;
-      const fresh = known === null ? [] : ids.filter((id) => !known.has(id));
-      listed = new Set(ids);
-      for (const id of fresh) open(session, id);
-    });
+    void list(root)
+      .then((ids) => {
+        const known = listed;
+        const fresh = known === null ? [] : ids.filter((id) => !known.has(id));
+        listed = new Set(ids);
+        for (const id of fresh) open(session, id);
+      })
+      .catch((error: unknown) => console.error("[dsh-generative-ui] could not list canvases", error));
   };
 
   const sweep = () => {

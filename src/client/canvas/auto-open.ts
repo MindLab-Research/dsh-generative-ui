@@ -75,8 +75,10 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
    * — a canvas that appears after it is one this session caused.
    */
   let listed: ReadonlySet<string> | null = null;
-  /** Settled opaque calls at the time of the last listing; `0`, so none means never relist. */
+  /** Settled opaque calls at the time of the last listing that LANDED; `0`, so none means never relist. */
   let listedAt = 0;
+  /** One listing at a time. An overlapping one would roll the marker back to a value still in flight. */
+  let listing = false;
   /**
    * `collectCanvases` walks every argument string by hand, which is what makes it correct on a
    * half-arrived JSON prefix — and it costs 0.16ms per canvas per sweep. The sweep runs on every
@@ -91,21 +93,22 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
   const relist = (session: string, settledOpaque: number) => {
     const root = cwd?.();
     if (root === undefined || list === undefined) return;
-    if (settledOpaque === listedAt) return;
-    const previous = listedAt;
-    listedAt = settledOpaque;
+    if (listing || settledOpaque === listedAt) return;
+    listing = true;
     void list(root)
       .then((ids) => {
+        listing = false;
+        // Only a listing that landed advances the marker. Rolling a failed one back to whatever
+        // was there before is wrong too: with two writes in flight that value is another request's
+        // uncommitted marker, and restoring it loses both writes to the next baseline.
+        listedAt = settledOpaque;
         const known = listed;
         const fresh = known === null ? [] : ids.filter((id) => !known.has(id));
         listed = new Set(ids);
         for (const id of fresh) open(session, id);
       })
       .catch((error: unknown) => {
-        // The marker advances only on a listing that landed. A failed one is retried by the next
-        // sweep; leaving it advanced instead consumed the next successful listing as the baseline,
-        // so the canvas this call wrote was never opened unless a third opaque call came along.
-        if (listedAt === settledOpaque) listedAt = previous;
+        listing = false;
         console.error("[dsh-generative-ui] could not list canvases", error);
       });
   };

@@ -220,3 +220,52 @@ test("a failed listing is retried, so the next canvas is not swallowed by the ba
     console.error = silent;
   }
 });
+
+test("two in-flight listings cannot roll the marker back", async () => {
+  // The first failure used to leave its marker behind for the second request to capture as
+  // `previous`; when the two rejected in order, the second restored it and both writes were
+  // consumed by the next baseline.
+  let release: (() => void)[] = [];
+  let fail = true;
+  const onDisk = ["old", "first", "second"];
+  const h = harness({
+    list: async () => {
+      await new Promise<void>((r) => release.push(r));
+      if (fail) throw new Error("offline");
+      return onDisk;
+    },
+  });
+  const silent = console.error;
+  console.error = () => {};
+  try {
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+    await drain();
+    // Only one listing is in flight; the second call waits for a later sweep.
+    expect(release).toHaveLength(1);
+    fail = true;
+    for (const done of release.splice(0)) done();
+    await drain();
+    expect(h.opens).toEqual([]);
+
+    fail = false;
+    h.sweep();
+    await drain();
+    for (const done of release.splice(0)) done();
+    await drain();
+    // The retry is still a baseline (nothing was listed before it), so it opens nothing — and it
+    // must not be skipped or consumed by a rolled-back marker.
+    expect(h.opens).toEqual([]);
+
+    // The next write is the one that tells the story: its listing must see the baseline and open
+    // only what appeared after it.
+    onDisk.push("third");
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(extra)`));
+    await drain();
+    for (const done of release.splice(0)) done();
+    await drain();
+    expect(h.opens).toEqual(["s1/third"]);
+  } finally {
+    console.error = silent;
+  }
+});

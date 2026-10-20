@@ -303,6 +303,11 @@ export const unbundleFetchedImports = (imports: Record<string, string>): Record<
 
 export const bustFetchedImports = (imports: Record<string, string>, attempt: number): Record<string, string> => Object.fromEntries(Object.entries(imports).map(([key, url]) => [key, url.startsWith("https://esm.sh/") ? `${url}${url.includes("?") ? "&" : "?"}ui4a-retry=${attempt}` : url]));
 
+/**
+ * Whether a paint is of the source the surface last handed the renderer, rather than an older
+ * frame that only just reached React's commit. Takes the ref rather than its value so the effect
+ * that owns the paint callback never reads a ref this class mutates later.
+ */
 export function GenUISurface({ code, streaming = false, preserveState = true, onError, onRendered, className }: GenUISurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // State, not a ref: `create` is async, so readiness must be able to trigger the
@@ -353,9 +358,9 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
    * passed in rather than read from `retryRef` so this initializer does not capture a binding
    * that is still being initialized.
    */
-  const handleFailureRef = useLatest((error: Error, phase: "transform" | "compile" | "render", retry: () => void) => {
+  const handleFailureRef = useLatest((error: Error, phase: "transform" | "compile" | "render", retry: () => void, streaming = streamingRef.current) => {
     if (phase === "render") threwRef.current = true;
-    const action = errorAction(error.message, phase, streamingRef.current, retriesRef.current);
+    const action = errorAction(error.message, phase, streaming, retriesRef.current);
     if (action === "ignore") strandedRef.current = { error, phase };
     dispatchError(action, {
       attempts: () => retriesRef.current,
@@ -428,14 +433,21 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           if (action === "ignore") strandedRef.current = { error, phase };
           handleFailureRef.current(error, phase, () => retryRef.current());
         },
-        onRendered: () => {
+        onRendered: (_component, rendered) => {
+          // Only a paint of the code we last delivered says anything about its import map. An
+          // earlier frame can reach React's concurrent render before a newer one commits, and
+          // letting that older paint cancel the newer frame's retry left the newest code failed
+          // with nothing left to try.
+          if (rendered.trimEnd() !== deliveredRef.current.trimEnd()) return;
           retriesRef.current = 0;
           for (const timer of retryTimers.current) clearTimeout(timer);
           retryTimers.current.clear();
           // A retry whose probe is already in flight is not in that set. This frame painted, so its
-          // import map is good enough; invalidating the sequence keeps the late retry from
-          // replacing it with a cache-busted map and re-rendering.
+          // import map is good enough; invalidating the sequences keeps a late retry — or the
+          // redundant probe a reorder of the same imports left pending — from reporting a failure
+          // against a card that is already on screen.
           retrySequenceRef.current++;
+          probeRef.current++;
           // partial-react repaints the LAST GOOD component after a render throw (`preserve` is on
           // for every inline card), so this fires for a card whose new code is broken. The throw
           // set `threwRef` a tick earlier; consuming it here is what tells the caller that this
@@ -532,7 +544,10 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
       const stranded = strandedRef.current;
       if (stranded !== null && reportStranded(streaming, stranded, code, strandedReportedRef.current)) {
         strandedReportedRef.current = code;
-        onErrorRef.current?.(stranded.error, stranded.phase);
+        // Re-decided now, not when it was parked: a transient probe failure is only known to be
+        // about a settled frame here, so classifying it at streaming time spent no retry budget
+        // and sent a one-off CDN blip to the model.
+        handleFailureRef.current(stranded.error, stranded.phase, () => retryRef.current(), false);
       }
       return;
     }
@@ -548,6 +563,9 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
     retriesRef.current = 0;
     for (const timer of retryTimers.current) clearTimeout(timer);
     retryTimers.current.clear();
+    // This ref is the effect's own inter-frame state; the paint callback above reads it, which is
+    // exactly why it is a ref and not a closure value.
+    // oxlint-disable-next-line react/immutability
     deliveredRef.current = code;
     // The refs this reads (`importedRef`, `deliveredRef`, `streamingRef`) are how the effect
     // carries state between frames; listing them would re-run it on values it just wrote.

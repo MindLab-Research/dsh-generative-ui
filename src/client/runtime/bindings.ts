@@ -9,7 +9,7 @@
  * filesystem service in dsh (`dsh-fs` is the Node half only) and no client-facing model
  * gateway, so `$dsh/fs` and `$dsh/ai` have no implementation here yet.
  */
-import { moduleUrl, registerModules, registryImports } from "./registry.ts";
+import { registryImports } from "./registry.ts";
 import { AI_STREAM_PATH, EXEC_PATH, FS_PATH, WEB_SEARCH_PATH } from "../../contract-assets.ts";
 import { capabilityModule } from "../../contract.ts";
 import { registerRuntimeModules } from "./register.ts";
@@ -25,8 +25,24 @@ export type Ui4aHost = {
   sessionId: () => string;
 };
 
-const INTERNAL = capabilityModule("internal");
 let host: Ui4aHost | null = null;
+
+/**
+ * Per-owner capability handles.
+ *
+ * The handle a shim carries is minted here and is not a session id, so generated code that reads
+ * one shim cannot name another session — `bindOwner` only ever resolves a handle this map holds.
+ */
+const handleOwners = new Map<string, string | undefined>();
+const ownerHandles = new Map<string | undefined, string>();
+const handleFor = (sessionId: string | undefined): string => {
+  const existing = ownerHandles.get(sessionId);
+  if (existing !== undefined) return existing;
+  const handle = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  ownerHandles.set(sessionId, handle);
+  handleOwners.set(handle, sessionId);
+  return handle;
+};
 
 /** Named so the round trip can be tested against the real code rather than a copy of it. */
 export function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {
@@ -49,6 +65,12 @@ export function registerUi4aHost(next: Ui4aHost): () => void {
  * A function rather than a constant so the host can be swapped (or torn down) without the
  * already-imported blob modules going stale — they close over `bind`, not over a host.
  */
+/** What a synthesized shim imports. A handle it was minted with; anything else is refused. */
+export function bindOwner(handle: string) {
+  if (!handleOwners.has(handle)) throw new Error("[dsh-generative-ui] no such capability handle");
+  return bind(handleOwners.get(handle));
+}
+
 export function bind(sessionId?: string) {
   const chat = {
     /**
@@ -246,20 +268,29 @@ async function* streamFrom(cwd: string, request: Ui4aStreamOptions, signal?: Abo
 
 /** Blob URLs are shared by surfaces with the same owner, never across different sessions. */
 const cached = new Map<string | undefined, Record<string, string>>();
-const internalNamespace = { bind };
+/**
+ * The internal blob is deliberately NOT in the module registry, so it is not in the document
+ * import map nor in the map a renderer is handed. A generated card cannot write
+ * `import { … } from "$dsh/internal"`; only our own shims name it, by literal blob URL.
+ */
+const INTERNAL_KEY = "__DSH_GENERATIVE_UI_BIND_OWNER__";
+let internal: string | null = null;
+const internalModule = (): string => {
+  if (internal !== null) return internal;
+  (globalThis as Record<string, unknown>)[INTERNAL_KEY] = bindOwner;
+  internal = URL.createObjectURL(new Blob([`export const bindOwner = globalThis[${JSON.stringify(INTERNAL_KEY)}];`], { type: "text/javascript" }));
+  return internal;
+};
 
 export function bindingImports(sessionId?: string): Record<string, string> {
   const existing = cached.get(sessionId);
   if (existing !== undefined) return existing;
-  // Registered here rather than in `registerUi4aHost`: what goes in the registry is `bind` itself,
-  // which does not depend on the host *value*. Hanging it off host registration meant a page with
-  // no host — a preview, a harness, the first frame of a session, any profile without
-  // `conversation` — got capability blobs importing an EMPTY `$dsh/internal`. The first mount
-  // reported `Unresolvable imports` and every one after it rendered silently blank. Verified: with
-  // this moved, a `$dsh/state` card mounts and persists with nothing else registered, and a
-  // `$dsh/chat` card lays out correctly and only throws `no host bound` when the button is pressed.
-  registerModules({ [INTERNAL]: internalNamespace });
-  const internal = moduleUrl(INTERNAL);
+  // Built here rather than in `registerUi4aHost`: what the shims reach is `bindOwner`, which does
+  // not depend on the host *value*. Hanging it off host registration meant a page with no host — a
+  // preview, a harness, the first frame of a session, any profile without `conversation` — got
+  // capability blobs importing an EMPTY internal module. The first mount reported
+  // `Unresolvable imports` and every one after it rendered silently blank.
+  const source = internalModule();
   const imports: Record<string, string> = {};
   const bound = bind();
   // Enumerated from `bind()`, not from a list beside it: a group added to the implementation and
@@ -267,9 +298,10 @@ export function bindingImports(sessionId?: string): Record<string, string> {
   // nothing in the console — the failure mode this project spends the most effort on.
   for (const [group, members] of Object.entries(bound)) {
     const names = Object.keys(members);
-    // One `export const` per name: ESM export names must be statically visible.
-    const source = [`import { bind } from ${JSON.stringify(internal)};`, `const g = bind(${JSON.stringify(sessionId) ?? ""}).${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
-    imports[capabilityModule(group)] = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+    // One `export const` per name: ESM export names must be statically visible. The handle is
+    // compiled into the body because a blob URL cannot carry a query string.
+    const body = [`import { bindOwner } from ${JSON.stringify(source)};`, `const g = bindOwner(${JSON.stringify(handleFor(sessionId))}).${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
+    imports[capabilityModule(group)] = URL.createObjectURL(new Blob([body], { type: "text/javascript" }));
   }
   cached.set(sessionId, imports);
   return imports;
@@ -278,6 +310,10 @@ export function bindingImports(sessionId?: string): Record<string, string> {
 export function releaseBindings(): void {
   for (const imports of cached.values()) for (const url of Object.values(imports)) URL.revokeObjectURL(url);
   cached.clear();
+  if (internal !== null) {
+    URL.revokeObjectURL(internal);
+    internal = null;
+  }
 }
 
 /**

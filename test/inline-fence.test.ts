@@ -149,7 +149,7 @@ afterEach(() => {
     }
 });
 
-const start = async (segments: () => any[], locale = { t: (key: string) => key, subscribeLocale: (_refresh: () => void) => () => {} }) => {
+const start = async (segments: () => any[], locale = { t: (key: string) => key, subscribeLocale: (_refresh: () => void) => () => {}, owner: () => "s1" }) => {
   mock.module("react-dom/client", () => ({
     createRoot: (node: any) => ({
       render: (el: any) => {
@@ -644,6 +644,7 @@ test("语言变化只刷新存留的源码预览，卸载后取消订阅", async
         listeners.delete(refresh);
       };
     },
+    owner: () => "s1",
   });
   elapse();
   language = "zh";
@@ -657,4 +658,27 @@ test("语言变化只刷新存留的源码预览，卸载后取消订阅", async
   expect(previews).toHaveLength(count);
   stop();
   expect(listeners.size).toBe(0);
+});
+
+/**
+ * A session switch must reach `render` even when the card's source did not change.
+ *
+ * React reuses the `.md-code-block` node across the switch, and the skip below used to treat
+ * "same rendered text, settled" as "nothing to do" — so the card kept the capability shims of the
+ * session it was claimed under, and its writes, commands and chat acted on a conversation the
+ * reader was no longer looking at.
+ */
+test("a session switch re-renders an unchanged card", async () => {
+  const code = "export default () => <div />";
+  makeBlock(code);
+  let owner = "s1";
+  const { again } = await start(() => [segment(code)], { t: (key) => key, subscribeLocale: () => () => {}, owner: () => owner });
+  elapse();
+  expect(painted).toHaveLength(1);
+  owner = "s2";
+  again();
+  elapse();
+  expect(painted).toHaveLength(2);
+  // And nothing else changed hands: the same code, still not streaming.
+  expect(painted[1]).toEqual({ code, streaming: false });
 });

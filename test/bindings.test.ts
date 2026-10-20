@@ -114,11 +114,36 @@ test("session shims are distinct and share a stable internal module", async () =
   expect(a["$dsh/fs"]).not.toBe(b["$dsh/fs"]);
   const aSource = await (await fetch(a["$dsh/fs"])).text();
   const bSource = await (await fetch(b["$dsh/fs"])).text();
-  expect(aSource).toContain('bind("a")');
-  expect(bSource).toContain('bind("b")');
+  // Opaque handles, never the session id: generated code that reads its own shim cannot name
+  // another session, because `bindOwner` only resolves a handle this module minted.
+  const handleOf = (source: string) => source.match(/bindOwner\("([^"]+)"\)/)![1];
+  const aHandle = handleOf(aSource);
+  const bHandle = handleOf(bSource);
+  expect(aHandle).not.toBe(bHandle);
+  expect(aSource).not.toContain('"a"');
+  expect(bSource).not.toContain('"b"');
   const internal = aSource.match(/from "(blob:[^"]+)"/)![1];
   expect(bSource).toContain(internal);
   expect((await fetch(internal)).ok).toBe(true);
+  // And the internal module is not advertised: `$dsh/internal` resolves for no generated card.
+  expect((await import("../src/client/runtime/bindings")).localImports("a")).not.toHaveProperty("$dsh/internal");
+});
+
+test("a capability handle cannot be forged into another session", async () => {
+  const { bindOwner, bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
+  release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
+  const source = await (await fetch(bindingImports("victim")["$dsh/fs"])).text();
+  const handle = source.match(/bindOwner\("([^"]+)"\)/)![1];
+  expect(() => bindOwner("victim")).toThrow("no such capability handle");
+  expect(() => bindOwner(handle + "x")).toThrow("no such capability handle");
+  const urls: URL[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    const url = new URL(String(input), "http://local");
+    urls.push(url);
+    return Response.json({ content: "ok" });
+  }) as typeof fetch;
+  await bindOwner(handle).fs.readFile("x");
+  expect(urls.at(-1)!.searchParams.get("session")).toBe("victim");
 });
 
 test("AI and web requests use the bound owner's workspace", async () => {

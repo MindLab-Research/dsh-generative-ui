@@ -258,6 +258,7 @@ Details you have to get right:
 - **Hide it when the card paints, not when the claim is made.** Compiling is not the same as having something to look at: mid-stream the default export usually exists while the body is still an empty shell, so hiding at claim time leaves a blank gap that fills in with a pop — with the source sitting right there the whole time. The signal is non-empty text or an `svg` in the mount node (icons and charts carry no text); a wrapper div with layout classes is not. Checked at most once per frame and torn down the moment it fires, because a streaming card mutates thousands of times and `textContent` walks the whole subtree. A card that never paints therefore keeps showing its source, which is the right fallback rather than a bug.
 - **…but only once the card has had a moment to paint without it.** The source preview is a shiki-highlighted `CodeBlock` with `lang="tsx"`, and shiki tokenizes synchronously inside React's render. Measured 2026-10-14 in a real `dsh web`, switching back to a session holding two settled 7–8KB recharts cards: one **310ms** long task, all of it `findNextMatchSync`, landing right after the claim — while the same cards paint **20–25ms** after mount on a warm renderer. The preview meant to cover the wait was the wait, and it also held up the second card's claim behind it. So the preview is rendered only if the card has not painted `PREVIEW_DELAY_MS` after the claim: a warm card never shows its source at all, and a cold one (first wasm init plus a first esm.sh fetch, ~2.6s) still gets it. The host's block is then hidden by whichever of the two takes its place — the preview, or the card — never at claim time, so the delay costs no blank gap of its own.
 - **Coalesce the MutationObserver into one frame.** A streaming reply fires dozens of mutations per second, and one sweep per mutation is the textbook way to burn the main thread.
+- **A card is also stale when its session changed, not only when its text did.** React reuses a `.md-code-block` across a session switch, so both "nothing to do" checks in `sweep` must include the owning session — otherwise an unchanged card keeps the capability shims of the conversation it was claimed under and acts on a session the reader has left.
 
 ## 3.6 How the canvas tab works
 
@@ -385,6 +386,12 @@ module needs to know about its caller has to be compiled into the body. Shims ar
 owning session, and surfaces (including compiled sub-pages) use that session's import map.
 The shared host resolves the named session's current workspace and policy on every call; it
 must never fall back to the selected session when the owner disappears. React remains shared.
+
+What a shim carries is an **opaque handle**, not a session id, and `$dsh/internal` is a private
+blob that no import map names — so a card that reads its own shim learns its own handle and
+nothing else, and `bindOwner` refuses any handle this module did not mint. Both halves matter:
+the handle stops caller-controlled session selection, and keeping the module out of the map stops
+it being invited into generated code at all.
 
 **`conversation` is scope-addressed, and the scope is a fresh context.** Reading it off the
 plugin's own context rejects with `requires a session scope — address one via

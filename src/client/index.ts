@@ -277,6 +277,9 @@ export function apply(ctx: ClientContext): void {
         segments,
         t: ctx.locale.bind("common"),
         subscribeLocale: (refresh) => ctx.locale.subscribe(refresh),
+        // A settled card is skipped only while it is still the one it was claimed for: a session
+        // switch re-renders it so its capability shims follow the conversation the reader is on.
+        owner: sessionId,
         // The SAME gate on both callbacks. A card that may not report a failure may not retract
         // one either — see `cardRendered`.
         render: ({ code, streaming, last }) => createElement(GenUISurface, { key: sessionId(), sessionId: sessionId(), code, streaming, onError: (error, phase) => reportCardError(sendToModel, error.message, phase, last), onRendered: (restored) => cardRendered(restored, last) }),

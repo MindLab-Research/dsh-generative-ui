@@ -434,6 +434,12 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           handleFailureRef.current(error, phase, () => retryRef.current());
         },
         onRendered: (_component, rendered) => {
+          // Consume the restore marker first, whatever this paint is. A throw that restored the
+          // last good component paints source that is NOT the code we just delivered; leaving the
+          // marker set across that early return made the next real paint look like a restore too,
+          // and an obsolete stranded failure survived all the way to the model.
+          const restored = threwRef.current;
+          threwRef.current = false;
           // Only a paint of the code we last delivered says anything about its import map. An
           // earlier frame can reach React's concurrent render before a newer one commits, and
           // letting that older paint cancel the newer frame's retry left the newest code failed
@@ -449,11 +455,9 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           retrySequenceRef.current++;
           probeRef.current++;
           // partial-react repaints the LAST GOOD component after a render throw (`preserve` is on
-          // for every inline card), so this fires for a card whose new code is broken. The throw
-          // set `threwRef` a tick earlier; consuming it here is what tells the caller that this
-          // paint is a restore, not the new code working.
-          const restored = threwRef.current;
-          threwRef.current = false;
+          // for every inline card), so this fires for a card whose new code is broken. The marker
+          // was consumed above; it is what tells the caller this paint is a restore, not the new
+          // code working.
           // A restore paints the LAST GOOD component, which says nothing about the current code —
           // clearing on it would lose exactly the failure this exists to carry.
           if (!restored) strandedRef.current = null;

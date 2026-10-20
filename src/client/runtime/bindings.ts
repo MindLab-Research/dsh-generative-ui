@@ -35,10 +35,16 @@ let host: Ui4aHost | null = null;
  */
 const handleOwners = new Map<string, string | undefined>();
 const ownerHandles = new Map<string | undefined, string>();
+// Entropy captured at module load, before any generated code runs. `crypto.randomUUID` and
+// `Math.random` are both writable, so a card that swapped them before a later session's shims
+// were minted could choose its own handle and name that session.
+const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
+const random = Math.random;
+const token = () => randomUUID?.() ?? `${Date.now().toString(36)}-${random().toString(36).slice(2)}`;
 const handleFor = (sessionId: string | undefined): string => {
   const existing = ownerHandles.get(sessionId);
   if (existing !== undefined) return existing;
-  const handle = globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const handle = token();
   ownerHandles.set(sessionId, handle);
   handleOwners.set(handle, sessionId);
   return handle;
@@ -273,11 +279,19 @@ const cached = new Map<string | undefined, Record<string, string>>();
  * import map nor in the map a renderer is handed. A generated card cannot write
  * `import { … } from "$dsh/internal"`; only our own shims name it, by literal blob URL.
  */
-const INTERNAL_KEY = "__DSH_GENERATIVE_UI_BIND_OWNER__";
-// Sealed before any generated code can run: a card that could REPLACE this bridge could hand a
-// later session's shim a wrapper, capture the handle that passes through it, and resolve that
-// session. Reading it is harmless — `bindOwner` still only resolves a handle this module minted —
-// so the property is readable and neither writable nor configurable.
+/**
+ * The bridge a shim's blob reads. Named by a token this module minted, and sealed on first use.
+ *
+ * Both halves matter. Sealing alone is not enough: a card running before the blob evaluates could
+ * put a wrapper under a well-known key and capture the handle a later session's shim passes
+ * through. An unpredictable key cannot be pre-installed — and once this defineProperty runs the
+ * property cannot be replaced either. Reading it is harmless: `bindOwner` still only resolves a
+ * handle this module minted.
+ *
+ * A fresh key per module evaluation is what keeps HMR working: a reload mints another key and
+ * seals another property, rather than tripping over the previous one.
+ */
+const INTERNAL_KEY = `__dsh_generative_ui_bind_${token()}`;
 Object.defineProperty(globalThis, INTERNAL_KEY, { value: bindOwner, writable: false, configurable: false, enumerable: false });
 let internal: string | null = null;
 const internalModule = (): string => {

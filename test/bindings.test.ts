@@ -238,9 +238,27 @@ test("capability modules resolve without a host registered", async () => {
   }
 });
 
-test("the capability bridge is sealed before any card can run", () => {
-  const own = Object.getOwnPropertyDescriptor(globalThis, "__DSH_GENERATIVE_UI_BIND_OWNER__");
-  expect(own?.writable).toBe(false);
-  expect(own?.configurable).toBe(false);
-  expect(() => ((globalThis as any)["__DSH_GENERATIVE_UI_BIND_OWNER__"] = () => null)).toThrow();
+test("the capability bridge is sealed before any card can run", async () => {
+  // The key is minted, not a well-known name: a card cannot pre-install a wrapper under a key it
+  // cannot predict. Whatever it is, it is sealed by the time any shim exists.
+  await import("../src/client/runtime/bindings");
+  const keys = Reflect.ownKeys(globalThis).filter((key) => typeof key === "string" && key.startsWith("__dsh_generative_ui_bind_"));
+  // Every generation mints its own key — the reload test makes more than one, and the suite runs
+  // its files in random order — so this is "all of them", not "exactly one".
+  expect(keys.length).toBeGreaterThan(0);
+  for (const key of keys) {
+    const own = Object.getOwnPropertyDescriptor(globalThis, key)!;
+    expect(own.writable).toBe(false);
+    expect(own.configurable).toBe(false);
+    expect(own.enumerable).toBe(false);
+    expect(() => ((globalThis as any)[key as string] = () => null)).toThrow();
+  }
+});
+
+test("a second module evaluation keeps HMR working instead of redefining the bridge", async () => {
+  const before = Reflect.ownKeys(globalThis).filter((key) => typeof key === "string" && key.startsWith("__dsh_generative_ui_bind_"));
+  await import(`../src/client/runtime/bindings.ts?reload=${Math.random()}`);
+  const after = Reflect.ownKeys(globalThis).filter((key) => typeof key === "string" && key.startsWith("__dsh_generative_ui_bind_"));
+  // A reload mints and seals its own key rather than tripping over the previous, non-configurable one.
+  expect(after.length).toBe(before.length + 1);
 });

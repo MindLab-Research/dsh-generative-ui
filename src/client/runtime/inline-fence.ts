@@ -406,7 +406,11 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, owner,
       // we hid. Its text is then no longer a prefix of what we rendered, and holding the
       // claim would leave a stale card on screen with the real block invisible behind it.
       if (segment === undefined) {
-        if (claim.code.startsWith(rendered)) continue;
+        // The prefix rule is for a block whose text is still arriving. Once the session changed it
+        // is a different transcript's card: keeping it leaves session A's mount — and its
+        // capabilities — on screen under B, and only the fence language may have changed, which no
+        // mutation reports.
+        if (claim.owner === owner() && claim.code.startsWith(rendered)) continue;
         release(claim, true);
         continue;
       }

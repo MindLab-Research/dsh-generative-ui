@@ -335,6 +335,7 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
   const retriesRef = useRef(0);
   const aliveRef = useRef(false);
   const revisionRef = useRef(0);
+  const stylePassRef = useRef(0);
   const probeRef = useRef(0);
   const retrySequenceRef = useRef(0);
   const asyncErrorRef = useLatest((reason: unknown) => {
@@ -465,6 +466,7 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
       disposed = true;
       aliveRef.current = false;
       revisionRef.current++;
+      stylePassRef.current++;
       probeRef.current++;
       // Detach from the local handle, not from a state updater: React skips the updater
       // for an unmounted fiber whenever the queue is not empty, and a renderer that is
@@ -490,7 +492,8 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
 
   useEffect(() => {
     if (renderer === null) return;
-    const revision = ++revisionRef.current;
+    // CSS work is superseded by every run; the retry revision below only moves when a frame lands.
+    const stylePass = ++stylePassRef.current;
     // Anything the model imports beyond the registered react family (recharts, motion, …) has no
     // entry in the import map, and an unresolvable bare specifier fails the whole module import —
     // the surface just stays blank. `mergeFallbackImports` probes esm.sh and fills those in.
@@ -507,8 +510,11 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           renderer.setImportMap({ imports });
           if (settle === "redeliver") renderer.render(deliveredRef.current);
         })
-        .catch((error: unknown) => {
-          if (probe === probeRef.current) asyncErrorRef.current(error);
+        .catch((reason: unknown) => {
+          if (probe !== probeRef.current) return;
+          // Through the retry policy, like a renderer failure: a transient lookup failure is the
+          // case the budget exists for, not a verdict on the card.
+          handleFailureRef.current(reason instanceof Error ? reason : new Error(String(reason)), "compile", () => retryRef.current());
         });
     }
     // Generated classes exist only in the code that just arrived, so their CSS is produced here
@@ -516,7 +522,7 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
     // whatever is already mounted, so a card paints unstyled for at most a frame instead of
     // holding up every delivery behind a generator that has to boot on the first call.
     void ensureUnoStyles(code, streaming).catch((error: unknown) => {
-      if (revision === revisionRef.current) asyncErrorRef.current(error);
+      if (stylePass === stylePassRef.current) asyncErrorRef.current(error);
     });
     if (!deliver(renderer, deliveryFor(code, deliveredRef.current, streaming))) {
       // Nothing was delivered, so nothing will recompile and no error will be raised — but the
@@ -535,6 +541,10 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
     // A frame that landed supersedes whatever the previous one scheduled. Cancelling at the top of
     // the effect instead did that for a NO-OP update too — the settled frame differing only in
     // trailing whitespace — leaving the surface failed with neither a retry nor a report.
+    // Only a landed frame supersedes an in-flight retry. A no-op update still bumps the CSS pass
+    // above, but must leave `revisionRef` alone or the retry's completion is discarded and the
+    // surface stays failed with neither another attempt nor a report.
+    revisionRef.current++;
     retriesRef.current = 0;
     for (const timer of retryTimers.current) clearTimeout(timer);
     retryTimers.current.clear();

@@ -467,7 +467,7 @@ Data visualization is the stated exception — chart series need their own hues 
 
 ## 4. Known traps
 
-- **Sub-page resolution belongs to a workspace and exact source revision, not its length.** Equal-length edits must not reuse old rewritten code. Retain a resolved revision's blob URLs until React has committed its replacement; revoke partial results on failure or abandoned resolution.
+- **Sub-page resolution belongs to a workspace and exact source revision, not its length.** Equal-length edits must not reuse old rewritten code. A rewrite's blob URLs are owned by the resolve pass that minted them and die with its effect cleanup — including when its state update is discarded (unmount before commit, or a later pass winning the same batch). The pass serial is part of the match, so a source that edits away and back cannot answer with blobs the intervening pass already revoked.
 
 - **Intermediate streaming frames are supposed to fail compilation**, `No default export found` most often — partial-react explicitly treats these as transient and keeps the last good frame. That semantics must not leak to callers; `GenUISurface` filters them out while streaming, or the UI flashes red on every character the model types.
 - **`GenUIRenderer.create` is async**, so the renderer must live in state, not a ref: in a ref, the first render's effect sees `null` and bails, and since `code` no longer changes it never re-runs — a surface that mounted and stays blank forever.

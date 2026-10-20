@@ -12,7 +12,7 @@
  * has no base to resolve against. Children may import their siblings, which works for the same
  * reason once they too have been rewritten.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { canvasPath } from "../../contract.ts";
 import { compiler } from "../runtime/GenUISurface.tsx";
 import type { Canvas } from "./collect.ts";
@@ -145,30 +145,33 @@ export const revokeAll = (urls: string[]): void => {
  * rewrite lands the original source is rendered, which fails exactly as it does today rather
  * than blanking a canvas that was working.
  */
-type ResolvedSubPages = { cwd: string; id: string; source: string; code: string; urls: string[] };
+type ResolvedSubPages = { run: number; cwd: string; id: string; source: string; code: string };
 
-export const resolvedSubPageCode = (resolved: ResolvedSubPages | null, cwd: string | undefined, id: string, source: string) => (resolved !== null && resolved.cwd === cwd && resolved.id === id && resolved.source === source ? resolved.code : source);
+/**
+ * Whether a rewrite is still the answer for what is being rendered.
+ *
+ * `run` is the resolve pass that produced it. Without it a source that edits away and back (A → B →
+ * A) would match an entry whose blob URLs the intervening pass already revoked — a compile against
+ * dead `blob:` imports, which kills the whole module graph and paints nothing.
+ */
+export const resolvedSubPageCode = (resolved: ResolvedSubPages | null, run: number, cwd: string | undefined, id: string, source: string) => (resolved !== null && resolved.run === run && resolved.cwd === cwd && resolved.id === id && resolved.source === source ? resolved.code : source);
 
-export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined) {
+export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined, sessionId?: string) {
   const [resolved, setResolved] = useState<ResolvedSubPages | null>(null);
-  // A committed revision owns its URLs until its replacement commits, not until fetching starts.
-  useEffect(
-    () => () => {
-      if (resolved !== null) revokeAll(resolved.urls);
-    },
-    [resolved],
-  );
   // Destructured so the effect depends on scalars: the caller rebuilds `canvas` on every
   // sweep, and depending on the object would re-run the whole resolve for an unchanged canvas.
   const id = canvas?.id;
   const code = canvas?.code;
   const streaming = canvas?.streaming;
+  /** The pass currently allowed to answer. Bumped by every run of the effect below, including the ones that resolve nothing. */
+  const run = useRef(0);
 
   useEffect(() => {
-    if (cwd === undefined || id === undefined || code === undefined) return;
-    if (!needsResolve(code, streaming)) return;
+    // Bumped before any early return: a canvas edited to drop its sibling imports must stop
+    // answering with the previous rewrite, and that rewrite's blobs go with the pass's cleanup.
+    const pass = ++run.current;
+    if (cwd === undefined || id === undefined || code === undefined || !needsResolve(code, streaming)) return;
     let live = true;
-    let retained = false;
     const urls: string[] = [];
     const compile = async (filename: string, source: string) => (await compiler().compile(source, { filename })).code;
     void inlineSubPages(code, canvasPath(id), (specifier, from) => readCanvasChild(cwd, id, specifier, from), compile, urls)
@@ -176,8 +179,7 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined)
         // Resolved after teardown: nobody will ever render these, so revoke them here — the
         // disposer already ran and cannot see urls the pass appended after it.
         if (!live) return void revokeAll(urls);
-        retained = true;
-        setResolved({ cwd, id, source: code, code: next, urls });
+        setResolved({ run: pass, cwd, id, source: code, code: next });
       })
       .catch((error: unknown) => {
         revokeAll(urls);
@@ -185,10 +187,13 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined)
       });
     return () => {
       live = false;
-      if (!retained) revokeAll(urls);
+      // This pass owns its blobs for exactly as long as its rewrite can answer — no longer. A
+      // rewrite whose state update was discarded (unmount before commit, or a later pass winning
+      // the same batch) therefore still releases them: ownership is the effect's, not the state's.
+      revokeAll(urls);
     };
-  }, [cwd, id, code, streaming]);
+  }, [cwd, id, code, streaming, sessionId]);
 
   if (id === undefined || code === undefined) return "";
-  return resolvedSubPageCode(resolved, cwd, id, code);
+  return resolvedSubPageCode(resolved, run.current, cwd, id, code);
 }

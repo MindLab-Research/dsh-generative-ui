@@ -3,16 +3,18 @@ import { createElement } from "react";
 import { renderToString } from "react-dom/server";
 import { resolvedSubPageCode, useSubPages } from "../src/client/canvas/subpages.ts";
 
-test("only the exact workspace and source revision may reuse resolved sub-pages", () => {
+test("only the resolve pass, workspace and source revision may reuse resolved sub-pages", () => {
   const source = 'import A from "./a";';
   const changed = 'import B from "./b";';
   expect(source.length).toBe(changed.length);
-  const resolved = { cwd: "/one", id: "card", source, code: 'import A from "blob:a";', urls: ["blob:a"] };
-  expect(resolvedSubPageCode(resolved, "/one", "card", source)).toBe(resolved.code);
-  expect(resolvedSubPageCode(resolved, "/one", "card", changed)).toBe(changed);
-  expect(resolvedSubPageCode(resolved, "/two", "card", source)).toBe(source);
-  expect(resolvedSubPageCode(resolved, "/one", "other", source)).toBe(source);
-  expect(resolvedSubPageCode(null, "/one", "card", changed)).toBe(changed);
+  const resolved = { run: 1, cwd: "/one", id: "card", source, code: 'import A from "blob:a";' };
+  expect(resolvedSubPageCode(resolved, 1, "/one", "card", source)).toBe(resolved.code);
+  // An edit that drops and restores the same source must not reuse the earlier pass's blobs.
+  expect(resolvedSubPageCode(resolved, 2, "/one", "card", source)).toBe(source);
+  expect(resolvedSubPageCode(resolved, 1, "/one", "card", changed)).toBe(changed);
+  expect(resolvedSubPageCode(resolved, 1, "/two", "card", source)).toBe(source);
+  expect(resolvedSubPageCode(resolved, 1, "/one", "other", source)).toBe(source);
+  expect(resolvedSubPageCode(null, 1, "/one", "card", changed)).toBe(changed);
 });
 
 /**

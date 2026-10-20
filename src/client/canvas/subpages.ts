@@ -12,7 +12,7 @@
  * has no base to resolve against. Children may import their siblings, which works for the same
  * reason once they too have been rewritten.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { canvasPath } from "../../contract.ts";
 import { compiler } from "../runtime/GenUISurface.tsx";
 import type { Canvas } from "./collect.ts";
@@ -145,31 +145,24 @@ export const revokeAll = (urls: string[]): void => {
  * rewrite lands the original source is rendered, which fails exactly as it does today rather
  * than blanking a canvas that was working.
  */
-type ResolvedSubPages = { run: number; cwd: string; id: string; source: string; code: string };
+type ResolvedSubPages = { cwd: string; id: string; source: string; code: string };
 
 /**
  * Whether a rewrite is still the answer for what is being rendered.
  *
- * `run` is the resolve pass that produced it. Without it a source that edits away and back (A → B →
- * A) would match an entry whose blob URLs the intervening pass already revoked — a compile against
- * dead `blob:` imports, which kills the whole module graph and paints nothing.
+ * Matched by workspace and exact source, so equal-length edits never reuse an older rewrite.
  */
-export const resolvedSubPageCode = (resolved: ResolvedSubPages | null, run: number, cwd: string | undefined, id: string, source: string) => (resolved !== null && resolved.run === run && resolved.cwd === cwd && resolved.id === id && resolved.source === source ? resolved.code : source);
+export const resolvedSubPageCode = (resolved: ResolvedSubPages | null, cwd: string | undefined, id: string, source: string) => (resolved !== null && resolved.cwd === cwd && resolved.id === id && resolved.source === source ? resolved.code : source);
 
-export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined, sessionId?: string) {
+export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined) {
   const [resolved, setResolved] = useState<ResolvedSubPages | null>(null);
   // Destructured so the effect depends on scalars: the caller rebuilds `canvas` on every
   // sweep, and depending on the object would re-run the whole resolve for an unchanged canvas.
   const id = canvas?.id;
   const code = canvas?.code;
   const streaming = canvas?.streaming;
-  /** The pass currently allowed to answer. Bumped by every run of the effect below, including the ones that resolve nothing. */
-  const run = useRef(0);
 
   useEffect(() => {
-    // Bumped before any early return: a canvas edited to drop its sibling imports must stop
-    // answering with the previous rewrite, and that rewrite's blobs go with the pass's cleanup.
-    const pass = ++run.current;
     if (cwd === undefined || id === undefined || code === undefined || !needsResolve(code, streaming)) return;
     let live = true;
     const urls: string[] = [];
@@ -179,7 +172,7 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined,
         // Resolved after teardown: nobody will ever render these, so revoke them here — the
         // disposer already ran and cannot see urls the pass appended after it.
         if (!live) return void revokeAll(urls);
-        setResolved({ run: pass, cwd, id, source: code, code: next });
+        setResolved({ cwd, id, source: code, code: next });
       })
       .catch((error: unknown) => {
         revokeAll(urls);
@@ -191,9 +184,12 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined,
       // rewrite whose state update was discarded (unmount before commit, or a later pass winning
       // the same batch) therefore still releases them: ownership is the effect's, not the state's.
       revokeAll(urls);
+      // And it stops answering on the way out. The source can edit away and back (A -> B -> A), in
+      // which case the older rewrite still matches by source while its blobs are already gone.
+      setResolved(null);
     };
-  }, [cwd, id, code, streaming, sessionId]);
+  }, [cwd, id, code, streaming]);
 
   if (id === undefined || code === undefined) return "";
-  return resolvedSubPageCode(resolved, run.current, cwd, id, code);
+  return resolvedSubPageCode(resolved, cwd, id, code);
 }

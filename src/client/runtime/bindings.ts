@@ -2,7 +2,8 @@
  * The `$dsh/*` capability modules generated code may import.
  *
  * These are real TypeScript that lives in our bundle; generated code reaches them through
- * shared blob shims registered in the document import map.
+ * shared blob shims supplied through each renderer's import map. They are not document
+ * import-map entries: `localImports` hands the URLs to `GenUIRenderer`'s own `importmap`.
  *
  * Filesystem, model, command and search calls reach plugin-owned Node routes; chat uses the
  * client conversation service, and persisted state uses localStorage without a host service.

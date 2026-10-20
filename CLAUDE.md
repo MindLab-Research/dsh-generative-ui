@@ -467,7 +467,7 @@ Data visualization is the stated exception — chart series need their own hues 
 
 ## 4. Known traps
 
-- **An empty canvas listing is a result, not a fallback for failed reads.** Missing files may return 404 while a write lands, and a missing canvas directory is an empty listing. Network, permission and server failures remain errors: the browser and canvas body show localized feedback with a retry action.
+- **An empty canvas listing is a result, not a fallback for failed reads.** Missing files may return 404 while a write lands, and a missing canvas directory is an empty listing. Network, permission and server failures remain errors: the browser and canvas body show localized feedback with a retry action. A retry drops the retained body before refetching — `body` can still hold the source of a revision whose read failed, and rendering that while the retry is pending executes code the file no longer has. The auto-open listing's progress marker likewise advances only on a listing that landed, or a rejection consumes the next successful listing as the baseline and the canvas it found is never opened.
 
 - **Intermediate streaming frames are supposed to fail compilation**, `No default export found` most often — partial-react explicitly treats these as transient and keeps the last good frame. That semantics must not leak to callers; `GenUISurface` filters them out while streaming, or the UI flashes red on every character the model types.
 - **`GenUIRenderer.create` is async**, so the renderer must live in state, not a ref: in a ref, the first render's effect sees `null` and bails, and since `code` no longer changes it never re-runs — a surface that mounted and stays blank forever.

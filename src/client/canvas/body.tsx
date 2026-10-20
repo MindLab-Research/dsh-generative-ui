@@ -78,9 +78,20 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered, t }
   // has no file, and this stays empty until it lands rather than previewing the arguments.
   const resolved = useSubPages(cwd, body === null || id === null ? undefined : { id, code: body, streaming: false });
 
+  // A retry after a failure drops the retained body first: `body` can still hold the source of a
+  // revision whose read failed, and rendering that while the retry is in flight remounts and
+  // executes code the file no longer has. Batched with the counter bump, so the render that
+  // follows shows the loading state rather than the stale canvas.
+  const retryRead = () => {
+    setBody(null);
+    setError(null);
+    setLoading(true);
+    setRetry((n) => n + 1);
+  };
+
   if (id === null) return null;
-  if (error !== null) return <CanvasReadStatus t={t} error={error} retry={() => setRetry((n) => n + 1)} />;
-  if (body === null) return <CanvasReadStatus t={t} retry={loading ? undefined : () => setRetry((n) => n + 1)} />;
+  if (error !== null) return <CanvasReadStatus t={t} error={error} retry={retryRead} />;
+  if (body === null) return <CanvasReadStatus t={t} retry={loading ? undefined : retryRead} />;
   // A canvas is inset; an inline card is not. The card is told to fill whatever holds it, so
   // the two surfaces have to differ HERE rather than in every generated component — inline sits
   // in the transcript and must share the prose's left edge, while a canvas in a panel with its

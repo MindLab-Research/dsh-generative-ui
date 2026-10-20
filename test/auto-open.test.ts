@@ -182,3 +182,41 @@ test("ordinary shell work does not pay for a listing", async () => {
   await drain();
   expect(listings).toBe(0);
 });
+
+test("a failed listing is retried, so the next canvas is not swallowed by the baseline", async () => {
+  // The marker used to advance before the listing landed. A rejection therefore left it
+  // advanced and `listed` null: the next successful listing was consumed as the baseline,
+  // so the canvas that appeared after the failure was never opened.
+  let fail = true;
+  let onDisk = ["old"];
+  let listings = 0;
+  const h = harness({
+    list: async () => {
+      listings += 1;
+      if (fail) throw new Error("offline");
+      return onDisk;
+    },
+  });
+  const silent = console.error;
+  console.error = () => {};
+  try {
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+    await drain();
+    expect(listings).toBe(1);
+
+    fail = false;
+    onDisk = ["old", "first"];
+    // No new call: the same settled write must be able to retry its listing.
+    h.sweep();
+    await drain();
+    expect(listings).toBe(2);
+    expect(h.opens).toEqual([]);
+
+    onDisk = ["old", "first", "second"];
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+    await drain();
+    expect(h.opens).toEqual(["s1/second"]);
+  } finally {
+    console.error = silent;
+  }
+});

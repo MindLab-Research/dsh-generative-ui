@@ -92,6 +92,7 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
     const root = cwd?.();
     if (root === undefined || list === undefined) return;
     if (settledOpaque === listedAt) return;
+    const previous = listedAt;
     listedAt = settledOpaque;
     void list(root)
       .then((ids) => {
@@ -100,7 +101,13 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
         listed = new Set(ids);
         for (const id of fresh) open(session, id);
       })
-      .catch((error: unknown) => console.error("[dsh-generative-ui] could not list canvases", error));
+      .catch((error: unknown) => {
+        // The marker advances only on a listing that landed. A failed one is retried by the next
+        // sweep; leaving it advanced instead consumed the next successful listing as the baseline,
+        // so the canvas this call wrote was never opened unless a third opaque call came along.
+        if (listedAt === settledOpaque) listedAt = previous;
+        console.error("[dsh-generative-ui] could not list canvases", error);
+      });
   };
 
   const sweep = () => {

@@ -33,11 +33,6 @@ let host: Ui4aHost | null = null;
  * The handle a shim carries is minted here and is not a session id, so generated code that reads
  * one shim cannot name another session — `bindOwner` only ever resolves a handle this map holds.
  */
-// Null-prototype tables, not `Map`: generated code shares this realm and can replace
-// `Map.prototype.has`/`get`, which would make the handle check accept a token the caller chose and
-// hand back a victim's owner. With no prototype, `in` and `[]` dispatch nothing replaceable.
-const handleOwners: Record<string, string | undefined> = Object.create(null);
-const ownerHandles: Record<string, string> = Object.create(null);
 /**
  * Entropy captured once, before any generated code runs, and kept across HMR evaluations.
  *
@@ -47,15 +42,32 @@ const ownerHandles: Record<string, string> = Object.create(null);
  * replace it nor rewrite the functions on it.
  */
 const ENTROPY_KEY = "__dsh_generative_ui_entropy__";
-type Entropy = { uuid: (() => string) | undefined; random: () => number };
+type Entropy = {
+  uuid: (() => string) | undefined;
+  random: () => number;
+  define: typeof Object.defineProperty;
+  create: typeof Object.create;
+};
 const entropy: Entropy = (() => {
   const existing = (globalThis as Record<string, unknown>)[ENTROPY_KEY] as Entropy | undefined;
   if (existing !== undefined) return existing;
   const crypto = globalThis.crypto;
-  const fresh: Entropy = Object.freeze({ uuid: crypto?.randomUUID?.bind(crypto), random: Math.random });
+  // `Object`'s methods are writable too, and a reload happens long after generated code has run —
+  // so every intrinsic this module relies on is taken now, while the realm is still ours.
+  // Plain `Object.*` here only: this branch runs on the first evaluation, before any generated
+  // code exists. A reload takes the `existing` path above and never calls them.
+  const fresh: Entropy = Object.freeze({ uuid: crypto?.randomUUID?.bind(crypto), random: Math.random, define: Object.defineProperty, create: Object.create });
   Object.defineProperty(globalThis, ENTROPY_KEY, { value: fresh, writable: false, configurable: false, enumerable: false });
   return fresh;
 })();
+const { define, create } = entropy;
+
+// Null-prototype tables, not `Map`: generated code shares this realm and can replace
+// `Map.prototype.has`/`get`, which would make the handle check accept a token the caller chose and
+// hand back a victim's owner. With no prototype, `in` and `[]` dispatch nothing replaceable.
+const handleOwners: Record<string, string | undefined> = create(null);
+const ownerHandles: Record<string, string> = create(null);
+
 const token = () => entropy.uuid?.() ?? `${Date.now().toString(36)}-${entropy.random().toString(36).slice(2)}`;
 const handleFor = (sessionId: string | undefined): string => {
   const key = sessionId ?? "";
@@ -290,7 +302,7 @@ async function* streamFrom(cwd: string, request: Ui4aStreamOptions, signal?: Abo
 }
 
 /** Blob URLs are shared by surfaces with the same owner, never across different sessions. */
-const cached: Record<string, Record<string, string>> = Object.create(null);
+const cached: Record<string, Record<string, string>> = create(null);
 /**
  * The internal blob is deliberately NOT in the module registry, so it is not in the document
  * import map nor in the map a renderer is handed. A generated card cannot write
@@ -309,7 +321,7 @@ const cached: Record<string, Record<string, string>> = Object.create(null);
  * seals another property, rather than tripping over the previous one.
  */
 const INTERNAL_KEY = `__dsh_generative_ui_bind_${token()}`;
-Object.defineProperty(globalThis, INTERNAL_KEY, { value: bindOwner, writable: false, configurable: false, enumerable: false });
+define(globalThis, INTERNAL_KEY, { value: bindOwner, writable: false, configurable: false, enumerable: false });
 let internal: string | null = null;
 const internalModule = (): string => {
   if (internal !== null) return internal;

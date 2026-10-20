@@ -344,6 +344,34 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
     else onErrorRef.current?.(error, "compile");
   });
   /**
+   * The renderer's failure path, callable from anywhere that has an `Error` and a phase.
+   *
+   * Split out so the import probe inside a retry takes the same `errorAction` as a renderer
+   * failure. Reporting a probe rejection through `asyncErrorRef` instead abandoned the retry
+   * budget on the first transient CDN error — the very case the budget exists for. `retry` is
+   * passed in rather than read from `retryRef` so this initializer does not capture a binding
+   * that is still being initialized.
+   */
+  const handleFailureRef = useLatest((error: Error, phase: "transform" | "compile" | "render", retry: () => void) => {
+    if (phase === "render") threwRef.current = true;
+    const action = errorAction(error.message, phase, streamingRef.current, retriesRef.current);
+    if (action === "ignore") strandedRef.current = { error, phase };
+    dispatchError(action, {
+      attempts: () => retriesRef.current,
+      setAttempts: (n) => {
+        retriesRef.current = n;
+      },
+      schedule: (ms) => {
+        const timer = setTimeout(() => {
+          retryTimers.current.delete(timer);
+          retry();
+        }, ms);
+        retryTimers.current.add(timer);
+      },
+      report: () => onErrorRef.current?.(error, phase),
+    });
+  });
+  /**
    * Re-deliver the current code after a dependency failed to fetch.
    *
    * `clear` is not enough on its own, though it is necessary — the renderer skips an unchanged
@@ -354,14 +382,16 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
    * so re-rendering imports the exact URL that failed and nothing is re-fetched. Every retry
    * before this was a no-op that burned 0.4/0.8/1.2s and reported the same failure.
    */
-  const retryRef = useLatest(() => {
+  // Named so the retry can hand `handleFailureRef` a way back into itself without `retryRef`
+  // being read while its own initializer is still running.
+  const retryRef = useLatest(function retry() {
     if (renderer === null || code === "") return;
     const attempt = retriesRef.current;
     const revision = revisionRef.current;
-    const retry = ++retrySequenceRef.current;
+    const sequence = ++retrySequenceRef.current;
     void mergeFallbackImports(localImports(), code)
       .then((imports) => {
-        if (!aliveRef.current || revision !== revisionRef.current || retry !== retrySequenceRef.current) return;
+        if (!aliveRef.current || revision !== revisionRef.current || sequence !== retrySequenceRef.current) return;
         // Only a retry that will actually apply may supersede the ordinary import probe.
         probeRef.current++;
         // Only the fetched esm.sh entries need busting; the local blob URLs are already fresh.
@@ -372,8 +402,9 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
         renderer.clear({ preserveVisualState: true });
         renderer.render(code);
       })
-      .catch((error: unknown) => {
-        if (revision === revisionRef.current && retry === retrySequenceRef.current) asyncErrorRef.current(error);
+      .catch((reason: unknown) => {
+        if (revision !== revisionRef.current || sequence !== retrySequenceRef.current) return;
+        handleFailureRef.current(reason instanceof Error ? reason : new Error(String(reason)), "compile", retry);
       });
   });
 
@@ -394,29 +425,16 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           // Remember what was swallowed. Only the newest matters: each frame supersedes the last,
           // so this is the state of the buffer the stream stopped on.
           if (action === "ignore") strandedRef.current = { error, phase };
-          dispatchError(action, {
-            attempts: () => retriesRef.current,
-            setAttempts: (n) => {
-              retriesRef.current = n;
-            },
-            // Tracked so the cleanup below can cancel it: a retry is scheduled up to 1.2s out,
-            // and a surface can unmount well inside that (a canvas tab closed, a message scrolled
-            // out of the host's window). Firing after that runs the whole import-probe chain
-            // against a renderer that has already been detached.
-            schedule: (ms) => {
-              const timer = setTimeout(() => {
-                retryTimers.current.delete(timer);
-                retryRef.current();
-              }, ms);
-              retryTimers.current.add(timer);
-            },
-            report: () => onErrorRef.current?.(error, phase),
-          });
+          handleFailureRef.current(error, phase, () => retryRef.current());
         },
         onRendered: () => {
           retriesRef.current = 0;
           for (const timer of retryTimers.current) clearTimeout(timer);
           retryTimers.current.clear();
+          // A retry whose probe is already in flight is not in that set. This frame painted, so its
+          // import map is good enough; invalidating the sequence keeps the late retry from
+          // replacing it with a cache-busted map and re-rendering.
+          retrySequenceRef.current++;
           // partial-react repaints the LAST GOOD component after a render throw (`preserve` is on
           // for every inline card), so this fires for a card whose new code is broken. The throw
           // set `threwRef` a tick earlier; consuming it here is what tells the caller that this
@@ -436,8 +454,12 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
         attached = created;
         setRenderer(created);
       })
-      .catch((error: unknown) => {
-        if (!disposed) asyncErrorRef.current(error);
+      .catch((reason: unknown) => {
+        if (disposed) return;
+        // Terminal, and so reported as itself: there is no buffer to preserve and no later frame
+        // to supersede it. Parked failures are flushed from the delivery effect below, which never
+        // runs without a renderer — parking this one lost it, leaving a blank surface and no report.
+        onErrorRef.current?.(reason instanceof Error ? reason : new Error(String(reason)), "compile");
       });
     return () => {
       disposed = true;
@@ -469,8 +491,6 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
   useEffect(() => {
     if (renderer === null) return;
     const revision = ++revisionRef.current;
-    for (const timer of retryTimers.current) clearTimeout(timer);
-    retryTimers.current.clear();
     // Anything the model imports beyond the registered react family (recharts, motion, …) has no
     // entry in the import map, and an unresolvable bare specifier fails the whole module import —
     // the surface just stays blank. `mergeFallbackImports` probes esm.sh and fills those in.
@@ -491,7 +511,6 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           if (probe === probeRef.current) asyncErrorRef.current(error);
         });
     }
-    retriesRef.current = 0;
     // Generated classes exist only in the code that just arrived, so their CSS is produced here
     // rather than at build time. Not awaited: the sheet is appended to `<head>` and applies to
     // whatever is already mounted, so a card paints unstyled for at most a frame instead of
@@ -513,6 +532,12 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
     }
     // `deliveredRef` must follow every delivery, or a later streaming frame diffs against a
     // prefix this render already superseded.
+    // A frame that landed supersedes whatever the previous one scheduled. Cancelling at the top of
+    // the effect instead did that for a NO-OP update too — the settled frame differing only in
+    // trailing whitespace — leaving the surface failed with neither a retry nor a report.
+    retriesRef.current = 0;
+    for (const timer of retryTimers.current) clearTimeout(timer);
+    retryTimers.current.clear();
     deliveredRef.current = code;
     // The refs this reads (`importedRef`, `deliveredRef`, `streamingRef`) are how the effect
     // carries state between frames; listing them would re-run it on values it just wrote.

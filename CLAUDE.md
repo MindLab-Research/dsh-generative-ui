@@ -467,7 +467,7 @@ Data visualization is the stated exception — chart series need their own hues 
 
 ## 4. Known traps
 
-- **An import retry owns one source revision and renderer lifetime.** A delayed retry must not replace a newer frame or touch a detached renderer. New frames cancel pending retry timers, new import probes supersede old probes, and rejected async initialization/probes must reach the same settled-error reporting path.
+- **An import retry owns one source revision and renderer lifetime.** A delayed retry must not replace a newer frame or touch a detached renderer. Only a frame that actually landed supersedes a scheduled retry — a settled update differing only in trailing whitespace delivers nothing and must leave it alone — and a paint invalidates a retry whose probe is already in flight. A probe that fails inside a retry takes the same `errorAction` as a renderer failure, so the retry budget covers CDN blips instead of reporting the first one. `GenUIRenderer.create` is terminal: report it as itself rather than parking it as a stranded streaming failure, which is flushed from an effect that never runs without a renderer.
 
 - **Intermediate streaming frames are supposed to fail compilation**, `No default export found` most often — partial-react explicitly treats these as transient and keeps the last good frame. That semantics must not leak to callers; `GenUISurface` filters them out while streaming, or the UI flashes red on every character the model types.
 - **`GenUIRenderer.create` is async**, so the renderer must live in state, not a ref: in a ref, the first render's effect sees `null` and bails, and since `code` no longer changes it never re-runs — a surface that mounted and stays blank forever.

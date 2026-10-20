@@ -79,6 +79,8 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
   let listedAt = 0;
   /** One listing at a time. An overlapping one would roll the marker back to a value still in flight. */
   let listing = false;
+  /** The newest write seen while a listing was in flight; its listing starts when that one settles. */
+  let queued: number | null = null;
   /**
    * `collectCanvases` walks every argument string by hand, which is what makes it correct on a
    * half-arrived JSON prefix — and it costs 0.16ms per canvas per sweep. The sweep runs on every
@@ -93,7 +95,13 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
   const relist = (session: string, settledOpaque: number) => {
     const root = cwd?.();
     if (root === undefined || list === undefined) return;
-    if (listing || settledOpaque === listedAt) return;
+    // A write that lands mid-listing is not dropped: its own listing follows this one, and if the
+    // directory snapshot predates it the canvas is otherwise never opened at all.
+    if (listing) {
+      if (settledOpaque > (queued ?? -1)) queued = settledOpaque;
+      return;
+    }
+    if (settledOpaque === listedAt) return;
     listing = true;
     void list(root)
       .then((ids) => {
@@ -106,9 +114,13 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
         const fresh = known === null ? [] : ids.filter((id) => !known.has(id));
         listed = new Set(ids);
         for (const id of fresh) open(session, id);
+        const next = queued;
+        queued = null;
+        if (next !== null) relist(session, next);
       })
       .catch((error: unknown) => {
         listing = false;
+        // The marker never advanced, so the queued write is retried by the next sweep.
         console.error("[dsh-generative-ui] could not list canvases", error);
       });
   };

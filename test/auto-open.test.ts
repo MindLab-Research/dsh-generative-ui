@@ -269,3 +269,31 @@ test("two in-flight listings cannot roll the marker back", async () => {
     console.error = silent;
   }
 });
+
+test("a write that lands mid-listing is listed by its own listing", async () => {
+  // Dropping the second sweep left its canvas unlisted whenever the first directory snapshot
+  // predates it — and with no later transcript mutation it was never opened at all.
+  const snapshots = [
+    ["old", "first"],
+    ["old", "first", "second"],
+  ];
+  const release: (() => void)[] = [];
+  const h = harness({
+    list: async () => {
+      await new Promise<void>((r) => release.push(r));
+      return snapshots.shift()!;
+    },
+  });
+  h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+  await drain();
+  h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+  await drain();
+  // The first listing resolves from a snapshot taken before the second write landed.
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(h.opens).toEqual([]);
+  // …and its own listing runs immediately, rather than waiting for an unrelated mutation.
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(h.opens).toEqual(["s1/second"]);
+});

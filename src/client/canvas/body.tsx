@@ -51,6 +51,10 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered, t }
     let live = true;
     setError(null);
     setLoading(true);
+    // Every re-read drops the body it is replacing, including the automatic one an edit triggers.
+    // Retaining it renders code the file no longer has while the read is pending — and for good if
+    // that read hangs.
+    setBody(null);
     void readCanvasFile(cwd, id)
       .then((code) => {
         if (live) {

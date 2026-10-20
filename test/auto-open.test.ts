@@ -297,3 +297,34 @@ test("a write that lands mid-listing is listed by its own listing", async () => 
   await drain();
   expect(h.opens).toEqual(["s1/second"]);
 });
+
+test("a write queued behind a failed listing is still listed", async () => {
+  // Settling the first promise schedules no sweep of its own: without draining here the queued
+  // write waits for some unrelated mutation before anyone looks for its canvas.
+  const release: (() => void)[] = [];
+  let attempt = 0;
+  const h = harness({
+    list: async () => {
+      attempt += 1;
+      await new Promise<void>((r) => release.push(r));
+      if (attempt === 1) throw new Error("offline");
+      return ["old", "first", "second"];
+    },
+  });
+  const silent = console.error;
+  console.error = () => {};
+  try {
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+    await drain();
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+    await drain();
+    for (const done of release.splice(0)) done();
+    await drain();
+    // The failure drains the queue into a second listing; that one lands and opens the newcomer.
+    for (const done of release.splice(0)) done();
+    await drain();
+    expect(attempt).toBe(2);
+  } finally {
+    console.error = silent;
+  }
+});

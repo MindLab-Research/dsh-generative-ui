@@ -80,7 +80,7 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
   /** One listing at a time. An overlapping one would roll the marker back to a value still in flight. */
   let listing = false;
   /** The newest write seen while a listing was in flight; its listing starts when that one settles. */
-  let queued: number | null = null;
+  let queued: { session: string; marker: number } | null = null;
   /**
    * `collectCanvases` walks every argument string by hand, which is what makes it correct on a
    * half-arrived JSON prefix — and it costs 0.16ms per canvas per sweep. The sweep runs on every
@@ -98,11 +98,18 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
     // A write that lands mid-listing is not dropped: its own listing follows this one, and if the
     // directory snapshot predates it the canvas is otherwise never opened at all.
     if (listing) {
-      if (settledOpaque > (queued ?? -1)) queued = settledOpaque;
+      // Session and marker travel together: after the reader switches, the queued write belongs
+      // to a different workspace, and reopening its ids under the old session is wrong.
+      if (queued === null || settledOpaque > queued.marker) queued = { session, marker: settledOpaque };
       return;
     }
     if (settledOpaque === listedAt) return;
     listing = true;
+    const drain = () => {
+      const next = queued;
+      queued = null;
+      if (next !== null) relist(next.session, next.marker);
+    };
     void list(root)
       .then((ids) => {
         listing = false;
@@ -114,14 +121,14 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
         const fresh = known === null ? [] : ids.filter((id) => !known.has(id));
         listed = new Set(ids);
         for (const id of fresh) open(session, id);
-        const next = queued;
-        queued = null;
-        if (next !== null) relist(session, next);
+        drain();
       })
       .catch((error: unknown) => {
         listing = false;
-        // The marker never advanced, so the queued write is retried by the next sweep.
         console.error("[dsh-generative-ui] could not list canvases", error);
+        // Settling a promise schedules no sweep of its own, so a write queued behind this one
+        // would wait for some unrelated mutation before it was ever listed.
+        drain();
       });
   };
 

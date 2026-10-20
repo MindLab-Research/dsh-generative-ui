@@ -79,8 +79,13 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
   let listedAt = 0;
   /** One listing at a time. An overlapping one would roll the marker back to a value still in flight. */
   let listing = false;
-  /** The newest write seen while a listing was in flight; its listing starts when that one settles. */
-  let queued: { session: string; marker: number } | null = null;
+  /**
+   * The newest write seen per session while a listing was in flight.
+   *
+   * Per session because the markers count settled opaque calls in ONE transcript: session A's
+   * marker says nothing about how many writes B has made, so comparing them is meaningless.
+   */
+  const queued = new Map<string, number>();
   /**
    * `collectCanvases` walks every argument string by hand, which is what makes it correct on a
    * half-arrived JSON prefix — and it costs 0.16ms per canvas per sweep. The sweep runs on every
@@ -98,17 +103,17 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
     // A write that lands mid-listing is not dropped: its own listing follows this one, and if the
     // directory snapshot predates it the canvas is otherwise never opened at all.
     if (listing) {
-      // Session and marker travel together: after the reader switches, the queued write belongs
-      // to a different workspace, and reopening its ids under the old session is wrong.
-      if (queued === null || settledOpaque > queued.marker) queued = { session, marker: settledOpaque };
+      const seen = queued.get(session);
+      if (seen === undefined || settledOpaque > seen) queued.set(session, settledOpaque);
       return;
     }
     if (settledOpaque === listedAt) return;
     listing = true;
     const drain = () => {
-      const next = queued;
-      queued = null;
-      if (next !== null) relist(next.session, next.marker);
+      const next = queued.entries().next().value as [string, number] | undefined;
+      if (next === undefined) return;
+      queued.delete(next[0]);
+      relist(next[0], next[1]);
     };
     void list(root)
       .then((ids) => {

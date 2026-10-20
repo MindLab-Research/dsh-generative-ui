@@ -33,20 +33,37 @@ let host: Ui4aHost | null = null;
  * The handle a shim carries is minted here and is not a session id, so generated code that reads
  * one shim cannot name another session — `bindOwner` only ever resolves a handle this map holds.
  */
-const handleOwners = new Map<string, string | undefined>();
-const ownerHandles = new Map<string | undefined, string>();
-// Entropy captured at module load, before any generated code runs. `crypto.randomUUID` and
-// `Math.random` are both writable, so a card that swapped them before a later session's shims
-// were minted could choose its own handle and name that session.
-const randomUUID = globalThis.crypto?.randomUUID?.bind(globalThis.crypto);
-const random = Math.random;
-const token = () => randomUUID?.() ?? `${Date.now().toString(36)}-${random().toString(36).slice(2)}`;
+// Null-prototype tables, not `Map`: generated code shares this realm and can replace
+// `Map.prototype.has`/`get`, which would make the handle check accept a token the caller chose and
+// hand back a victim's owner. With no prototype, `in` and `[]` dispatch nothing replaceable.
+const handleOwners: Record<string, string | undefined> = Object.create(null);
+const ownerHandles: Record<string, string> = Object.create(null);
+/**
+ * Entropy captured once, before any generated code runs, and kept across HMR evaluations.
+ *
+ * `crypto.randomUUID` and `Math.random` are writable. Recapturing them on a reload would mean
+ * capturing whatever a card left behind, making every later handle — and the next bridge key —
+ * predictable. The holder is frozen and sealed under a fixed name; a card can read it but neither
+ * replace it nor rewrite the functions on it.
+ */
+const ENTROPY_KEY = "__dsh_generative_ui_entropy__";
+type Entropy = { uuid: (() => string) | undefined; random: () => number };
+const entropy: Entropy = (() => {
+  const existing = (globalThis as Record<string, unknown>)[ENTROPY_KEY] as Entropy | undefined;
+  if (existing !== undefined) return existing;
+  const crypto = globalThis.crypto;
+  const fresh: Entropy = Object.freeze({ uuid: crypto?.randomUUID?.bind(crypto), random: Math.random });
+  Object.defineProperty(globalThis, ENTROPY_KEY, { value: fresh, writable: false, configurable: false, enumerable: false });
+  return fresh;
+})();
+const token = () => entropy.uuid?.() ?? `${Date.now().toString(36)}-${entropy.random().toString(36).slice(2)}`;
 const handleFor = (sessionId: string | undefined): string => {
-  const existing = ownerHandles.get(sessionId);
+  const key = sessionId ?? "";
+  const existing = ownerHandles[key];
   if (existing !== undefined) return existing;
   const handle = token();
-  ownerHandles.set(sessionId, handle);
-  handleOwners.set(handle, sessionId);
+  ownerHandles[key] = handle;
+  handleOwners[handle] = sessionId;
   return handle;
 };
 
@@ -73,8 +90,8 @@ export function registerUi4aHost(next: Ui4aHost): () => void {
  */
 /** What a synthesized shim imports. A handle it was minted with; anything else is refused. */
 export function bindOwner(handle: string) {
-  if (!handleOwners.has(handle)) throw new Error("[dsh-generative-ui] no such capability handle");
-  return bind(handleOwners.get(handle));
+  if (!(handle in handleOwners)) throw new Error("[dsh-generative-ui] no such capability handle");
+  return bind(handleOwners[handle]);
 }
 
 export function bind(sessionId?: string) {
@@ -273,7 +290,7 @@ async function* streamFrom(cwd: string, request: Ui4aStreamOptions, signal?: Abo
 }
 
 /** Blob URLs are shared by surfaces with the same owner, never across different sessions. */
-const cached = new Map<string | undefined, Record<string, string>>();
+const cached: Record<string, Record<string, string>> = Object.create(null);
 /**
  * The internal blob is deliberately NOT in the module registry, so it is not in the document
  * import map nor in the map a renderer is handed. A generated card cannot write
@@ -301,7 +318,8 @@ const internalModule = (): string => {
 };
 
 export function bindingImports(sessionId?: string): Record<string, string> {
-  const existing = cached.get(sessionId);
+  const key = sessionId ?? "";
+  const existing = cached[key];
   if (existing !== undefined) return existing;
   // Built here rather than in `registerUi4aHost`: what the shims reach is `bindOwner`, which does
   // not depend on the host *value*. Hanging it off host registration meant a page with no host — a
@@ -321,13 +339,13 @@ export function bindingImports(sessionId?: string): Record<string, string> {
     const body = [`import { bindOwner } from ${JSON.stringify(source)};`, `const g = bindOwner(${JSON.stringify(handleFor(sessionId))}).${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
     imports[capabilityModule(group)] = URL.createObjectURL(new Blob([body], { type: "text/javascript" }));
   }
-  cached.set(sessionId, imports);
+  cached[key] = imports;
   return imports;
 }
 
 export function releaseBindings(): void {
-  for (const imports of cached.values()) for (const url of Object.values(imports)) URL.revokeObjectURL(url);
-  cached.clear();
+  for (const imports of Object.values(cached)) for (const url of Object.values(imports)) URL.revokeObjectURL(url);
+  for (const key of Object.keys(cached)) delete cached[key];
   if (internal !== null) {
     URL.revokeObjectURL(internal);
     internal = null;

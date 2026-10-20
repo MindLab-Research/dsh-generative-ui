@@ -262,3 +262,43 @@ test("a second module evaluation keeps HMR working instead of redefining the bri
   // A reload mints and seals its own key rather than tripping over the previous, non-configurable one.
   expect(after.length).toBe(before.length + 1);
 });
+
+test("replacing Map.prototype cannot mint a handle for another session", async () => {
+  const { bindOwner, bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
+  release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
+  const source = await (await fetch(bindingImports("victim")["$dsh/fs"])).text();
+  const handle = source.match(/bindOwner\("([^"]+)"\)/)![1];
+  const realHas = Map.prototype.has;
+  const realGet = Map.prototype.get;
+  Map.prototype.has = () => true;
+  Map.prototype.get = () => "victim";
+  try {
+    // The lookup is a null-prototype table, so neither `in` nor `[]` dispatches what a card can
+    // replace. If it did, this would hand back the victim's capabilities instead of throwing.
+    expect(() => bindOwner("forged-token")).toThrow("no such capability handle");
+  } finally {
+    Map.prototype.has = realHas;
+    Map.prototype.get = realGet;
+  }
+  expect(handle).toBeTruthy();
+});
+
+test("entropy survives a reload even after a card replaced the realm primitives", async () => {
+  const first = await import("../src/client/runtime/bindings");
+  const a = await (await fetch(first.bindingImports("owner-a")["$dsh/fs"])).text();
+  const handleA = a.match(/bindOwner\("([^"]+)"\)/)![1];
+
+  const realUUID = globalThis.crypto.randomUUID;
+  (globalThis.crypto as any).randomUUID = () => "known";
+  try {
+    const second = await import(`../src/client/runtime/bindings.ts?entropy=${Math.random()}`);
+    const b = await (await fetch(second.bindingImports("owner-b")["$dsh/fs"])).text();
+    const handleB = b.match(/bindOwner\("([^"]+)"\)/)![1];
+    // A reload must reuse the entropy captured before generated code ran, not whatever it left
+    // in the realm: a constant here would make every later handle — and the bridge key — known.
+    expect(handleB).not.toBe("known");
+    expect(handleB).not.toBe(handleA);
+  } finally {
+    (globalThis.crypto as any).randomUUID = realUUID;
+  }
+});

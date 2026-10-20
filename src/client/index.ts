@@ -284,7 +284,13 @@ export function apply(ctx: ClientContext): void {
         // which is the one case `observeTranscript` has nothing to react to.
         subscribeOwner: (refresh) => {
           const selected = ctx.get("uiSession") as { adapter?: { current: { subscribe?: (listener: () => void) => () => void } } } | undefined;
-          return selected?.adapter?.current.subscribe?.(refresh) ?? (() => {});
+          const primary = selected?.adapter?.current.subscribe?.(refresh);
+          if (primary !== undefined) return primary;
+          // Older hosts keep the selection on the session list, which is where
+          // `selectedSessionId` reads it from too. Listening to only one of the two leaves the
+          // cards of the other un-re-rendered across a switch.
+          const list = sessions.list as unknown as { subscribe?: (listener: () => void) => () => void };
+          return list.subscribe?.(refresh) ?? (() => {});
         },
         // The SAME gate on both callbacks. A card that may not report a failure may not retract
         // one either — see `cardRendered`.

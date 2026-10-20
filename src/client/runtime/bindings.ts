@@ -274,10 +274,14 @@ const cached = new Map<string | undefined, Record<string, string>>();
  * `import { … } from "$dsh/internal"`; only our own shims name it, by literal blob URL.
  */
 const INTERNAL_KEY = "__DSH_GENERATIVE_UI_BIND_OWNER__";
+// Sealed before any generated code can run: a card that could REPLACE this bridge could hand a
+// later session's shim a wrapper, capture the handle that passes through it, and resolve that
+// session. Reading it is harmless — `bindOwner` still only resolves a handle this module minted —
+// so the property is readable and neither writable nor configurable.
+Object.defineProperty(globalThis, INTERNAL_KEY, { value: bindOwner, writable: false, configurable: false, enumerable: false });
 let internal: string | null = null;
 const internalModule = (): string => {
   if (internal !== null) return internal;
-  (globalThis as Record<string, unknown>)[INTERNAL_KEY] = bindOwner;
   internal = URL.createObjectURL(new Blob([`export const bindOwner = globalThis[${JSON.stringify(INTERNAL_KEY)}];`], { type: "text/javascript" }));
   return internal;
 };

@@ -135,6 +135,11 @@ export type InlineFenceOptions = {
   subscribeLocale: (refresh: () => void) => () => void;
   /** 当前会话。内容未变的卡片也必须随会话切换重渲染，否则能力仍绑在上一个会话。 */
   owner: () => string | undefined;
+  /**
+   * 会话切换本身不会改动 transcript DOM，`observeTranscript` 因此不会跑 sweep；宿主用它
+   * 订阅选择变化，在 React 复用同一组节点时也能重画未变的卡片。
+   */
+  subscribeOwner?: (refresh: () => void) => () => void;
   scope?: HTMLElement;
 };
 
@@ -177,7 +182,7 @@ export const isLastSegment = (segments: readonly Ui4aSegment[], code: string): b
  */
 const NEAR_VIEWPORT = "100% 0px";
 
-export function claimInlineFences({ segments, render, t, subscribeLocale, owner, scope }: InlineFenceOptions): () => void {
+export function claimInlineFences({ segments, render, t, subscribeLocale, owner, subscribeOwner, scope }: InlineFenceOptions): () => void {
   const claims = new Map<HTMLElement, Claim>();
   const root = scope ?? document.body;
 
@@ -425,12 +430,14 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, owner,
   };
 
   const stop = observeTranscript(sweep);
+  const stopOwner = subscribeOwner?.(sweep) ?? (() => {});
   const stopLocale = subscribeLocale(() => {
     for (const claim of claims.values()) renderPreview(claim);
   });
 
   return () => {
     stop();
+    stopOwner();
     stopLocale();
     // `disconnect` rather than unobserving each: the observer is going away with us, and a
     // parked block that is never claimed would otherwise keep it alive through its target list.

@@ -672,11 +672,22 @@ test("a session switch re-renders an unchanged card", async () => {
   const code = "export default () => <div />";
   makeBlock(code);
   let owner = "s1";
-  const { again } = await start(() => [segment(code)], { t: (key) => key, subscribeLocale: () => () => {}, owner: () => owner });
+  const listeners = new Set<() => void>();
+  await start(() => [segment(code)], {
+    t: (key) => key,
+    subscribeLocale: () => () => {},
+    owner: () => owner,
+    subscribeOwner: (refresh) => {
+      listeners.add(refresh);
+      return () => listeners.delete(refresh);
+    },
+  });
   elapse();
   expect(painted).toHaveLength(1);
   owner = "s2";
-  again();
+  // Not `again()`: a switch can reuse every transcript node without one DOM mutation, so the
+  // host's own selection subscription is the only thing that can ask for a sweep.
+  for (const refresh of listeners) refresh();
   elapse();
   expect(painted).toHaveLength(2);
   // And nothing else changed hands: the same code, still not streaming.

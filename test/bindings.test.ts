@@ -237,3 +237,10 @@ test("capability modules resolve without a host registered", async () => {
     expect(await (await fetch(internalUrl!)).text()).toContain("bind");
   }
 });
+
+test("the capability bridge is sealed before any card can run", () => {
+  const own = Object.getOwnPropertyDescriptor(globalThis, "__DSH_GENERATIVE_UI_BIND_OWNER__");
+  expect(own?.writable).toBe(false);
+  expect(own?.configurable).toBe(false);
+  expect(() => ((globalThis as any)["__DSH_GENERATIVE_UI_BIND_OWNER__"] = () => null)).toThrow();
+});

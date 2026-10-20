@@ -280,6 +280,12 @@ export function apply(ctx: ClientContext): void {
         // A settled card is skipped only while it is still the one it was claimed for: a session
         // switch re-renders it so its capability shims follow the conversation the reader is on.
         owner: sessionId,
+        // React can reuse the whole transcript across a session switch without a single mutation,
+        // which is the one case `observeTranscript` has nothing to react to.
+        subscribeOwner: (refresh) => {
+          const selected = ctx.get("uiSession") as { adapter?: { current: { subscribe?: (listener: () => void) => () => void } } } | undefined;
+          return selected?.adapter?.current.subscribe?.(refresh) ?? (() => {});
+        },
         // The SAME gate on both callbacks. A card that may not report a failure may not retract
         // one either — see `cardRendered`.
         render: ({ code, streaming, last }) => createElement(GenUISurface, { key: sessionId(), sessionId: sessionId(), code, streaming, onError: (error, phase) => reportCardError(sendToModel, error.message, phase, last), onRendered: (restored) => cardRendered(restored, last) }),

@@ -245,3 +245,16 @@ describe("running", () => {
     expect(json.error).toBe("shell exploded");
   });
 });
+
+test("a session that does not own the workspace cannot run there", async () => {
+  const ctx = {
+    ...ctxWith(),
+    sessions: {
+      list: () => [
+        { id: "s1", header: { cwd: "/w" } },
+        { id: "s2", header: { cwd: "/elsewhere" } },
+      ],
+    },
+  } as never;
+  expect((await call("cwd=%2Fw&session=s2", { body, ctx })).status).toBe(400);
+});

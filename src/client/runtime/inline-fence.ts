@@ -57,7 +57,7 @@ export const PREVIEW_DELAY_MS = 300;
 type Preview = { host: HTMLElement; root: Root; shown: boolean; timer?: ReturnType<typeof setTimeout> };
 
 /** `reserved` is the segment code this claim owns, so no other block can be matched to it — see `sweep`. */
-type Claim = { block: HTMLElement; mount: HTMLElement; root: Root; code: string; reserved: string; complete: boolean; rendered: string; painted: MutationObserver | null; preview: Preview | null };
+type Claim = { block: HTMLElement; mount: HTMLElement; root: Root; code: string; reserved: string; complete: boolean; rendered: string; painted: MutationObserver | null; preview: Preview | null; owner: string | undefined };
 
 /**
  * Whether the card has actually painted something a reader can see.
@@ -133,6 +133,13 @@ export type InlineFenceOptions = {
   t: (key: "copy" | "copied") => string;
   /** 语言或字典变化只刷新源码预览，不重新挂载卡片。 */
   subscribeLocale: (refresh: () => void) => () => void;
+  /** 当前会话。内容未变的卡片也必须随会话切换重渲染，否则能力仍绑在上一个会话。 */
+  owner: () => string | undefined;
+  /**
+   * 会话切换本身不会改动 transcript DOM，`observeTranscript` 因此不会跑 sweep；宿主用它
+   * 订阅选择变化，在 React 复用同一组节点时也能重画未变的卡片。
+   */
+  subscribeOwner?: (refresh: () => void) => () => void;
   scope?: HTMLElement;
 };
 
@@ -175,7 +182,7 @@ export const isLastSegment = (segments: readonly Ui4aSegment[], code: string): b
  */
 const NEAR_VIEWPORT = "100% 0px";
 
-export function claimInlineFences({ segments, render, t, subscribeLocale, scope }: InlineFenceOptions): () => void {
+export function claimInlineFences({ segments, render, t, subscribeLocale, owner, subscribeOwner, scope }: InlineFenceOptions): () => void {
   const claims = new Map<HTMLElement, Claim>();
   const root = scope ?? document.body;
 
@@ -333,7 +340,7 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
       // PREVIEW_DELAY_MS passes, or the card the moment it paints. Hiding it at claim time would
       // leave a gap where the source was, which is exactly the blank this preview exists to avoid.
       const preview: Preview = { host: previewHost, root: createRoot(previewHost), shown: false };
-      const claim: Claim = { block, mount, root: createRoot(mount), code: "", reserved: segment.code, complete: false, rendered: "", painted: null, preview };
+      const claim: Claim = { block, mount, root: createRoot(mount), code: "", reserved: segment.code, complete: false, rendered: "", painted: null, preview, owner: owner() };
       preview.timer = setTimeout(() => {
         preview.shown = true;
         renderPreview(claim);
@@ -375,7 +382,11 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
       // so it would keep rendering a card with its last statement missing. The skip is an
       // optimization for the steady state (most blocks in a long transcript), and a claim that
       // is still streaming is being re-scanned every frame regardless.
-      if (rendered === claim.rendered && claim.code !== "" && claim.complete) continue;
+      // `owner` is part of it: React reuses a `.md-code-block` across a session switch, so an
+      // unchanged card is otherwise never handed to `render` again and keeps the shims of the
+      // session it was claimed under — writes, commands and chat then act on a session the reader
+      // is no longer looking at.
+      if (rendered === claim.rendered && claim.code !== "" && claim.complete && claim.owner === owner()) continue;
       claim.rendered = rendered;
       // Same reservation as the claim loop, minus this claim's own segment: a block whose text is
       // still the shared opening line matches an older card here too, and the newest block would
@@ -395,7 +406,11 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
       // we hid. Its text is then no longer a prefix of what we rendered, and holding the
       // claim would leave a stale card on screen with the real block invisible behind it.
       if (segment === undefined) {
-        if (claim.code.startsWith(rendered)) continue;
+        // The prefix rule is for a block whose text is still arriving. Once the session changed it
+        // is a different transcript's card: keeping it leaves session A's mount — and its
+        // capabilities — on screen under B, and only the fence language may have changed, which no
+        // mutation reports.
+        if (claim.owner === owner() && claim.code.startsWith(rendered)) continue;
         release(claim, true);
         continue;
       }
@@ -404,11 +419,12 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
       taken.delete(claim.reserved);
       taken.add(code);
       claim.reserved = code;
-      if (code === claim.code && complete === claim.complete) continue;
+      if (code === claim.code && complete === claim.complete && claim.owner === owner()) continue;
       claim.code = code;
       claim.complete = complete;
       // `code` is captured, `segments()` is read at call time: that is exactly the report-time
       // question, and it stays correct across the re-render that replaces this claim's own block.
+      claim.owner = owner();
       claim.root.render(render({ code, streaming: !complete, last: () => isLastSegment(segments(), code) }));
       // The preview follows the SEGMENT, not the block: mid-stream the snapshot runs ahead of
       // what markdown has painted, so this is the newer text and the one the reader wants while
@@ -418,12 +434,14 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, scope 
   };
 
   const stop = observeTranscript(sweep);
+  const stopOwner = subscribeOwner?.(sweep) ?? (() => {});
   const stopLocale = subscribeLocale(() => {
     for (const claim of claims.values()) renderPreview(claim);
   });
 
   return () => {
     stop();
+    stopOwner();
     stopLocale();
     // `disconnect` rather than unobserving each: the observer is going away with us, and a
     // parked block that is never claimed would otherwise keep it alive through its target list.

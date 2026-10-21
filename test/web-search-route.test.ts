@@ -6,6 +6,7 @@ const call = async (body: string, opts: { cwd?: string; method?: string; search?
   const chunks: string[] = [];
   let status = 0;
   const res = {
+    on() {},
     writeHead(code: number) {
       status = code;
       return res;

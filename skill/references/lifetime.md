@@ -2,7 +2,7 @@
 
 Two things follow from the lifetime difference:
 
-- An **inline** block that the user acts on should *end that step* — see the next entry for WHICH control ends it, because on a card whose options need previewing it is not the one they pick with. Whichever it is, that control does two things: send the result with `sendMessage` **and** record what was chosen in `usePersistedState`, so the card still shows it when scrolled back to weeks later.
+- An **inline** block that the user acts on should _end that step_ — see the next entry for WHICH control ends it, because on a card whose options need previewing it is not the one they pick with. Whichever it is, that control does two things: send the result with `sendMessage` **and** record what was chosen in `usePersistedState`, so the card still shows it when scrolled back to weeks later.
 
   **The second half is the one that gets dropped, and it fails in two different ways.** Measured over the 105 turns where a reader actually submitted something: **36 (34%) left the card looking exactly as it had before the click**, and another **20 (19%) showed the choice and then lost it on reload** — 53% between them, and evenly spread across every model, so it is the rule and not a habit. The first is forgetting to record at all (`sendMessage` treated as the finish line); the second is recording into `useState`, which a reload throws away. Both read to the reader as a form that did not take their answer.
 
@@ -23,6 +23,7 @@ Two things follow from the lifetime difference:
   someone coming back to this card next week, who sees one button shaded and no statement of what
   was decided. Say it in words AND keep it in `usePersistedState`. (Re-firing on reload is the opposite mistake and does not happen — 0 of 105 — so
   guard the send with the recorded answer, not with anything cleverer.)
+
 - **Exactly one control ends the step, and the reader must be able to find it.** This is the
   single largest hole in what gets built: across 161 runs where the reader actually clicked
   something, **108 of them — 67% — never once got a result back out of the card**, 468 clicks that
@@ -98,11 +99,12 @@ Two things follow from the lifetime difference:
   artifact, invoke a capability, or send a concrete request. If the user already asked for a
   durable checklist or template, choose sensible defaults and write that Canvas in the same turn;
   a local selector that only highlights buttons is not a substitute for the requested artifact.
+
 - A **canvas outlives the reply that made it**, so data the user puts into it — entries, notes, cards — must survive a reload on its own. Reach for `usePersistedState` from `$dsh/state`. It returns the familiar `[value, setValue]` pair and accepts a lazy initialiser, but its call signature is **key first**: `usePersistedState(key, initial)`. The value is kept in `localStorage` under a namespaced key, with the read and write already wrapped:
 
   ```tsx
-  import { usePersistedState } from "$dsh/state"
-  const [entries, setEntries] = usePersistedState<Entry[]>("expense-ledger", [])
+  import { usePersistedState } from "$dsh/state";
+  const [entries, setEntries] = usePersistedState<Entry[]>("expense-ledger", []);
   ```
 
   **Name the key after this canvas, not after the data.** `"ledger"`, `"todos"`, `"settings"` are what every card reaches for, and two cards sharing a key share the rows. Plain `useState` is a bug you cannot see while building: the ledger looks right until the tab reloads and every row is gone.
@@ -176,12 +178,24 @@ Two things follow from the lifetime difference:
   Hold the removed row and offer it back:
 
   ```tsx
-  const [undo, setUndo] = React.useState<Row | null>(null)
+  const [undo, setUndo] = React.useState<Row | null>(null);
   const remove = (id: string) => {
-    setUndo(rows.find((r) => r.id === id) ?? null)
-    setRows((prev) => prev.filter((r) => r.id !== id))
+    setUndo(rows.find((r) => r.id === id) ?? null);
+    setRows((prev) => prev.filter((r) => r.id !== id));
+  };
+  {
+    undo && (
+      <button
+        type="button"
+        onClick={() => {
+          setRows((p) => [...p, undo]);
+          setUndo(null);
+        }}
+      >
+        Undo delete
+      </button>
+    );
   }
-  { undo && <button type="button" onClick={() => { setRows((p) => [...p, undo]); setUndo(null) }}>Undo delete</button> }
   ```
 
   A confirm step does the same job — but not the browser's own `confirm()`, which is a modal
@@ -256,7 +270,7 @@ Two things follow from the lifetime difference:
 
   **A running clock is state too**, and the least obvious kind: a stopwatch or a timer mid-count
   reads 0 again after one edit. Measured — the interval itself is cleaned up correctly, nothing
-  stacks up, but the elapsed value is gone. Store the *start timestamp* rather than the elapsed
+  stacks up, but the elapsed value is gone. Store the _start timestamp_ rather than the elapsed
   count, so the display is derived and survives a remount by arithmetic.
 
   **Reaching for `localStorage` by hand is where this goes wrong.** A full quota, or storage

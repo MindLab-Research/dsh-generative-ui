@@ -1,6 +1,6 @@
 ## Framing
 
-This one runs *opposite* in the two places, and getting it backwards is the most visible mistake:
+This one runs _opposite_ in the two places, and getting it backwards is the most visible mistake:
 
 - **Canvas fills its panel.** It already has a frame and a title bar around it. So take the whole space — `height: 100%`, your own padding, backgrounds bleeding to the edges — and do **not** wrap yourself in one more rounded, bordered, tinted box. A card inside the panel is a frame inside a frame.
 - **Inline is the card.** It sits between paragraphs, so one bounded box is what tells the reader where it starts and stops.
@@ -109,11 +109,12 @@ Either way, don't restage the header. The panel already names the canvas, so a h
   sitting on a background that matches it. On a filled row the children want the fill's opposing
   foreground (`var(--dsw-alias-label-primary-foreground)`) as their colour and no background at all,
   or a theme-safe outline if the shape itself has to stay readable.
+
 - **Keep nesting shallow.** A bordered box inside a bordered box is almost always wrong; a divider line does the job.
 - **You are a component on someone else's page.** Your root is a normal node inside the chat column or the panel — nothing isolates you until you do it yourself. No `position: fixed`, no viewport UNITS (`vh`/`vw`, at any number — the window is not your box, so `78vh` is wrong for the same reason `100vh` is), no portals into `document.body`, no global listeners you don't remove. Overlays go in a `relative` wrapper you own with `absolute inset-0`. Effect libraries default to the wrong thing here and have to be pointed at your own element — `canvas-confetti` attaches a fullscreen canvas to `document.body` unless you pass one, so `confetti.create(ref.current, { resize: true, useWorker: true })` with that `<canvas>` absolutely positioned inside your container. Same for anything that says "mounts to body" or "fullscreen".
 - **A title or a control sitting above a long list is a `sticky` header. Not "could be" — is.**
-  The test is mechanical, so apply it mechanically: *is there anything above the list that the
-  reader will still want once they are deep inside it?* A heading that says what they are looking
+  The test is mechanical, so apply it mechanically: _is there anything above the list that the
+  reader will still want once they are deep inside it?_ A heading that says what they are looking
   at, a search box, a row of filter chips, a count that changes as they filter. If yes, that strip
   pins. Otherwise the reader scrolls into the list, decides to narrow it, and has to scroll back up
   past everything they were reading to reach the box that narrows it.
@@ -132,9 +133,11 @@ Either way, don't restage the header. The panel already names the canvas, so a h
   scroll, and give an inner pane its own bound only when a list genuinely needs one:
 
   ```tsx
-  <div className="isolate relative">                                   {/* your own stacking context */}
+  <div className="isolate relative">
+    {" "}
+    {/* your own stacking context */}
     <div className="sticky top-0 z-10 bg-layer border-b border-line">…</div>
-    <div className="max-h-[30rem] overflow-y-auto">…</div>            {/* the list, not the card */}
+    <div className="max-h-[30rem] overflow-y-auto">…</div> {/* the list, not the card */}
   </div>
   ```
 
@@ -147,15 +150,15 @@ Either way, don't restage the header. The panel already names the canvas, so a h
   is above everything of yours and below everything of the app's. Without one, a number picked to
   beat your own siblings also beats the composer the reader types into.
 
-- **The width is not the viewport's.** The same component lands in a narrow chat column *and* in a wide panel, so a media query tells you nothing useful — measure your own container with `@container` and `@[32rem]:` variants, which is the ONE responsive tool that works here. "One comfortable column beats two cramped ones" settles what to do at 320px; it is not a licence to ship the same single column at 720. **Judged by a vision panel on 59 cards at three widths, "still one column at 720px, half the card is empty" was the single most common criticism — 91% of verdicts — and "no breakpoint of any kind in the source" was 76%.** A list of items with a name and a description is `@[30rem]:grid-cols-2`; a strip of stats is `@[24rem]:grid-flow-col`. The reader who widens the panel is asking for less scrolling, and getting a wider version of the same tall column is not an answer.
+- **The width is not the viewport's.** The same component lands in a narrow chat column _and_ in a wide panel, so a media query tells you nothing useful — measure your own container with `@container` and `@[32rem]:` variants, which is the ONE responsive tool that works here. "One comfortable column beats two cramped ones" settles what to do at 320px; it is not a licence to ship the same single column at 720. **Judged by a vision panel on 59 cards at three widths, "still one column at 720px, half the card is empty" was the single most common criticism — 91% of verdicts — and "no breakpoint of any kind in the source" was 76%.** A list of items with a name and a description is `@[30rem]:grid-cols-2`; a strip of stats is `@[24rem]:grid-flow-col`. The reader who widens the panel is asking for less scrolling, and getting a wider version of the same tall column is not an answer.
 
 - **Extra width should make the rows SHORTER, not the card wider — inline as much as in a canvas.**
   This entry read "In a canvas" for a while and that scope was wrong: a vision panel grading
-  **inline** cards raised it in 27% of verdicts, on cards that *did* carry breakpoints. Measured across
+  **inline** cards raised it in 27% of verdicts, on cards that _did_ carry breakpoints. Measured across
   one wave, height at 320 divided by height at 720: the five inline cards shrink 1.26–1.52x, and
   the six canvases shrink **1.02–1.18x** — one is 1100px tall at 320 and still 1076px at 720. It
   is not for want of the technique; 8 of those 9 canvases carry a container query or an intrinsic
-  grid. They spend it *inside* a row — a stat strip, a chip group — and never on the row itself.
+  grid. They spend it _inside_ a row — a stat strip, a chip group — and never on the row itself.
   The shape that costs the most is a three-band row: a name, a right-aligned number, then a
   control on its own full-width line, so at 720 the name and its number sit 1100px apart with a
   rail between them. At that width the three fit on ONE line:
@@ -167,16 +170,17 @@ Either way, don't restage the header. The panel already names the canvas, so a h
       </div>
 
   The reader drags a canvas panel between 320 and 720 — that drag should buy them less scrolling.
+
 - **Nothing you draw may carry a width the column did not give it.** Measured by mounting 60 real
   cards at 380px: **12 overflowed the column**, across 4 of the 26 runs sampled, and the part that
   hangs off the edge is invisible in a screenshot — the picture is clipped at the card, so an
   absent column reads as a design choice and nobody can name the defect. Every one of the 12 was
   the same mistake in a different costume:
 
-  | what stuck out | how far | write instead |
-  | --- | --- | --- |
-  | `<svg width="600" …>` | 308–348px | `viewBox="0 0 600 400"` and `className="w-full h-auto"` — the viewBox carries the coordinates, the class carries the size |
-  | a `<pre>`/`<code>` of real source | 409–705px | the code keeps its long lines; the WRAPPER gets `overflow-x-auto`, so the card stays put and the code scrolls inside it |
+  | what stuck out                    | how far   | write instead                                                                                                             |
+  | --------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------- |
+  | `<svg width="600" …>`             | 308–348px | `viewBox="0 0 600 400"` and `className="w-full h-auto"` — the viewBox carries the coordinates, the class carries the size |
+  | a `<pre>`/`<code>` of real source | 409–705px | the code keeps its long lines; the WRAPPER gets `overflow-x-auto`, so the card stays put and the code scrolls inside it   |
 
   **A hand-rolled `<pre>` is two defects at once, and it is the single commonest thing in this
   corpus.** Of 766 cards, **194 show code and 182 of them hand-roll a `<pre>` — 94%**; only 4 reach

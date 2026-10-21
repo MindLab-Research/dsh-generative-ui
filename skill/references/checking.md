@@ -91,7 +91,7 @@ Run a finite source pass over the complete card before sending or writing it:
   card is open and clean up its timer on unmount; an old `new Date()` result becomes past tense.
 
 For an inline card, run the same final check over the complete assistant reply, not only the
-extracted TSX or a cleaned-up transcript: there must be one opener that is exactly ````ui4a/tsx````
+extracted TSX or a cleaned-up transcript: there must be one opener that is exactly `ui4a/tsx`
 and one closer that is exactly ```` on its own line, with a blank line before the opener. A
 three-backtick `tsx` block, an opener joined to prose, a scratch/example fence, or a second closing
 fence is a protocol failure even when the source itself compiles. If the card owns a calculation,

@@ -96,7 +96,6 @@ export function cancelPendingReport(): void {
  */
 export function cardRendered(restored = false, current: () => boolean = () => true): void {
   if (restored) return;
-  cancelPendingReport();
   // **A card may only retract its OWN failure.** The error path is gated on `isLastSegment`; without
   // the same gate here the asymmetry is that a superseded card cannot report a failure but can
   // still clear someone else's. That is reachable by scrolling: an old card enters the
@@ -104,6 +103,7 @@ export function cardRendered(restored = false, current: () => boolean = () => tr
   // told nothing is broken while the newest card is still a red panel — and it cannot re-report,
   // because `reportStranded`'s `reportedFor` guard already fired for that code.
   if (!current()) return;
+  cancelPendingReport();
   // A card that is working again must be taken OUT of the model's context, or it reads about a
   // failure that no longer exists on every step for the rest of the session.
   const send = outstanding;

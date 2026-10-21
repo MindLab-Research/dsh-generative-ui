@@ -339,6 +339,48 @@ function SessionSurface({ code, streaming = false, preserveState = true, onError
   const preserveStateRef = useRef(preserveState);
   /** Retries spent on the current code. Reset by a successful paint and by every new frame. */
   const retriesRef = useRef(0);
+  const aliveRef = useRef(false);
+  const revisionRef = useRef(0);
+  const stylePassRef = useRef(0);
+  const probeRef = useRef(0);
+  const retrySequenceRef = useRef(0);
+  const asyncErrorRef = useLatest((reason: unknown) => {
+    if (!aliveRef.current) return;
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    if (streamingRef.current) strandedRef.current = { error, phase: "compile" };
+    else onErrorRef.current?.(error, "compile");
+  });
+  /**
+   * The renderer's failure path, callable from anywhere that has an `Error` and a phase.
+   *
+   * Split out so the import probe inside a retry takes the same `errorAction` as a renderer
+   * failure. Reporting a probe rejection through `asyncErrorRef` instead abandoned the retry
+   * budget on the first transient CDN error — the very case the budget exists for. `retry` is
+   * passed in rather than read from `retryRef` so this initializer does not capture a binding
+   * that is still being initialized.
+   */
+  const handleFailureRef = useLatest((error: Error, phase: "transform" | "compile" | "render", retry: () => void, streaming = streamingRef.current) => {
+    // A compile or render that started before teardown can report after it. Nothing downstream
+    // should react to a surface that no longer exists — not a report, not another retry.
+    if (!aliveRef.current) return;
+    if (phase === "render") threwRef.current = true;
+    const action = errorAction(error.message, phase, streaming, retriesRef.current);
+    if (action === "ignore") strandedRef.current = { error, phase };
+    dispatchError(action, {
+      attempts: () => retriesRef.current,
+      setAttempts: (n) => {
+        retriesRef.current = n;
+      },
+      schedule: (ms) => {
+        const timer = setTimeout(() => {
+          retryTimers.current.delete(timer);
+          retry();
+        }, ms);
+        retryTimers.current.add(timer);
+      },
+      report: () => onErrorRef.current?.(error, phase),
+    });
+  });
   /**
    * Re-deliver the current code after a dependency failed to fetch.
    *
@@ -350,24 +392,37 @@ function SessionSurface({ code, streaming = false, preserveState = true, onError
    * so re-rendering imports the exact URL that failed and nothing is re-fetched. Every retry
    * before this was a no-op that burned 0.4/0.8/1.2s and reported the same failure.
    */
-  const retryRef = useLatest(() => {
-    if (renderer === null || code === "") return;
+  // Named so the retry can hand `handleFailureRef` a way back into itself without `retryRef`
+  // being read while its own initializer is still running.
+  const retryRef = useLatest(function retry() {
+    if (!aliveRef.current || renderer === null || code === "") return;
     const attempt = retriesRef.current;
-    void mergeFallbackImports(localImports(sessionId), code).then((imports) => {
-      // Only the fetched esm.sh entries need busting; the local blob URLs are already fresh.
-      // From the second attempt the bundled build is dropped as well: if the first failure was a
-      // bundle-side 500 (see `unbundleFetchedImports`) no amount of cache-busting can clear it.
-      const fresh = attempt > 0 ? unbundleFetchedImports(imports) : imports;
-      renderer.setImportMap({ imports: bustFetchedImports(fresh, attempt) });
-      renderer.clear({ preserveVisualState: true });
-      renderer.render(code);
-    });
+    const revision = revisionRef.current;
+    const sequence = ++retrySequenceRef.current;
+    void mergeFallbackImports(localImports(sessionId), code)
+      .then((imports) => {
+        if (!aliveRef.current || revision !== revisionRef.current || sequence !== retrySequenceRef.current) return;
+        // Only a retry that will actually apply may supersede the ordinary import probe.
+        probeRef.current++;
+        // Only the fetched esm.sh entries need busting; the local blob URLs are already fresh.
+        // From the second attempt the bundled build is dropped as well: if the first failure was a
+        // bundle-side 500 (see `unbundleFetchedImports`) no amount of cache-busting can clear it.
+        const fresh = attempt > 0 ? unbundleFetchedImports(imports) : imports;
+        renderer.setImportMap({ imports: bustFetchedImports(fresh, attempt) });
+        renderer.clear({ preserveVisualState: true });
+        renderer.render(code);
+      })
+      .catch((reason: unknown) => {
+        if (revision !== revisionRef.current || sequence !== retrySequenceRef.current) return;
+        handleFailureRef.current(reason instanceof Error ? reason : new Error(String(reason)), "compile", retry);
+      });
   });
 
   useEffect(() => {
     const host = hostRef.current;
     if (host === null) return;
     let disposed = false;
+    aliveRef.current = true;
     let attached: GenUIRenderer | null = null;
     void GenUIRenderer.create(host, {
       compiler: compiler(),
@@ -380,41 +435,57 @@ function SessionSurface({ code, streaming = false, preserveState = true, onError
           // Remember what was swallowed. Only the newest matters: each frame supersedes the last,
           // so this is the state of the buffer the stream stopped on.
           if (action === "ignore") strandedRef.current = { error, phase };
-          dispatchError(action, {
-            attempts: () => retriesRef.current,
-            setAttempts: (n) => {
-              retriesRef.current = n;
-            },
-            // Tracked so the cleanup below can cancel it: a retry is scheduled up to 1.2s out,
-            // and a surface can unmount well inside that (a canvas tab closed, a message scrolled
-            // out of the host's window). Firing after that runs the whole import-probe chain
-            // against a renderer that has already been detached.
-            schedule: (ms) => void retryTimers.current.add(setTimeout(() => retryRef.current(), ms)),
-            report: () => onErrorRef.current?.(error, phase),
-          });
+          handleFailureRef.current(error, phase, () => retryRef.current());
         },
-        onRendered: () => {
+        onRendered: (_component, rendered) => {
+          // "Is this the code we last delivered" decides everything here, including what a restore
+          // is: partial-react repaints the LAST GOOD source after a render throw, which is by
+          // definition not the code we just handed it. One global "a throw happened" flag cannot
+          // survive interleaved commits — whichever callback runs first is the one that gets it
+          // wrong. Tying the decision to the painted source is what makes the order irrelevant.
+          const current = rendered.trimEnd() === deliveredRef.current.trimEnd();
+          const restored = threwRef.current && !current;
+          if (current) threwRef.current = false;
+          // Only a current paint says anything about the import map or the retry state. An earlier
+          // frame can reach React's concurrent render before a newer one commits, and letting that
+          // older paint — or a restore — cancel the newer frame's retry left the newest code failed
+          // with nothing left to try.
+          if (!current) return;
           retriesRef.current = 0;
-          // partial-react repaints the LAST GOOD component after a render throw (`preserve` is on
-          // for every inline card), so this fires for a card whose new code is broken. The throw
-          // set `threwRef` a tick earlier; consuming it here is what tells the caller that this
-          // paint is a restore, not the new code working.
-          const restored = threwRef.current;
-          threwRef.current = false;
+          for (const timer of retryTimers.current) clearTimeout(timer);
+          retryTimers.current.clear();
+          // A retry whose probe is already in flight is not in that set. This frame painted, so its
+          // import map is good enough; invalidating the sequences keeps a late retry — or the
+          // redundant probe a reorder of the same imports left pending — from reporting a failure
+          // against a card that is already on screen.
+          retrySequenceRef.current++;
+          probeRef.current++;
           // A restore paints the LAST GOOD component, which says nothing about the current code —
           // clearing on it would lose exactly the failure this exists to carry.
           if (!restored) strandedRef.current = null;
           onRenderedRef.current?.(restored);
         },
       },
-    }).then((created) => {
-      // A fast unmount can land before `create` settles; detaching there would leak the root.
-      if (disposed) return void created.detach();
-      attached = created;
-      setRenderer(created);
-    });
+    })
+      .then((created) => {
+        // A fast unmount can land before `create` settles; detaching there would leak the root.
+        if (disposed) return void created.detach();
+        attached = created;
+        setRenderer(created);
+      })
+      .catch((reason: unknown) => {
+        if (disposed) return;
+        // Terminal, and so reported as itself: there is no buffer to preserve and no later frame
+        // to supersede it. Parked failures are flushed from the delivery effect below, which never
+        // runs without a renderer — parking this one lost it, leaving a blank surface and no report.
+        onErrorRef.current?.(reason instanceof Error ? reason : new Error(String(reason)), "compile");
+      });
     return () => {
       disposed = true;
+      aliveRef.current = false;
+      revisionRef.current++;
+      stylePassRef.current++;
+      probeRef.current++;
       // Detach from the local handle, not from a state updater: React skips the updater
       // for an unmounted fiber whenever the queue is not empty, and a renderer that is
       // never detached keeps its React root and its module URL alive for the tab's life.
@@ -439,26 +510,38 @@ function SessionSurface({ code, streaming = false, preserveState = true, onError
 
   useEffect(() => {
     if (renderer === null) return;
+    // CSS work is superseded by every run; the retry revision below only moves when a frame lands.
+    const stylePass = ++stylePassRef.current;
     // Anything the model imports beyond the registered react family (recharts, motion, …) has no
     // entry in the import map, and an unresolvable bare specifier fails the whole module import —
     // the surface just stays blank. `mergeFallbackImports` probes esm.sh and fills those in.
     const signature = importSignature(code);
     if (signature !== importedRef.current) {
       importedRef.current = signature;
+      const probe = ++probeRef.current;
       // A later frame's probe can settle first; without this the map reverts to an older import set.
-      void mergeFallbackImports(localImports(sessionId), code).then((imports) => {
-        const settle = probeOutcome(signature, importedRef.current, streamingRef.current, deliveredRef.current, code);
-        if (settle === "stale") return;
-        renderer.setImportMap({ imports });
-        if (settle === "redeliver") renderer.render(deliveredRef.current);
-      });
+      void mergeFallbackImports(localImports(sessionId), code)
+        .then((imports) => {
+          if (!aliveRef.current || probe !== probeRef.current) return;
+          const settle = probeOutcome(signature, importedRef.current, streamingRef.current, deliveredRef.current, code);
+          if (settle === "stale") return;
+          renderer.setImportMap({ imports });
+          if (settle === "redeliver") renderer.render(deliveredRef.current);
+        })
+        .catch((reason: unknown) => {
+          if (probe !== probeRef.current) return;
+          // Through the retry policy, like a renderer failure: a transient lookup failure is the
+          // case the budget exists for, not a verdict on the card.
+          handleFailureRef.current(reason instanceof Error ? reason : new Error(String(reason)), "compile", () => retryRef.current());
+        });
     }
-    retriesRef.current = 0;
     // Generated classes exist only in the code that just arrived, so their CSS is produced here
     // rather than at build time. Not awaited: the sheet is appended to `<head>` and applies to
     // whatever is already mounted, so a card paints unstyled for at most a frame instead of
     // holding up every delivery behind a generator that has to boot on the first call.
-    void ensureUnoStyles(code, streaming);
+    void ensureUnoStyles(code, streaming).catch((error: unknown) => {
+      if (stylePass === stylePassRef.current) asyncErrorRef.current(error);
+    });
     if (!deliver(renderer, deliveryFor(code, deliveredRef.current, streaming))) {
       // Nothing was delivered, so nothing will recompile and no error will be raised — but the
       // buffer on screen may already have failed while streaming. This is the only moment that
@@ -467,12 +550,28 @@ function SessionSurface({ code, streaming = false, preserveState = true, onError
       const stranded = strandedRef.current;
       if (stranded !== null && reportStranded(streaming, stranded, code, strandedReportedRef.current)) {
         strandedReportedRef.current = code;
-        onErrorRef.current?.(stranded.error, stranded.phase);
+        // Re-decided now, not when it was parked: a transient probe failure is only known to be
+        // about a settled frame here, so classifying it at streaming time spent no retry budget
+        // and sent a one-off CDN blip to the model.
+        handleFailureRef.current(stranded.error, stranded.phase, () => retryRef.current(), false);
       }
       return;
     }
     // `deliveredRef` must follow every delivery, or a later streaming frame diffs against a
     // prefix this render already superseded.
+    // A frame that landed supersedes whatever the previous one scheduled. Cancelling at the top of
+    // the effect instead did that for a NO-OP update too — the settled frame differing only in
+    // trailing whitespace — leaving the surface failed with neither a retry nor a report.
+    // Only a landed frame supersedes an in-flight retry. A no-op update still bumps the CSS pass
+    // above, but must leave `revisionRef` alone or the retry's completion is discarded and the
+    // surface stays failed with neither another attempt nor a report.
+    revisionRef.current++;
+    retriesRef.current = 0;
+    for (const timer of retryTimers.current) clearTimeout(timer);
+    retryTimers.current.clear();
+    // This ref is the effect's own inter-frame state; the paint callback above reads it, which is
+    // exactly why it is a ref and not a closure value.
+    // oxlint-disable-next-line react/immutability
     deliveredRef.current = code;
     // The refs this reads (`importedRef`, `deliveredRef`, `streamingRef`) are how the effect
     // carries state between frames; listing them would re-run it on values it just wrote.

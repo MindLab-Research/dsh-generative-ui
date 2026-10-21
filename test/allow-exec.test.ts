@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { inlinePrompt } from "../src/prompt.ts";
+import { DEFAULT_CAPABILITIES, inlinePrompt, type Capabilities } from "../src/prompt.ts";
+
+const ALL: Capabilities = { fs: true, ai: true, exec: true, web: true };
+const NO_EXEC: Capabilities = { ...ALL, exec: false };
 import { skillBody } from "../src/skill.ts";
 import { Config, serveExec } from "../src/index.ts";
 
@@ -33,19 +36,28 @@ test("an explicit off is still honoured", () => {
 test("an omitted argument documents the SMALLER set, which is the safe direction", () => {
   expect(inlinePrompt()).not.toContain("$dsh/exec");
   expect(skillBody(undefined, undefined)).not.toContain("$dsh/exec");
+  // The safe direction generalises: an omitted argument describes NO host-backed capability, so
+  // there is nothing for the model to reach for that a host may not have mounted.
+  for (const backed of ["$dsh/fs", "$dsh/ai", "$dsh/exec", "$dsh/web"]) {
+    expect(inlinePrompt()).not.toContain(backed);
+    expect(skillBody(undefined, undefined)).not.toContain(backed);
+  }
+  // `$dsh/chat` and `$dsh/state` need no service and stay.
+  expect(inlinePrompt()).toContain("$dsh/chat");
+  expect(inlinePrompt(DEFAULT_CAPABILITIES)).toBe(inlinePrompt());
 });
 
 // The call site that reads the setting has to pass it on. Both halves, both directions.
 test("with commands on, both halves document them", () => {
-  expect(inlinePrompt(true)).toContain("$dsh/exec");
-  expect(skillBody(undefined, undefined, true)).toContain("$dsh/exec");
+  expect(inlinePrompt(ALL)).toContain("$dsh/exec");
+  expect(skillBody(undefined, undefined, ALL)).toContain("$dsh/exec");
 });
 
 // Not just the import line. A prompt that drops the bullet but keeps "run `git log` in a card"
 // still teaches the model to reach for a capability whose import will fail — and a failed import
 // takes the whole module down, so the reader gets a blank card naming nothing.
 test("with commands off, nothing in either half suggests running one", () => {
-  for (const text of [inlinePrompt(false), skillBody(undefined, undefined, false)]) {
+  for (const text of [inlinePrompt(NO_EXEC), skillBody(undefined, undefined, NO_EXEC)]) {
     expect(text).not.toContain("$dsh/exec");
     expect(text).not.toContain("bash(");
     expect(text).not.toContain("## Running a command");
@@ -56,9 +68,9 @@ test("with commands off, nothing in either half suggests running one", () => {
 // so it has to name the set that exists — claiming five while documenting four is worse than not
 // claiming a number at all.
 test("the closed-set sentence counts the capabilities that exist", () => {
-  expect(inlinePrompt(false)).toContain("These five are the whole set");
-  expect(inlinePrompt(true)).toContain("These six are the whole set");
-  expect(inlinePrompt(false)).not.toContain("`exec`");
+  expect(inlinePrompt(NO_EXEC)).toContain("These five are the whole set");
+  expect(inlinePrompt(ALL)).toContain("These six are the whole set");
+  expect(inlinePrompt(NO_EXEC)).not.toContain("`exec`");
 });
 
 // The number and the list have to agree, and they did not: the list used to be built by
@@ -70,7 +82,7 @@ test("the closed-set sentence counts the capabilities that exist", () => {
 test("the closed-set sentence lists exactly as many capabilities as it claims", () => {
   const WORDS: Record<string, number> = { four: 4, five: 5, six: 6, seven: 7 };
   for (const allowExec of [false, true]) {
-    const sentence = /These (\w+) are the whole set — ([^—]+) —/.exec(inlinePrompt(allowExec));
+    const sentence = /These (\w+) are the whole set — ([^—]+) —/.exec(inlinePrompt(allowExec ? ALL : NO_EXEC));
     expect(sentence).not.toBeNull();
     const claimed = WORDS[sentence![1]];
     const listed = [...sentence![2].matchAll(/`(\w+)`/g)].map((m) => m[1]);
@@ -80,14 +92,14 @@ test("the closed-set sentence lists exactly as many capabilities as it claims", 
 });
 
 test("turning it on restores both halves", () => {
-  expect(inlinePrompt(true)).toContain("$dsh/exec");
-  expect(skillBody(undefined, undefined, true)).toContain("## Running a command");
+  expect(inlinePrompt(ALL)).toContain("$dsh/exec");
+  expect(skillBody(undefined, undefined, ALL)).toContain("## Running a command");
 });
 
 // The templating must not leak. A stray `__EXEC_BULLET__` in the prompt is text the model reads.
 test("no placeholder survives into either build", () => {
   for (const on of [false, true]) {
-    expect(inlinePrompt(on)).not.toMatch(/__[A-Z_]+__/);
+    expect(inlinePrompt(on ? ALL : NO_EXEC)).not.toMatch(/__[A-Z_]+__/);
     expect(skillBody(undefined, undefined, on)).not.toMatch(/__[A-Z_]+__/);
   }
 });
@@ -133,4 +145,48 @@ test("a host with no settings service still mounts the prompt and the skill", ()
   apply(stub, { allowExec: false });
   expect(sections.length).toBe(1);
   expect(skills.length).toBe(1);
+});
+
+/**
+ * The same rule as `allowExec`, for every host-backed capability.
+ *
+ * Each one is only in the prompt, the closed-set sentence and the skill's references when its
+ * route is registered. Documenting one that is not is the failure the `allowExec` comment spells
+ * out: the model writes an import that fails and the whole module goes down.
+ */
+for (const [label, missing, bullet, reference] of [
+  ["web", "web", "$dsh/web", "references/web.md"],
+  ["fs", "fs", "$dsh/fs", "references/files.md"],
+  ["ai", "ai", "$dsh/ai", "references/ai.md"],
+] as const) {
+  const absent: Capabilities = { ...ALL, [missing]: false };
+  test(`a host with no ${label} documents neither the capability nor its reference`, () => {
+    const prompt = inlinePrompt(absent);
+    const skill = skillBody(undefined, undefined, absent);
+    expect(prompt).not.toContain(bullet);
+    expect(skill).not.toContain(reference);
+    // The closed set must not name it either — that sentence is what stops the model reasoning
+    // its way to an import we do not resolve.
+    const sentence = /These \w+ are the whole set — ([^—]+) —/.exec(prompt)![1];
+    expect(sentence).not.toContain(`\`${missing}\``);
+  });
+
+  test(`turning ${label} back on restores both halves`, () => {
+    expect(inlinePrompt(ALL)).toContain(bullet);
+    expect(skillBody(undefined, undefined, ALL)).toContain(reference);
+  });
+}
+
+test("the capability count agrees with the list for every subset", () => {
+  const WORDS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6 };
+  for (const fs of [false, true])
+    for (const ai of [false, true])
+      for (const exec of [false, true])
+        for (const web of [false, true]) {
+          const sentence = /These (\w+) are the whole set — ([^—]+) —/.exec(inlinePrompt({ fs, ai, exec, web }));
+          expect(sentence).not.toBeNull();
+          const listed = [...sentence![2].matchAll(/`(\w+)`/g)].map((m) => m[1]);
+          expect(listed.length).toBe(WORDS[sentence![1]]);
+          expect(new Set(listed)).toEqual(new Set(["fs", "ai", "exec", "web", "chat", "state"].filter((n) => n === "chat" || n === "state" || { fs, ai, exec, web }[n as "fs"])));
+        }
 });

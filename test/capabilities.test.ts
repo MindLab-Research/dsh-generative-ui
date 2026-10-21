@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { capabilityModule } from "../src/contract.ts";
 import { bind } from "../src/client/runtime/bindings.ts";
-import { inlinePrompt } from "../src/prompt.ts";
+import { inlinePrompt, type Capabilities } from "../src/prompt.ts";
 import { skillBody } from "../src/skill.ts";
 
 /**
@@ -17,28 +17,32 @@ import { skillBody } from "../src/skill.ts";
 const GROUPS = Object.keys(bind());
 
 /**
- * `exec` is the one capability a host can withhold (`allowExec`, off by default), so the set the
- * text must name depends on the switch. Both directions matter and they fail differently: naming
- * one that is off teaches the model an import that will fail — and a failed import takes the whole
- * module down, so the reader gets a blank card naming nothing. Omitting one that is on wastes it.
+ * Which groups this host actually mounted. Both directions matter and they fail differently:
+ * naming one that is off teaches the model an import that will fail — and a failed import takes
+ * the whole module down, so the reader gets a blank card naming nothing. Omitting one that is on
+ * wastes it.
+ *
+ * `chat` and `state` need no service and are always mounted.
  */
-const groupsFor = (allowExec: boolean) => (allowExec ? GROUPS : GROUPS.filter((g) => g !== "exec"));
+const groupsFor = (capabilities: Capabilities) => GROUPS.filter((g) => g === "chat" || g === "state" || capabilities[g as keyof Capabilities]);
+const SUBSETS: Capabilities[] = [];
+for (const fs of [false, true]) for (const ai of [false, true]) for (const exec of [false, true]) for (const web of [false, true]) SUBSETS.push({ fs, ai, exec, web });
 
 test("bind() exposes something to enumerate", () => {
   expect(GROUPS.length).toBeGreaterThan(0);
 });
 
 test("the prompt names every capability the host exposes", () => {
-  for (const allowExec of [false, true]) {
-    const text = inlinePrompt(allowExec);
-    for (const group of groupsFor(allowExec)) expect(text).toContain(capabilityModule(group));
+  for (const capabilities of SUBSETS) {
+    const text = inlinePrompt(capabilities);
+    for (const group of groupsFor(capabilities)) expect(text).toContain(capabilityModule(group));
   }
 });
 
 test("the skill names every capability the host exposes", () => {
-  for (const allowExec of [false, true]) {
-    const body = skillBody(undefined, undefined, allowExec);
-    for (const group of groupsFor(allowExec)) expect(body).toContain(capabilityModule(group));
+  for (const capabilities of SUBSETS) {
+    const body = skillBody(undefined, undefined, capabilities);
+    for (const group of groupsFor(capabilities)) expect(body).toContain(capabilityModule(group));
   }
 });
 
@@ -48,12 +52,12 @@ test("the skill names every capability the host exposes", () => {
  * the name. Every specifier either prompt mentions has to be one `bind()` actually returns.
  */
 test("and no capability that does not exist — or that this host withheld", () => {
-  for (const allowExec of [false, true]) checkNamedCapabilities(allowExec);
+  for (const capabilities of SUBSETS) checkNamedCapabilities(capabilities);
 });
 
-function checkNamedCapabilities(allowExec: boolean) {
-  const real = new Set(groupsFor(allowExec).map(capabilityModule));
-  const both = inlinePrompt(allowExec) + skillBody(undefined, undefined, allowExec);
+function checkNamedCapabilities(capabilities: Capabilities) {
+  const real = new Set(groupsFor(capabilities).map(capabilityModule));
+  const both = inlinePrompt(capabilities) + skillBody(undefined, undefined, capabilities);
   // `$dsh/internal` is the private module the blob shims import; it is deliberately not a
   // capability and must not appear in anything the model reads.
   const named = new Set([...both.matchAll(/\$dsh\/[\w-]+/g)].map((m) => m[0]));

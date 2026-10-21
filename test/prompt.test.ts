@@ -8,13 +8,16 @@
  */
 import { expect, test } from "bun:test";
 import { FENCE_LANG } from "../src/contract.ts";
-import { inlinePrompt } from "../src/prompt.ts";
+import { inlinePrompt, type Capabilities } from "../src/prompt.ts";
+
+const ALL: Capabilities = { fs: true, ai: true, exec: true, web: true };
+const NO_EXEC: Capabilities = { ...ALL, exec: false };
 
 // Every rule below has to survive on the host that has the most text — commands on — because
 // that is the build these phrases were written against. The `allow-exec` suite is what pins
 // what changes when they are off.
-const PROMPT = inlinePrompt(true);
-// Same reason every `skillBody(…, true)` below passes the flag: these phrases live in sections a
+const PROMPT = inlinePrompt(ALL);
+// Same reason every `skillBody(…, ALL)` below passes the flag: these phrases live in sections a
 // host without commands does not get.
 import { skillBody, skillEntry, skillResourceBase } from "../src/skill.ts";
 import { existsSync, readFileSync } from "node:fs";
@@ -99,7 +102,7 @@ const SKILL_RULES = [
   ["the null preview choice", "Start `pick` at `null`"],
   ["live explanatory values", "A displayed explanation is state too"],
   ["contrast guidance", "Contrast is part of the selected state"],
-  ["the linked-field initialization", "do not initialize the derived field to `\"\"`"],
+  ["the linked-field initialization", 'do not initialize the derived field to `""`'],
   ["the reference read arguments", "`file_path` is the only valid argument"],
   ["abort the previous streamText", "const ctrl = (running.current = new AbortController())"],
   ["abort the previous bash when polling", "ctrl.abort(); clearInterval(timer)"],
@@ -113,7 +116,7 @@ const SKILL_RULES = [
 
 for (const [name, phrase] of SKILL_RULES) {
   test(`the skill still shows the code for ${name}`, () => {
-    expect(skillBody("types.json", "standalone.json", true).split(phrase).length - 1).toBe(1);
+    expect(skillBody("types.json", "standalone.json", ALL).split(phrase).length - 1).toBe(1);
   });
 }
 
@@ -141,7 +144,7 @@ const SECTIONS = [
 ];
 
 test("the skill body carries every section, in order", () => {
-  const body = skillBody("types.json", "standalone.json", true);
+  const body = skillBody("types.json", "standalone.json", ALL);
   expect(
     body
       .split("\n")
@@ -151,7 +154,7 @@ test("the skill body carries every section, in order", () => {
 });
 
 test("the registered entrypoint routes to real files without loading their bodies", () => {
-  const entry = skillEntry("types.json", "standalone.json", true);
+  const entry = skillEntry("types.json", "standalone.json", ALL);
   expect(entry).toContain("references/layout.md");
   expect(entry).toContain("references/commands.md");
   expect(entry).not.toContain("## Layout");
@@ -161,7 +164,7 @@ test("the registered entrypoint routes to real files without loading their bodie
     expect(existsSync(path)).toBe(true);
     expect(readFileSync(path, "utf8").length).toBeGreaterThan(100);
   }
-  expect(skillEntry(undefined, undefined, false)).not.toContain("references/commands.md");
+  expect(skillEntry(undefined, undefined, NO_EXEC)).not.toContain("references/commands.md");
 });
 
 // The two maps have genuinely different lifetimes, and the body is built for all four
@@ -174,7 +177,7 @@ test("the body assembles whether or not the maps exist", () => {
     [undefined, "s.json"],
     ["t.json", "s.json"],
   ] as const) {
-    const body = skillBody(maps[0], maps[1], true);
+    const body = skillBody(maps[0], maps[1], ALL);
     expect(body.startsWith("# Building a generative UI")).toBe(true);
     // Not a bare `undefined` search: the prose says "it is an `undefined` component" on purpose.
     // What must not appear is an interpolation that leaked one — a path, or a flag's argument.
@@ -319,7 +322,7 @@ test("every unscreenable registration still names a rule in the prompt", () => {
 test("every screen has a rule telling the model not to do it", async () => {
   const { SCREENS } = await import("../scripts/screens.ts");
   expect(Object.keys(RULE_FOR_SCREEN).toSorted()).toEqual(Object.keys(SCREENS).toSorted());
-  const both = PROMPT + skillBody("types.json", "standalone.json", true);
+  const both = PROMPT + skillBody("types.json", "standalone.json", ALL);
   const missing = Object.entries(RULE_FOR_SCREEN).filter(([, p]) => ![p].flat().every((phrase) => both.includes(phrase)));
   expect(missing).toEqual([]);
 });
@@ -342,7 +345,7 @@ test("every screen has a rule telling the model not to do it", async () => {
  */
 for (const [name, text] of [
   ["the inline prompt", () => PROMPT],
-  ["the skill body", () => skillBody("types.json", "standalone.json", true)],
+  ["the skill body", () => skillBody("types.json", "standalone.json", ALL)],
 ] as const) {
   test(`${name} carries no {{ for the loader to read as a variable`, () => {
     expect([...text().matchAll(/\{\{[^}]*\}\}?/g)].map((m) => m[0])).toEqual([]);
@@ -366,7 +369,7 @@ for (const [name, text] of [
 const ACCESSIBILITY_RULES = ["aria-label", "aria-live", "motion-reduce:", "<button"];
 
 test("an accessibility rule lives in the skill, where it is read while writing JSX", () => {
-  const body = skillBody("types.json", "standalone.json", true);
+  const body = skillBody("types.json", "standalone.json", ALL);
   const promptOnly = ACCESSIBILITY_RULES.filter((rule) => !body.includes(rule));
   expect(promptOnly).toEqual([]);
 });

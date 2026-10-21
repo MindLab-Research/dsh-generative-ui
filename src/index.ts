@@ -27,7 +27,7 @@ import { createUserMessage, type ContextFormed } from "@deepseek-ai/dsh-llm";
 import { AI_STREAM_PATH, ASSET_PREFIX, CANVAS_READ_PATH, CARD_ERROR_PATH, EXEC_PATH, FS_PATH, WASM_PATH, WEB_SEARCH_PATH } from "./contract-assets.ts";
 import { CANVAS_DIR, canvasChildPath, canvasIdOf, canvasPath, isCanvasId } from "./contract.ts";
 import { CardFailures, CARD_FAILURE_CONTEXT, CARD_FAILURE_CONTEXT_ORDER, WAKE_SUMMARY, WAKE_TEXT } from "./card-failure.ts";
-import { inlinePrompt, PROMPT_SECTION_NAME, PROMPT_SECTION_ORDER } from "./prompt.ts";
+import { inlinePrompt, PROMPT_SECTION_NAME, PROMPT_SECTION_ORDER, type Capabilities } from "./prompt.ts";
 import { skillEntry, skillPath, skillResourceBase, SKILL_DESCRIPTION, SKILL_NAME } from "./skill.ts";
 
 /**
@@ -612,10 +612,60 @@ export function apply(ctx: Context, config: Config = Config({})): void {
 
 /** Everything whose shape depends on `allowExec`; rebuilt when the setting changes. */
 function applyWith(ctx: Context, allowExec: boolean): void {
-  // The prompt has to follow the switch. With commands off, a section that documents `bash()`
-  // teaches the model to write cards that cannot work — and the failure surfaces to the user as a
-  // dead card, not as a disabled feature.
-  ctx.effect(() => ctx.systemPrompt.section({ name: PROMPT_SECTION_NAME, order: PROMPT_SECTION_ORDER, text: inlinePrompt(allowExec) }), "dsh-generative-ui: inline prompt");
+  /**
+   * The guidance is built from what this host actually mounted, not from what it might have.
+   *
+   * A capability whose route is not registered cannot be used, and the closed-set sentence in the
+   * prompt is load-bearing: it is what stops the model reasoning its way to a plausible extra
+   * import. Documenting one that is missing teaches a card whose import fails, and a failed import
+   * takes the whole module down — a blank card with nothing naming the cause. This is the same rule
+   * `allowExec` has always followed, generalised to the four host-backed capabilities.
+   */
+  const capabilities: Capabilities = { fs: false, ai: false, exec: false, web: false };
+  // `ctx.effect` and `ctx.inject` hand back a fiber, not a plain disposer, so normalise both.
+  const stop = (handle: unknown): void => {
+    if (typeof handle === "function") return void (handle as () => void)();
+    void (handle as { dispose?: () => unknown } | undefined)?.dispose?.();
+  };
+  let stopGuidance: unknown[] = [];
+  const guidance = () => {
+    for (const handle of stopGuidance) stop(handle);
+    stopGuidance = [
+      ctx.effect(() => ctx.systemPrompt.section({ name: PROMPT_SECTION_NAME, order: PROMPT_SECTION_ORDER, text: inlinePrompt(capabilities) }), "dsh-generative-ui: inline prompt"),
+      ctx.inject(["skills"], (scoped) =>
+        scoped.effect(
+          () =>
+            scoped.skills.register({
+              name: SKILL_NAME,
+              description: SKILL_DESCRIPTION,
+              path: skillPath,
+              resourceBase: skillResourceBase,
+              content: skillEntry(typesImportMap(import.meta.url), standaloneImportMap(import.meta.url), capabilities),
+              source: "runtime",
+              invocation: { modelInvocable: true, userInvocable: false },
+            }),
+          "dsh-generative-ui: skill",
+        ),
+      ),
+    ];
+  };
+  guidance();
+  // A service can arrive after us, so each one folds into the set and restates the guidance.
+  // Capabilities only ever appear, never disappear, so this converges on the mounted set.
+  const mounted =
+    (key: keyof Capabilities, ready: () => boolean = () => true) =>
+    () => {
+      if (!ready() || capabilities[key]) return;
+      capabilities[key] = true;
+      guidance();
+    };
+  ctx.inject(["fs"], mounted("fs"));
+  ctx.inject(
+    ["shell"],
+    mounted("exec", () => allowExec),
+  );
+  ctx.inject(["web"], mounted("web"));
+  ctx.inject(["llm", "agentDefaultModel"], mounted("ai"));
   // A card that will not render, as CONTEXT rather than as a message — see `card-failure.ts`.
   // The provider runs per assembly, so an empty string is how a fixed card stops being mentioned;
   // `agent.id` is the session id, which is what the browser half keys its reports on.
@@ -681,26 +731,6 @@ function applyWith(ctx: Context, allowExec: boolean): void {
     scoped.inject(["llm", "agentDefaultModel"], (withLlm) => {
       withLlm.effect(() => withLlm.webServer.register({ kind: "exact", path: AI_STREAM_PATH, handler: (req, res) => serveAi(withLlm as unknown as LlmCtx, liveWorkspaces, req, res) }), "dsh-generative-ui: model stream");
     });
-  });
-  // Scoped rather than listed in `inject`: cordis has no optional injection, so naming "skills"
-  // there would keep the whole plugin — wasm route included — inactive wherever the skill
-  // subsystem is disabled. Nested, only the skill goes missing.
-  // Model-only: `/generative-ui` as a user command would just print the guidance at the user.
-  ctx.inject(["skills"], (scoped) => {
-    scoped.effect(
-      () =>
-        scoped.skills.register({
-          name: SKILL_NAME,
-          description: SKILL_DESCRIPTION,
-          path: skillPath,
-          resourceBase: skillResourceBase,
-          // The entrypoint carries checker notes; resourceBase keeps topic references lazy.
-          content: skillEntry(typesImportMap(import.meta.url), standaloneImportMap(import.meta.url), allowExec),
-          source: "runtime",
-          invocation: { modelInvocable: true, userInvocable: false },
-        }),
-      "dsh-generative-ui: skill",
-    );
   });
 }
 

@@ -97,19 +97,45 @@ export function mapNotes(typesMap: string | undefined, standaloneMap: string | u
 export const skillResourceBase = { kind: "directory", path: fileURLToPath(new URL("../skill/", import.meta.url)) } as const;
 export const skillPath = fileURLToPath(new URL("../skill/SKILL.md", import.meta.url));
 
+import { DEFAULT_CAPABILITIES, type Capabilities } from "./capabilities.ts";
+
 const readSkill = (relative: string): string => readFileSync(new URL(`../skill/${relative}`, import.meta.url), "utf8");
 const stripFrontmatter = (text: string): string => text.replace(/^---\n[\s\S]*?\n---\n\n/, "");
 const EXEC_REFERENCE = "<!-- exec-reference: included only on hosts where the command route is enabled -->";
+/**
+ * The host-backed topic guides, in the order `SKILL.md` lists them.
+ *
+ * The index is the part the model reads to decide what to load, so it has to be conditional in the
+ * same way as the prompt: a topic named for a capability whose route is not registered teaches the
+ * model to build against something that fails.
+ */
+/**
+ * Prose that directs the model at a capability from inside a rule that stands without it. Same
+ * treatment as the prompt's cross-references: when the route is not mounted, the pointer is advice
+ * to use something that fails.
+ */
+const CAPABILITY_PROSE: [keyof Capabilities, string, string][] = [["fs", "<!-- fs-persist -->", "When a workspace file owns the content, read that file through `$dsh/fs` instead of keeping a second copy in local storage; persist only an unsaved draft if needed."]];
+const CAPABILITY_REFERENCES: [keyof Capabilities, string, string][] = [
+  ["web", "<!-- web-reference -->", "- For web search: [web.md](references/web.md)."],
+  ["fs", "<!-- files-reference -->", "- For workspace files and binary assets: [files.md](references/files.md)."],
+  ["ai", "<!-- ai-reference -->", "- For model-generated content inside a card: [ai.md](references/ai.md)."],
+];
 
 /** Only this entrypoint is sent by the skill tool; topic references stay on disk until needed. */
-export function skillEntry(typesMap: string | undefined, standaloneMap: string | undefined, allowExec = false): string {
-  const core = stripFrontmatter(readSkill("SKILL.md")).replace(EXEC_REFERENCE, allowExec ? "- For non-destructive workspace commands: [commands.md](references/commands.md)." : "");
+export function skillEntry(typesMap: string | undefined, standaloneMap: string | undefined, capabilities: Capabilities = DEFAULT_CAPABILITIES): string {
+  const core = [...CAPABILITY_REFERENCES, ...CAPABILITY_PROSE].reduce(
+    (text, [key, marker, line]) => text.replace(marker, capabilities[key] ? line : ""),
+    stripFrontmatter(readSkill("SKILL.md")).replace(EXEC_REFERENCE, capabilities.exec ? "- For non-destructive workspace commands: [commands.md](references/commands.md)." : ""),
+  );
   const maps = mapNotes(typesMap, standaloneMap);
   return core + (maps ? `\n## Checker import maps\n\n${maps}\n` : "\n## Checker import maps\n\nNo type import map is installed here. Omit `-i` from `check`; use the live panel to verify harness calls.\n");
 }
 
 /** Complete text for consistency checks; production registers only skillEntry(). */
-export function skillBody(typesMap: string | undefined, standaloneMap: string | undefined, allowExec = false): string {
-  const refs = ["lifetime", "layout", "accessibility", "sound", "runtime", ...(allowExec ? ["commands"] : []), "web", "files", "ai", "checking", "imports"];
-  return skillEntry(typesMap, standaloneMap, allowExec) + refs.map((name) => `\n${readSkill(`references/${name}.md`)}`).join("");
+export function skillBody(typesMap: string | undefined, standaloneMap: string | undefined, capabilities: Capabilities = DEFAULT_CAPABILITIES): string {
+  // A topic reference is part of the closed set too: `web.md` on a host with no web capability is
+  // the same error as documenting `$dsh/web` in the prompt — the model reads it and writes an
+  // import that fails.
+  const refs = ["lifetime", "layout", "accessibility", "sound", "runtime", ...(capabilities.exec ? ["commands"] : []), ...(capabilities.web ? ["web"] : []), ...(capabilities.fs ? ["files"] : []), ...(capabilities.ai ? ["ai"] : []), "checking", "imports"];
+  return skillEntry(typesMap, standaloneMap, capabilities) + refs.map((name) => `\n${readSkill(`references/${name}.md`)}`).join("");
 }

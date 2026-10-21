@@ -11,12 +11,9 @@ let readSerial = 0;
 
 /** Every canvas in the workspace, including ones this session never wrote. */
 export async function listCanvasIds(cwd: string): Promise<readonly string[]> {
-  try {
-    const response = await fetch(`${CANVAS_READ_PATH}?cwd=${encodeURIComponent(cwd)}`, { cache: "no-store" });
-    return response.ok ? ((await response.json()) as string[]) : [];
-  } catch {
-    return [];
-  }
+  const response = await fetch(`${CANVAS_READ_PATH}?cwd=${encodeURIComponent(cwd)}`, { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return (await response.json()) as string[];
 }
 
 export async function readCanvasFile(cwd: string, id: string): Promise<string | null> {
@@ -24,16 +21,14 @@ export async function readCanvasFile(cwd: string, id: string): Promise<string | 
   // changed, so any reuse of an earlier response is guaranteed to be the wrong answer.
   readSerial += 1;
   const url = `${CANVAS_READ_PATH}?cwd=${encodeURIComponent(cwd)}&id=${encodeURIComponent(id)}&r=${readSerial}`;
-  try {
-    // `cache: "no-store"` on the request as well as the response: a canvas is re-read
-    // precisely because it just changed, and a cached body is the one answer that is
-    // guaranteed wrong.
-    const response = await fetch(url, { cache: "no-store" });
-    // 404 is ordinary: a canvas whose write is still streaming has no file yet.
-    return response.ok ? await response.text() : null;
-  } catch {
-    return null;
-  }
+  // `cache: "no-store"` on the request as well as the response: a canvas is re-read
+  // precisely because it just changed, and a cached body is the one answer that is
+  // guaranteed wrong.
+  const response = await fetch(url, { cache: "no-store" });
+  // 404 is ordinary: a canvas whose write is still streaming has no file yet.
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.text();
 }
 
 /**

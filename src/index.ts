@@ -194,8 +194,13 @@ export async function serveCanvas(liveWorkspaces: () => ReadonlySet<string>, req
           const found = canvasIdOf(`${CANVAS_DIR}/${name}`);
           return found === null ? [] : [found];
         }),
-      () => [],
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return [];
+        res.writeHead(500).end();
+        return null;
+      },
     );
+    if (ids === null) return;
     res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     return void res.end(JSON.stringify(ids));
   }
@@ -222,9 +227,9 @@ export async function serveCanvas(liveWorkspaces: () => ReadonlySet<string>, req
     const code = await readFile(join(cwd, canvasPath(id)), "utf8");
     res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
     res.end(code);
-  } catch {
+  } catch (error) {
     // A canvas whose write is still streaming has no file yet; the client keeps its own copy.
-    res.writeHead(404).end();
+    res.writeHead((error as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500).end();
   }
 }
 

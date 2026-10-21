@@ -213,6 +213,7 @@ export function apply(ctx: ClientContext): void {
               name: "sidebar.right.pane.tab",
               key: CANVAS_TAB_ID,
               registrant: "dsh-generative-ui: canvas tab body",
+              locale: NS,
               inject: () => ({
                 cwdOf,
                 onCardError: (message: string, phase: string) => reportCardError(sendToModel, message, phase),

@@ -359,6 +359,9 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
    * that is still being initialized.
    */
   const handleFailureRef = useLatest((error: Error, phase: "transform" | "compile" | "render", retry: () => void, streaming = streamingRef.current) => {
+    // A compile or render that started before teardown can report after it. Nothing downstream
+    // should react to a surface that no longer exists — not a report, not another retry.
+    if (!aliveRef.current) return;
     if (phase === "render") threwRef.current = true;
     const action = errorAction(error.message, phase, streaming, retriesRef.current);
     if (action === "ignore") strandedRef.current = { error, phase };
@@ -391,7 +394,7 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
   // Named so the retry can hand `handleFailureRef` a way back into itself without `retryRef`
   // being read while its own initializer is still running.
   const retryRef = useLatest(function retry() {
-    if (renderer === null || code === "") return;
+    if (!aliveRef.current || renderer === null || code === "") return;
     const attempt = retriesRef.current;
     const revision = revisionRef.current;
     const sequence = ++retrySequenceRef.current;
@@ -434,17 +437,19 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           handleFailureRef.current(error, phase, () => retryRef.current());
         },
         onRendered: (_component, rendered) => {
-          // Consume the restore marker first, whatever this paint is. A throw that restored the
-          // last good component paints source that is NOT the code we just delivered; leaving the
-          // marker set across that early return made the next real paint look like a restore too,
-          // and an obsolete stranded failure survived all the way to the model.
-          const restored = threwRef.current;
-          threwRef.current = false;
-          // Only a paint of the code we last delivered says anything about its import map. An
-          // earlier frame can reach React's concurrent render before a newer one commits, and
-          // letting that older paint cancel the newer frame's retry left the newest code failed
+          // "Is this the code we last delivered" decides everything here, including what a restore
+          // is: partial-react repaints the LAST GOOD source after a render throw, which is by
+          // definition not the code we just handed it. One global "a throw happened" flag cannot
+          // survive interleaved commits — whichever callback runs first is the one that gets it
+          // wrong. Tying the decision to the painted source is what makes the order irrelevant.
+          const current = rendered.trimEnd() === deliveredRef.current.trimEnd();
+          const restored = threwRef.current && !current;
+          if (current) threwRef.current = false;
+          // Only a current paint says anything about the import map or the retry state. An earlier
+          // frame can reach React's concurrent render before a newer one commits, and letting that
+          // older paint — or a restore — cancel the newer frame's retry left the newest code failed
           // with nothing left to try.
-          if (rendered.trimEnd() !== deliveredRef.current.trimEnd()) return;
+          if (!current) return;
           retriesRef.current = 0;
           for (const timer of retryTimers.current) clearTimeout(timer);
           retryTimers.current.clear();
@@ -454,10 +459,6 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
           // against a card that is already on screen.
           retrySequenceRef.current++;
           probeRef.current++;
-          // partial-react repaints the LAST GOOD component after a render throw (`preserve` is on
-          // for every inline card), so this fires for a card whose new code is broken. The marker
-          // was consumed above; it is what tells the caller this paint is a restore, not the new
-          // code working.
           // A restore paints the LAST GOOD component, which says nothing about the current code —
           // clearing on it would lose exactly the failure this exists to carry.
           if (!restored) strandedRef.current = null;

@@ -39,7 +39,8 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: C
   const parsed = parseFileAddress(address);
   // The address's own session, not the tab's standard-prop one and never "current": the two
   // only agree when the reader happens to be looking at the session that wrote the canvas.
-  const cwd = parsed?.scope === "session" ? cwdOf(parsed.sessionId) : undefined;
+  const sessionId = parsed?.scope === "session" ? parsed.sessionId : undefined;
+  const cwd = sessionId === undefined ? undefined : cwdOf(sessionId);
   const [body, setBody] = useState<string | null>(null);
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: C
   // Disk is the source, so a body read here is always settled. Under the default PTC mode the
   // first frame the transcript shows is settled too (§3.6); off-PTC a top-level `write` briefly
   // has no file, and this stays empty until it lands rather than previewing the arguments.
-  const resolved = useSubPages(cwd, body === null || id === null ? undefined : { id, code: body, streaming: false });
+  const resolved = useSubPages(cwd, body === null || id === null ? undefined : { id, code: body, streaming: false }, sessionId);
 
   if (id === null) return null;
   // A canvas is inset; an inline card is not. The card is told to fill whatever holds it, so
@@ -76,7 +77,7 @@ export function CanvasBody({ useTabInfo, cwdOf, onCardError, onCardRendered }: C
   // border-box` keeps that 100% inside the padding rather than overflowing it.
   return (
     <div style={{ boxSizing: "border-box", height: "100%", minHeight: 0, overflow: "auto", padding: "24px", display: "grid", gridTemplateRows: "minmax(100%, auto)" }}>
-      <GenUISurface key={id} code={resolved} streaming={false} onError={(error, phase) => onCardError(error.message, phase)} onRendered={onCardRendered} />
+      <GenUISurface key={`${sessionId}:${id}`} sessionId={sessionId} code={resolved} streaming={false} onError={(error, phase) => onCardError(error.message, phase)} onRendered={onCardRendered} />
     </div>
   );
 }

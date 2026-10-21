@@ -336,7 +336,7 @@ test("every screen has a rule telling the model not to do it", async () => {
  *
  * `{{` is fatal ANYWHERE in the text — inline code spans included, indented code blocks
  * included. Verified against `dsh` itself by putting one back in each position and watching
- * `scripts/loads.sh` fail; the loader is a plain string scan and markdown means nothing to it.
+ * it reject the section; the loader is a plain string scan and markdown means nothing to it.
  *
  * Write `style={ { … } }` in prompt text: same JSX, same meaning to a reader, no `{{`.
  */

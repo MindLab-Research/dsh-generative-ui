@@ -36,16 +36,20 @@ resolves against the app, 404s, and the reader gets a page of broken icons. Meas
 canvas that found 357 images and showed none of them. The whole shape is three lines:
 
 ```tsx
-const [url, setUrl] = useState<string>()
+const [url, setUrl] = useState<string>();
 useEffect(() => {
-  let live = true, made: string | undefined
+  let live = true,
+    made: string | undefined;
   void readBytes(path).then((bytes) => {
-    if (!live) return
-    made = URL.createObjectURL(new Blob([bytes]))
-    setUrl(made)
-  })
-  return () => { live = false; if (made !== undefined) URL.revokeObjectURL(made) }
-}, [path])
+    if (!live) return;
+    made = URL.createObjectURL(new Blob([bytes]));
+    setUrl(made);
+  });
+  return () => {
+    live = false;
+    if (made !== undefined) URL.revokeObjectURL(made);
+  };
+}, [path]);
 ```
 
 Revoking is not optional in a browser that keeps a long transcript: one object URL per image per
@@ -59,7 +63,7 @@ and commit.
 easy to open the README, summarise it, and paste the summary in as a string — and the result
 is a photograph: right the moment you took it, silently stale from the next edit on. If the
 card is about workspace content, the card calls `readFile`. Reserve your own reading for
-deciding *what to build*, not for supplying what it displays.
+deciding _what to build_, not for supplying what it displays.
 
 **Read on demand, not all at once.** A list of twenty files does not want twenty
 `readFile` calls before it can draw — it wants to draw immediately from `readdir` (which

@@ -23,19 +23,43 @@ const run = (records: unknown[]) => {
 };
 
 test("keeps assistant text and ignores reasoning, tools, and user content", () => {
-  expect(parse([
-    { type: "user/message", data: { message: { content: [{ type: "text", text: "98°F" }] } } },
-    { type: "assistant/message", data: { message: { content: [{ type: "reasoning", text: "scratch ```tsx 36.7" }, { type: "tool-call", name: "read" }] } } },
-    { type: "tool/result", data: { message: { content: [{ type: "text", text: "reference" }] } } },
-    { type: "assistant/message", data: { message: { content: [{ type: "reasoning", text: "more scratch 36.7" }, { type: "text", text: "intro\n\n````ui4a/tsx\nexport default function Card() {}\n````" }] } } },
-  ])).toBe("intro\n\n````ui4a/tsx\nexport default function Card() {}\n````");
+  expect(
+    parse([
+      { type: "user/message", data: { message: { content: [{ type: "text", text: "98°F" }] } } },
+      {
+        type: "assistant/message",
+        data: {
+          message: {
+            content: [
+              { type: "reasoning", text: "scratch ```tsx 36.7" },
+              { type: "tool-call", name: "read" },
+            ],
+          },
+        },
+      },
+      { type: "tool/result", data: { message: { content: [{ type: "text", text: "reference" }] } } },
+      {
+        type: "assistant/message",
+        data: {
+          message: {
+            content: [
+              { type: "reasoning", text: "more scratch 36.7" },
+              { type: "text", text: "intro\n\n````ui4a/tsx\nexport default function Card() {}\n````" },
+            ],
+          },
+        },
+      },
+    ]),
+  ).toBe("intro\n\n````ui4a/tsx\nexport default function Card() {}\n````");
 });
 
 test("concatenates visible text blocks from multiple assistant messages", () => {
-  expect(parse([
-    { type: "assistant/message", data: { message: { content: [{ type: "text", text: "before" }] } } },
-    { type: "assistant/message", data: { message: { content: [{ type: "text", text: "after" }] } } },
-  ])).toBe("beforeafter");
+  expect(
+    parse([
+      { type: "assistant/message", data: { message: { content: [{ type: "text", text: "before" }] } } },
+      { type: "assistant/message", data: { message: { content: [{ type: "text", text: "after" }] } } },
+    ]),
+  ).toBe("beforeafter");
 });
 
 test("rejects a transcript that has no visible assistant text", () => {

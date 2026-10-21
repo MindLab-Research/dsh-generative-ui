@@ -112,4 +112,3 @@ const rewritePlainGenericArrows = (code: string) => {
 };
 
 export const normalizeGeneratedTsxCompat = (code: string, options: PartialTsxOptions = {}) => normalizeGeneratedTsx(rewritePlainGenericArrows(code), options);
-

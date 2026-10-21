@@ -22,7 +22,11 @@ for (const line of input.split(/\r?\n/)) {
   assistantMessages++;
   const content = record.data?.message?.content;
   if (!Array.isArray(content)) continue;
-  for (const block of content as ContentBlock[]) if (block.type === "text" && typeof block.text === "string") { visibleBlocks++; reply += block.text; }
+  for (const block of content as ContentBlock[])
+    if (block.type === "text" && typeof block.text === "string") {
+      visibleBlocks++;
+      reply += block.text;
+    }
 }
 
 if (assistantMessages === 0) throw new Error("transcript has no assistant/message record");

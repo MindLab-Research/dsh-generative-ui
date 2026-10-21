@@ -105,7 +105,7 @@ const SKILL_RULES = [
   ["the linked-field initialization", 'do not initialize the derived field to `""`'],
   ["the reference read arguments", "`file_path` is the only valid argument"],
   ["abort the previous streamText", "const ctrl = (running.current = new AbortController())"],
-  ["abort the previous bash when polling", "ctrl.abort(); clearInterval(timer)"],
+  ["abort the previous bash when polling", "ctrl.abort();\n    clearInterval(timer);"],
   ["honour prefers-reduced-motion (transition)", "motion-reduce:transition-none"],
   ["honour prefers-reduced-motion (keyframes)", "motion-reduce:animate-none"],
   ["keyboard-reachable controls", '<button type="button" aria-label="复制" onClick={copy}>'],
@@ -339,7 +339,7 @@ test("every screen has a rule telling the model not to do it", async () => {
  *
  * `{{` is fatal ANYWHERE in the text — inline code spans included, indented code blocks
  * included. Verified against `dsh` itself by putting one back in each position and watching
- * `scripts/loads.sh` fail; the loader is a plain string scan and markdown means nothing to it.
+ * it reject the section; the loader is a plain string scan and markdown means nothing to it.
  *
  * Write `style={ { … } }` in prompt text: same JSX, same meaning to a reader, no `{{`.
  */

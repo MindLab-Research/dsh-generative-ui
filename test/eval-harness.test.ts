@@ -26,8 +26,8 @@ test("a hung run is reported separately from a dead one", () => {
   expect(script).toContain("crash/nosession");
   expect(script).toContain("crash/unfinished");
   expect(script).toContain('sess=""');
-  expect(script).toContain('sess=$(ls -td');
-  expect(script).toContain('session.v4.jsonl.zstd');
+  expect(script).toContain("sess=$(ls -td");
+  expect(script).toContain("session.v4.jsonl.zstd");
   expect(script).toContain('transcript="$sess/session.v4.jsonl.zstd"');
   // and with distinct exit codes, since callers branch on them
   expect(script).toMatch(/exit 3/);

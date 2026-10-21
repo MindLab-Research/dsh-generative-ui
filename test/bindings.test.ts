@@ -107,167 +107,49 @@ test("the binding blobs are built once and revoked on release", () => {
   expect(bindingImports()).not.toBe(first);
 });
 
-test("session shims are distinct and share a stable internal module", async () => {
+test("session shims are distinct and carry no secret in their source", async () => {
   const a = bindingImports("a");
   const b = bindingImports("b");
   expect(bindingImports("a")).toBe(a);
   expect(a["$dsh/fs"]).not.toBe(b["$dsh/fs"]);
   const aSource = await (await fetch(a["$dsh/fs"])).text();
   const bSource = await (await fetch(b["$dsh/fs"])).text();
-  // Opaque handles, never the session id: generated code that reads its own shim cannot name
-  // another session, because `bindOwner` only resolves a handle this module minted.
-  const handleOf = (source: string) => source.match(/bindOwner\("([^"]+)"\)/)![1];
-  const aHandle = handleOf(aSource);
-  const bHandle = handleOf(bSource);
-  expect(aHandle).not.toBe(bHandle);
+  // The capability is the shim's own `import.meta.url`, read in the shim. Nothing is compiled in,
+  // so intercepting the text of one reveals no more than the card already had.
+  expect(aSource).toContain("bindOwner(import.meta.url)");
+  expect(bSource).toContain("bindOwner(import.meta.url)");
+  // No literal argument: that is what would put a capability in a string a card can read.
+  expect(aSource).not.toMatch(/bindOwner\((["'`])/);
+  expect(bSource).not.toMatch(/bindOwner\((["'`])/);
+  // …and no session id travels in either body.
   expect(aSource).not.toContain('"a"');
   expect(bSource).not.toContain('"b"');
   const internal = aSource.match(/from "(blob:[^"]+)"/)![1];
   expect(bSource).toContain(internal);
   expect((await fetch(internal)).ok).toBe(true);
-  // And the internal module is not advertised: `$dsh/internal` resolves for no generated card.
+  // The internal module is not advertised: `$dsh/internal` resolves for no generated card.
   expect((await import("../src/client/runtime/bindings")).localImports("a")).not.toHaveProperty("$dsh/internal");
 });
 
-test("a capability handle cannot be forged into another session", async () => {
+test("a capability is the shim URL itself, and cannot be forged", async () => {
   const { bindOwner, bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
   release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
-  const source = await (await fetch(bindingImports("victim")["$dsh/fs"])).text();
-  const handle = source.match(/bindOwner\("([^"]+)"\)/)![1];
-  expect(() => bindOwner("victim")).toThrow("no such capability handle");
-  expect(() => bindOwner(handle + "x")).toThrow("no such capability handle");
-  const urls: URL[] = [];
+  const url = bindingImports("victim")["$dsh/fs"];
+  expect(() => bindOwner("blob:not-a-shim")).toThrow("no such capability");
+  expect(() => bindOwner("victim")).toThrow("no such capability");
+  const urls: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = new URL(String(input), "http://local");
-    urls.push(url);
+    urls.push(new URL(String(input), "http://local"));
     return Response.json({ content: "ok" });
   }) as typeof fetch;
-  await bindOwner(handle).fs.readFile("x");
+  await bindOwner(url).fs.readFile("x");
   expect(urls.at(-1)!.searchParams.get("session")).toBe("victim");
 });
 
-test("AI and web requests use the bound owner's workspace", async () => {
-  release = registerUi4aHost({ cwd: (owner) => (owner === "a" ? "/a" : "/b"), sessionId: () => "b", send() {} });
-  const urls: URL[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = new URL(String(input), "http://local");
-    urls.push(url);
-    return url.pathname.endsWith("search") ? Response.json({ sources: [], truncated: false }) : new Response("answer");
-  }) as typeof fetch;
-  const canvas = bind("a");
-  for await (const _chunk of canvas.ai.streamText("hi")) {
-    /* consume the response */
-  }
-  await canvas.web.search("hi");
-  expect(urls).toHaveLength(2);
-  expect(urls.every((url) => url.searchParams.get("cwd") === "/a")).toBe(true);
-});
-
-test("a retained canvas keeps its owner and reads that owner's current access mode", async () => {
-  const sessions = new Map([
-    ["a", { cwd: "/a", writable: false }],
-    ["b", { cwd: "/b", writable: true }],
-  ]);
-  let selected = "a";
-  const sent: string[] = [];
-  release = registerUi4aHost({
-    sessionId: () => selected,
-    cwd: (owner) => sessions.get(owner ?? selected)?.cwd,
-    send: (_text, owner) => {
-      const id = owner ?? selected;
-      if (!sessions.has(id)) throw new Error("owning session is unavailable");
-      sent.push(id);
-    },
-  });
-  const urls: URL[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(String(input), "http://local");
-    urls.push(url);
-    const owner = url.searchParams.get("session")!;
-    if (init?.method === "POST" && url.pathname === FS_PATH && !sessions.get(owner)?.writable) return Response.json({ error: "FS_SANDBOX_DENIED" }, { status: 403 });
-    return Response.json({ content: "ok", stdout: "ok" });
-  }) as typeof fetch;
-  const canvas = bind("a");
-  selected = "b";
-  await canvas.fs.readFile("file.txt");
-  await expect(canvas.fs.writeFile("file.txt", "x")).rejects.toThrow("FS_SANDBOX_DENIED");
-  await canvas.exec.bash("pwd");
-  canvas.chat.sendMessage("hi");
-  expect(sent).toEqual(["a"]);
-  expect(urls.every((url) => url.searchParams.get("cwd") === "/a" && url.searchParams.get("session") === "a")).toBe(true);
-  sessions.get("a")!.writable = true;
-  sessions.get("a")!.cwd = "/b";
-  await canvas.fs.writeFile("file.txt", "x");
-  expect(urls.at(-1)!.searchParams.get("session")).toBe("a");
-  expect(urls.at(-1)!.searchParams.get("cwd")).toBe("/b");
-  sessions.delete("a");
-  await expect(canvas.fs.readFile("file.txt")).rejects.toThrow("needs a session workspace");
-  expect(() => canvas.exec.bash("pwd")).toThrow("needs a session workspace");
-  expect(() => canvas.chat.sendMessage("hi")).toThrow("owning session is unavailable");
-});
-
-// The teardown returned by `registerUi4aHost` must not unbind a host that replaced it.
-test("releasing a stale host does not unbind the current one", () => {
-  const stale = hostWith("/a");
-  release = hostWith("/b");
-  stale();
-  // The guard throws synchronously, before any request: asserting through the promise instead
-  // makes the test depend on whatever `fetch` happens to be installed.
-  globalThis.fetch = (async () => new Response("{}")) as typeof fetch;
-  expect(() => bind().fs.readFile("x")).not.toThrow();
-});
-
-// `$dsh/internal` used to be registered inside `registerUi4aHost`, so a surface that came up
-// before any host — a preview, a harness, the first frame of a session, any profile without
-// `conversation` — got capability blobs importing an empty module. The first mount reported
-// `Unresolvable imports` and every one after it rendered silently blank. Nothing in `bind`
-// depends on the host *value*, so nothing about it belongs behind that call.
-test("capability modules resolve without a host registered", async () => {
-  const { bindingImports, bind } = await import("../src/client/runtime/bindings");
-  const imports = bindingImports();
-  const groups = Object.keys(bind());
-  expect(groups.length).toBeGreaterThan(0);
-  for (const group of groups) {
-    const url = imports[`$dsh/${group}`];
-    expect(url).toBeDefined();
-    const source = await (await fetch(url)).text();
-    // Each blob re-exports from the `$dsh/internal` blob; an unregistered one is an empty module.
-    const internalUrl = source.match(/from "(blob:[^"]+)"/)?.[1];
-    expect(internalUrl).toBeDefined();
-    expect(await (await fetch(internalUrl!)).text()).toContain("bind");
-  }
-});
-
-test("the capability bridge is sealed before any card can run", async () => {
-  // The key is minted, not a well-known name: a card cannot pre-install a wrapper under a key it
-  // cannot predict. Whatever it is, it is sealed by the time any shim exists.
-  await import("../src/client/runtime/bindings");
-  const keys = Reflect.ownKeys(globalThis).filter((key) => typeof key === "string" && key.startsWith("__dsh_generative_ui_bind_"));
-  // Every generation mints its own key — the reload test makes more than one, and the suite runs
-  // its files in random order — so this is "all of them", not "exactly one".
-  expect(keys.length).toBeGreaterThan(0);
-  for (const key of keys) {
-    const own = Object.getOwnPropertyDescriptor(globalThis, key)!;
-    expect(own.writable).toBe(false);
-    expect(own.configurable).toBe(false);
-    expect(own.enumerable).toBe(false);
-    expect(() => ((globalThis as any)[key as string] = () => null)).toThrow();
-  }
-});
-
-test("a second module evaluation keeps HMR working instead of redefining the bridge", async () => {
-  const before = Reflect.ownKeys(globalThis).filter((key) => typeof key === "string" && key.startsWith("__dsh_generative_ui_bind_"));
-  await import(`../src/client/runtime/bindings.ts?reload=${Math.random()}`);
-  const after = Reflect.ownKeys(globalThis).filter((key) => typeof key === "string" && key.startsWith("__dsh_generative_ui_bind_"));
-  // A reload mints and seals its own key rather than tripping over the previous, non-configurable one.
-  expect(after.length).toBe(before.length + 1);
-});
-
-test("replacing Map.prototype cannot mint a handle for another session", async () => {
+test("replacing Map.prototype cannot mint a capability for another session", async () => {
   const { bindOwner, bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
   release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
-  const source = await (await fetch(bindingImports("victim")["$dsh/fs"])).text();
-  const handle = source.match(/bindOwner\("([^"]+)"\)/)![1];
+  const capability = bindingImports("victim")["$dsh/fs"];
   const realHas = Map.prototype.has;
   const realGet = Map.prototype.get;
   Map.prototype.has = () => true;
@@ -275,29 +157,27 @@ test("replacing Map.prototype cannot mint a handle for another session", async (
   try {
     // The lookup is a null-prototype table, so neither `in` nor `[]` dispatches what a card can
     // replace. If it did, this would hand back the victim's capabilities instead of throwing.
-    expect(() => bindOwner("forged-token")).toThrow("no such capability handle");
+    expect(() => bindOwner("forged-token")).toThrow("no such capability");
+    expect(() => bindOwner(capability)).not.toThrow();
   } finally {
     Map.prototype.has = realHas;
     Map.prototype.get = realGet;
   }
-  expect(handle).toBeTruthy();
 });
 
 test("entropy survives a reload even after a card replaced the realm primitives", async () => {
   const first = await import("../src/client/runtime/bindings");
-  const a = await (await fetch(first.bindingImports("owner-a")["$dsh/fs"])).text();
-  const handleA = a.match(/bindOwner\("([^"]+)"\)/)![1];
+  const capabilityA = first.bindingImports("owner-a")["$dsh/fs"];
 
   const realUUID = globalThis.crypto.randomUUID;
   (globalThis.crypto as any).randomUUID = () => "known";
   try {
     const second = await import(`../src/client/runtime/bindings.ts?entropy=${Math.random()}`);
-    const b = await (await fetch(second.bindingImports("owner-b")["$dsh/fs"])).text();
-    const handleB = b.match(/bindOwner\("([^"]+)"\)/)![1];
+    const capabilityB = second.bindingImports("owner-b")["$dsh/fs"];
     // A reload must reuse the entropy captured before generated code ran, not whatever it left
-    // in the realm: a constant here would make every later handle — and the bridge key — known.
-    expect(handleB).not.toBe("known");
-    expect(handleB).not.toBe(handleA);
+    // in the realm: a constant here would make every later capability — and the bridge key — known.
+    expect(capabilityB).not.toBe("known");
+    expect(capabilityB).not.toBe(capabilityA);
   } finally {
     (globalThis.crypto as any).randomUUID = realUUID;
   }

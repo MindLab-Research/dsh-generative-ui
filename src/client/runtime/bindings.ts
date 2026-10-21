@@ -28,12 +28,6 @@ export type Ui4aHost = {
 let host: Ui4aHost | null = null;
 
 /**
- * Per-owner capability handles.
- *
- * The handle a shim carries is minted here and is not a session id, so generated code that reads
- * one shim cannot name another session — `bindOwner` only ever resolves a handle this map holds.
- */
-/**
  * Entropy captured once, before any generated code runs, and kept across HMR evaluations.
  *
  * `crypto.randomUUID` and `Math.random` are writable. Recapturing them on a reload would mean
@@ -47,6 +41,9 @@ type Entropy = {
   random: () => number;
   define: typeof Object.defineProperty;
   create: typeof Object.create;
+  entries: typeof Object.entries;
+  objectURL: typeof URL.createObjectURL;
+  blob: typeof Blob;
 };
 const entropy: Entropy = (() => {
   const existing = (globalThis as Record<string, unknown>)[ENTROPY_KEY] as Entropy | undefined;
@@ -56,28 +53,32 @@ const entropy: Entropy = (() => {
   // so every intrinsic this module relies on is taken now, while the realm is still ours.
   // Plain `Object.*` here only: this branch runs on the first evaluation, before any generated
   // code exists. A reload takes the `existing` path above and never calls them.
-  const fresh: Entropy = Object.freeze({ uuid: crypto?.randomUUID?.bind(crypto), random: Math.random, define: Object.defineProperty, create: Object.create });
+  const fresh: Entropy = Object.freeze({
+    uuid: crypto?.randomUUID?.bind(crypto),
+    random: Math.random,
+    define: Object.defineProperty,
+    create: Object.create,
+    entries: Object.entries,
+    objectURL: URL.createObjectURL.bind(URL),
+    blob: Blob,
+  });
   Object.defineProperty(globalThis, ENTROPY_KEY, { value: fresh, writable: false, configurable: false, enumerable: false });
   return fresh;
 })();
-const { define, create } = entropy;
+const { define, create, entries, objectURL, blob } = entropy;
 
 // Null-prototype tables, not `Map`: generated code shares this realm and can replace
-// `Map.prototype.has`/`get`, which would make the handle check accept a token the caller chose and
-// hand back a victim's owner. With no prototype, `in` and `[]` dispatch nothing replaceable.
-const handleOwners: Record<string, string | undefined> = create(null);
-const ownerHandles: Record<string, string> = create(null);
+// `Map.prototype.has`/`get`, which would make the capability check accept a caller-chosen token
+// and hand back a victim's owner. With no prototype, `in` and `[]` dispatch nothing replaceable.
+//
+// The capability a shim carries is **its own `import.meta.url`**. Nothing secret is written into
+// the shim's source, so intercepting the text of one tells you nothing, and the URL only becomes
+// visible at the moment it is minted — which is why the minting intrinsics live in the entropy
+// holder above rather than being looked up off the realm. A card can resolve its own shim through
+// its own import map and get its own capability; nobody else's is obtainable that way.
+const ownersByUrl: Record<string, string | undefined> = create(null);
 
 const token = () => entropy.uuid?.() ?? `${Date.now().toString(36)}-${entropy.random().toString(36).slice(2)}`;
-const handleFor = (sessionId: string | undefined): string => {
-  const key = sessionId ?? "";
-  const existing = ownerHandles[key];
-  if (existing !== undefined) return existing;
-  const handle = token();
-  ownerHandles[key] = handle;
-  handleOwners[handle] = sessionId;
-  return handle;
-};
 
 /** Named so the round trip can be tested against the real code rather than a copy of it. */
 export function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {
@@ -101,9 +102,9 @@ export function registerUi4aHost(next: Ui4aHost): () => void {
  * already-imported blob modules going stale — they close over `bind`, not over a host.
  */
 /** What a synthesized shim imports. A handle it was minted with; anything else is refused. */
-export function bindOwner(handle: string) {
-  if (!(handle in handleOwners)) throw new Error("[dsh-generative-ui] no such capability handle");
-  return bind(handleOwners[handle]);
+export function bindOwner(capability: string) {
+  if (!(capability in ownersByUrl)) throw new Error("[dsh-generative-ui] no such capability");
+  return bind(ownersByUrl[capability]);
 }
 
 export function bind(sessionId?: string) {
@@ -325,7 +326,7 @@ define(globalThis, INTERNAL_KEY, { value: bindOwner, writable: false, configurab
 let internal: string | null = null;
 const internalModule = (): string => {
   if (internal !== null) return internal;
-  internal = URL.createObjectURL(new Blob([`export const bindOwner = globalThis[${JSON.stringify(INTERNAL_KEY)}];`], { type: "text/javascript" }));
+  internal = objectURL(new blob([`export const bindOwner = globalThis[${JSON.stringify(INTERNAL_KEY)}];`], { type: "text/javascript" }));
   return internal;
 };
 
@@ -343,13 +344,17 @@ export function bindingImports(sessionId?: string): Record<string, string> {
   const bound = bind();
   // Enumerated from `bind()`, not from a list beside it: a group added to the implementation and
   // missed here would simply have no blob module, and a card importing it renders blank with
-  // nothing in the console — the failure mode this project spends the most effort on.
-  for (const [group, members] of Object.entries(bound)) {
+  // nothing in the console — the failure mode this project spends the most effort on. `entries` is
+  // the captured one: a card that swapped `Object.entries` for a wrapper could retain the whole
+  // unowned surface and use it against whichever session is selected.
+  for (const [group, members] of entries(bound)) {
     const names = Object.keys(members);
-    // One `export const` per name: ESM export names must be statically visible. The handle is
-    // compiled into the body because a blob URL cannot carry a query string.
-    const body = [`import { bindOwner } from ${JSON.stringify(source)};`, `const g = bindOwner(${JSON.stringify(handleFor(sessionId))}).${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
-    imports[capabilityModule(group)] = URL.createObjectURL(new Blob([body], { type: "text/javascript" }));
+    // One `export const` per name: ESM export names must be statically visible. The capability is
+    // the shim's own URL, read in the shim itself — no secret is written into the body.
+    const body = [`import { bindOwner } from ${JSON.stringify(source)};`, `const g = bindOwner(import.meta.url).${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
+    const url = objectURL(new blob([body], { type: "text/javascript" }));
+    ownersByUrl[url] = sessionId;
+    imports[capabilityModule(group)] = url;
   }
   cached[key] = imports;
   return imports;
@@ -358,6 +363,7 @@ export function bindingImports(sessionId?: string): Record<string, string> {
 export function releaseBindings(): void {
   for (const imports of Object.values(cached)) for (const url of Object.values(imports)) URL.revokeObjectURL(url);
   for (const key of Object.keys(cached)) delete cached[key];
+  for (const url of Object.keys(ownersByUrl)) delete ownersByUrl[url];
   if (internal !== null) {
     URL.revokeObjectURL(internal);
     internal = null;

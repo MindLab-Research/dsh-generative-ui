@@ -513,6 +513,7 @@ token minted outside this realm. #82 carries that.
 
 ## 4. Known traps
 
+- **AI and search cancellation follows the response, just like exec.** Consuming a POST body does not mean the reader left. Check `res.destroyed` before starting provider work, and abort only when the response closes before `writableEnded`.
 - **A superseded card cannot cancel a pending report either.** Check the newest-card predicate before touching the shared pending timer, not only before retracting an already-sent failure. Otherwise an old card painting during the settle window silently suppresses the current card's error.
 - **An empty canvas listing is a result, not a fallback for failed reads.** Missing files may return 404 while a write lands, and a missing canvas directory is an empty listing. Network, permission and server failures remain errors: the browser and canvas body show localized feedback with a retry action. A retry drops the retained body before refetching — `body` can still hold the source of a revision whose read failed, and rendering that while the retry is pending executes code the file no longer has. The auto-open listing's progress marker likewise advances only on a listing that landed, or a rejection consumes the next successful listing as the baseline and the canvas it found is never opened.
 

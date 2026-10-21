@@ -477,34 +477,36 @@ Data visualization is the stated exception — chart series need their own hues 
 ## 3.68 What `$dsh/*` does and does not defend against
 
 Generated code runs **in the host's realm**, with the same reach to `globalThis`, the built-in
-prototypes and the DOM as the plugin's own client half. It can rewrite `Object.entries`,
-`URL.createObjectURL`, `Blob`, `Array.prototype.join`, `String.prototype.replace` — anything —
-*before* whichever plugin code path runs next.
+prototypes and the DOM as the plugin's own client half. That makes a boundary drawn *inside* this
+realm a fight against an unbounded list: the shim body is built with `Array.prototype.join`,
+`JSON.stringify`, `String.prototype.replace`, and any intrinsic used after a card runs can be
+turned on us.
 
-That makes a capability boundary drawn inside this realm **unbounded work**: the shim body is
-built from strings, the handle it carries is a bearer token, and any intrinsic used after a card
-runs can be turned into a way to read or mint one. Sealing a property, capturing one entropy
-source, using a null-prototype table — each closes the vector named and leaves the class open.
+The design therefore keeps the capability **out of every string**, and keeps the minting
+intrinsics **out of the realm's hands**:
 
-What this module does defend, and deliberately:
+- A shim's capability is **its own `import.meta.url`**, read in the shim itself. Nothing is
+  compiled into the body, so intercepting the text of one reveals nothing.
+- `URL.createObjectURL` and `Blob` are captured at first module load (with the entropy holder),
+  so the URL only becomes visible where we decide — not to a wrapper a card installed earlier.
+- **No realm-controlled call touches the capability surface or the shim source.** The shims are
+  enumerated and assembled with the captured `Object.entries`/`keys`/`values` and index loops and
+  `+`; a swapped-in `Object.keys` would otherwise be handed `bind()`'s unowned surface, and a
+  swapped-in `join`/`map` is code injection into another surface's module.
+- The holder is **fail-closed across an upgrade**: a build whose holder predates the minting
+  intrinsics refuses to mint rather than recapturing them mid-page. The capture point *is* the
+  property; it can only happen before generated code runs.
+- `$dsh/internal` is a private blob no import map names; the bridge it reads is sealed under an
+  unpredictable key.
 
-- Handles are minted from entropy captured at first module load, not from whatever the realm holds
-  later, and are unguessable.
-- `$dsh/internal` is a private blob that no import map names, so a card is not invited to name
-  another owner's binder.
-- The bridge is sealed under a key the card cannot predict.
+Routes enforce the other half: `session` and `cwd` have to name the same session, so one request
+cannot read or run in a workspace under another session's access mode.
 
-What it does **not** defend, and cannot from here:
-
-- A card that intercepts blob creation or module-source construction can read another surface's
-  handle and act as its owner.
-- None of this is a boundary at all while `/dsh-generative-ui/*` accepts any live session id from
-  any page — an attacker skips `$dsh/*` entirely and calls the routes.
-
-So the realm work is **defence in depth**. The authorization boundary is the route layer, and the
-only changes that close the class are a separate realm for generated code, or server-validated
-owner tokens issued outside the realm. Until one of those lands, treat further "an intrinsic is
-replaceable" reports as the same open class rather than as individual defects.
+What is still not defended: generated code and the plugin share a realm, so anything the plugin
+does that is observable *after* a card has run is fair game. There is no secret a same-origin
+page can hold and its own scripts cannot read, which is why the remaining answer is architectural
+— give generated code its own realm, or move the capability check into the route layer behind a
+token minted outside this realm. #82 carries that.
 
 ## 4. Known traps
 

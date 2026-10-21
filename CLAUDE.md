@@ -489,8 +489,13 @@ intrinsics **out of the realm's hands**:
   compiled into the body, so intercepting the text of one reveals nothing.
 - `URL.createObjectURL` and `Blob` are captured at first module load (with the entropy holder),
   so the URL only becomes visible where we decide — not to a wrapper a card installed earlier.
-- `Object.entries` is captured too: a swapped-in wrapper could otherwise retain the whole unowned
-  surface and use it against whichever session is selected.
+- **No realm-controlled call touches the capability surface or the shim source.** The shims are
+  enumerated and assembled with the captured `Object.entries`/`keys`/`values` and index loops and
+  `+`; a swapped-in `Object.keys` would otherwise be handed `bind()`'s unowned surface, and a
+  swapped-in `join`/`map` is code injection into another surface's module.
+- The holder is **fail-closed across an upgrade**: a build whose holder predates the minting
+  intrinsics refuses to mint rather than recapturing them mid-page. The capture point *is* the
+  property; it can only happen before generated code runs.
 - `$dsh/internal` is a private blob no import map names; the bridge it reads is sealed under an
   unpredictable key.
 

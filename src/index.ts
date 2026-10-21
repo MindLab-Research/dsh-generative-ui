@@ -261,6 +261,12 @@ export async function serveFs(ctx: FsCtx, liveWorkspaces: () => ReadonlySet<stri
   const path = url.searchParams.get("path");
   if (cwd === null || path === null || path === "") return void res.writeHead(400).end();
   if (!liveWorkspaces().has(cwd)) return void res.writeHead(403).end();
+  // Before ANY read as well as before a write. `cwd` selects the allowlist entry and `session`
+  // selects the policy; left independent, a GET with someone else's workspace reads it and a POST
+  // writes it under another session's access mode. Reads carry `session` too.
+  const sessionId = url.searchParams.get("session");
+  const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
+  if (session === undefined || session.header.cwd !== cwd) return void res.writeHead(400).end();
 
   const json = (status: number, body: unknown): void => {
     res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -305,14 +311,8 @@ export async function serveFs(ctx: FsCtx, liveWorkspaces: () => ReadonlySet<stri
       return void res.writeHead(400).end();
     }
     if (typeof content !== "string") return void res.writeHead(400).end();
-    // The session's policy, not ours: the composer's access mode is what decides. Addressed
-    // by id, not found by cwd — several sessions share one workspace, and picking the first
-    // of them silently runs the write under a stranger's access mode.
-    const sessionId = url.searchParams.get("session");
-    const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
-    // The pair has to belong together: `cwd` picks the allowlist entry, `session` picks the policy,
-    // and either one naming a different session is a request to act on one under another's rules.
-    if (session === undefined || session.header.cwd !== cwd) return void res.writeHead(400).end();
+    // The session's policy, not ours: the composer's access mode is what decides. The pair was
+    // validated above, before anything could be read or written.
     await ctx.fs.writeText(target, content, undefined, undefined, ctx.sandboxPolicy.resolve({ session }));
     return json(200, { written: target.displayPath });
   } catch (error) {

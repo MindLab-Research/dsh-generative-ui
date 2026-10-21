@@ -42,6 +42,8 @@ type Entropy = {
   define: typeof Object.defineProperty;
   create: typeof Object.create;
   entries: typeof Object.entries;
+  keys: typeof Object.keys;
+  values: typeof Object.values;
   objectURL: typeof URL.createObjectURL;
   blob: typeof Blob;
 };
@@ -59,13 +61,26 @@ const entropy: Entropy = (() => {
     define: Object.defineProperty,
     create: Object.create,
     entries: Object.entries,
+    keys: Object.keys,
+    values: Object.values,
     objectURL: URL.createObjectURL.bind(URL),
     blob: Blob,
   });
   Object.defineProperty(globalThis, ENTROPY_KEY, { value: fresh, writable: false, configurable: false, enumerable: false });
   return fresh;
 })();
-const { define, create, entries, objectURL, blob } = entropy;
+const { define, create, entries, keys, values, objectURL, blob } = entropy;
+/**
+ * An older build's holder has only the entropy and the two Object helpers. Minting with `undefined`
+ * in place of `URL.createObjectURL` is a blank card; capturing them fresh at upgrade time would
+ * mean capturing whatever a card left in the realm. So this fails closed instead: the capture
+ * point is the property, and it can only happen before generated code runs. One page reload.
+ */
+export const intrinsicsReady = (holder: Partial<Entropy>): boolean => typeof holder.objectURL === "function" && typeof holder.blob === "function" && typeof holder.entries === "function" && typeof holder.keys === "function" && typeof holder.values === "function";
+const requireIntrinsics = (): void => {
+  if (intrinsicsReady(entropy)) return;
+  throw new Error("[dsh-generative-ui] capability intrinsics predate this build; reload the page before rendering generated UI");
+};
 
 // Null-prototype tables, not `Map`: generated code shares this realm and can replace
 // `Map.prototype.has`/`get`, which would make the capability check accept a caller-chosen token
@@ -326,11 +341,14 @@ define(globalThis, INTERNAL_KEY, { value: bindOwner, writable: false, configurab
 let internal: string | null = null;
 const internalModule = (): string => {
   if (internal !== null) return internal;
-  internal = objectURL(new blob([`export const bindOwner = globalThis[${JSON.stringify(INTERNAL_KEY)}];`], { type: "text/javascript" }));
+  // Assembled with `+`, not `JSON.stringify`/`join`: this is module source, and a swapped-in
+  // formatter is a way to inject code into someone else's surface.
+  internal = objectURL(new blob(['export const bindOwner = globalThis["' + INTERNAL_KEY + '"];'], { type: "text/javascript" }));
   return internal;
 };
 
 export function bindingImports(sessionId?: string): Record<string, string> {
+  requireIntrinsics();
   const key = sessionId ?? "";
   const existing = cached[key];
   if (existing !== undefined) return existing;
@@ -344,14 +362,22 @@ export function bindingImports(sessionId?: string): Record<string, string> {
   const bound = bind();
   // Enumerated from `bind()`, not from a list beside it: a group added to the implementation and
   // missed here would simply have no blob module, and a card importing it renders blank with
-  // nothing in the console — the failure mode this project spends the most effort on. `entries` is
-  // the captured one: a card that swapped `Object.entries` for a wrapper could retain the whole
-  // unowned surface and use it against whichever session is selected.
-  for (const [group, members] of entries(bound)) {
-    const names = Object.keys(members);
+  // nothing in the console — the failure mode this project spends the most effort on.
+  //
+  // Every step below avoids a realm-controlled call. `entries`/`keys` are the captured ones and
+  // the loops are index loops, so a live capability object never reaches a function a card can
+  // replace — that would hand it `bind()`'s unowned surface, which resolves to whichever session
+  // is selected. The source is assembled with `+` for the same reason: a swapped-in `join` or
+  // `map` is code injection into another surface's module.
+  const groups = entries(bound);
+  for (let g = 0; g < groups.length; g += 1) {
+    const group = groups[g][0];
+    const names = keys(groups[g][1]);
     // One `export const` per name: ESM export names must be statically visible. The capability is
     // the shim's own URL, read in the shim itself — no secret is written into the body.
-    const body = [`import { bindOwner } from ${JSON.stringify(source)};`, `const g = bindOwner(import.meta.url).${group};`, ...names.map((name) => `export const ${name} = g.${name};`), "export default g;"].join("\n");
+    let body = 'import { bindOwner } from "' + source + '";\nconst g = bindOwner(import.meta.url).' + group + ";\n";
+    for (let n = 0; n < names.length; n += 1) body += "export const " + names[n] + " = g." + names[n] + ";\n";
+    body += "export default g;";
     const url = objectURL(new blob([body], { type: "text/javascript" }));
     ownersByUrl[url] = sessionId;
     imports[capabilityModule(group)] = url;
@@ -361,9 +387,15 @@ export function bindingImports(sessionId?: string): Record<string, string> {
 }
 
 export function releaseBindings(): void {
-  for (const imports of Object.values(cached)) for (const url of Object.values(imports)) URL.revokeObjectURL(url);
-  for (const key of Object.keys(cached)) delete cached[key];
-  for (const url of Object.keys(ownersByUrl)) delete ownersByUrl[url];
+  const owners = values(cached);
+  for (let i = 0; i < owners.length; i += 1) {
+    const urls = values(owners[i]);
+    for (let j = 0; j < urls.length; j += 1) URL.revokeObjectURL(urls[j]);
+  }
+  const cachedKeys = keys(cached);
+  for (let i = 0; i < cachedKeys.length; i += 1) delete cached[cachedKeys[i]];
+  const ownedUrls = keys(ownersByUrl);
+  for (let i = 0; i < ownedUrls.length; i += 1) delete ownersByUrl[ownedUrls[i]];
   if (internal !== null) {
     URL.revokeObjectURL(internal);
     internal = null;

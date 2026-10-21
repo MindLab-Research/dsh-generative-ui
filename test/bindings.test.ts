@@ -182,3 +182,44 @@ test("entropy survives a reload even after a card replaced the realm primitives"
     (globalThis.crypto as any).randomUUID = realUUID;
   }
 });
+
+test("shim construction does not run through anything a card can replace", async () => {
+  const { bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
+  release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
+  const stolen: unknown[] = [];
+  const realKeys = Object.keys;
+  const realMap = Array.prototype.map;
+  const realJoin = Array.prototype.join;
+  (Object as any).keys = (value: unknown) => {
+    stolen.push(value);
+    return realKeys(value);
+  };
+  (Array.prototype as any).map = function (fn: unknown) {
+    stolen.push(this);
+    return realMap.call(this, fn);
+  };
+  (Array.prototype as any).join = function (sep: unknown) {
+    stolen.push(this);
+    return realJoin.call(this, sep);
+  };
+  try {
+    const source = await (await fetch(bindingImports("mine")["$dsh/fs"])).text();
+    expect(source).toContain("bindOwner(import.meta.url)");
+    // Nothing that reached a replaceable call was a live capability object. If it were, the
+    // wrapper could retain `readFile` and use it against whichever session is selected.
+    expect(stolen.every((value) => typeof value !== "object" || value === null || Array.isArray(value) || !("readFile" in (value as object)))).toBe(true);
+  } finally {
+    Object.keys = realKeys;
+    (Array.prototype as any).map = realMap;
+    (Array.prototype as any).join = realJoin;
+  }
+});
+
+test("an older entropy holder fails closed instead of minting broken shims", () => {
+  const { intrinsicsReady } = require("../src/client/runtime/bindings.ts") as { intrinsicsReady: (holder: Record<string, unknown>) => boolean };
+  // The parent build's holder has only entropy and the two Object helpers. Capturing the rest at
+  // upgrade time would mean capturing whatever a card left in the realm; refusing is the honest
+  // answer, and one page reload fixes it.
+  expect(intrinsicsReady({ uuid: () => "x", random: Math.random, define: Object.defineProperty, create: Object.create })).toBe(false);
+  expect(intrinsicsReady({ objectURL: () => "blob:x", blob: Blob, entries: Object.entries, keys: Object.keys, values: Object.values })).toBe(true);
+});

@@ -204,9 +204,11 @@ do not initialize the derived field to `""` and wait for an effect or the first 
 - For controls, keyboard and screen-reader access, selected state, and motion: [accessibility.md](references/accessibility.md).
 - For audio or waveform UI: [sound.md](references/sound.md).
 - For hooks, timers, animation loops, or overlapping async work: [runtime.md](references/runtime.md).
+
 <!-- web-reference -->
 <!-- files-reference -->
 <!-- ai-reference -->
+
 - Before handing over a long inline card or canvas: [checking.md](references/checking.md).
 - When choosing an npm library or checking an export: [imports.md](references/imports.md).
 

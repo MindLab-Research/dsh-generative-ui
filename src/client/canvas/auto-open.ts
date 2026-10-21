@@ -68,24 +68,31 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
   /** Last signature acted on, per session and canvas. */
   const opened = new Map<string, string>();
   /**
-   * The canvases the last listing saw, or `null` before the first one.
+   * One session's listing state.
    *
-   * The first listing is a BASELINE and opens nothing: a workspace that already holds seventeen
-   * canvases from last week would otherwise get seventeen tabs. What it is for is the difference
-   * — a canvas that appears after it is one this session caused.
+   * Everything about a listing is transcript-local: the marker counts settled opaque calls in
+   * that one session, and the root is that session's workspace. A shared scalar gets both wrong
+   * the moment two sessions are in play — one blocks the other's marker, and a queued request
+   * re-reads `cwd()` for whatever session happens to be selected when it drains.
    */
-  let listed: ReadonlySet<string> | null = null;
-  /** Settled opaque calls at the time of the last listing that LANDED; `0`, so none means never relist. */
-  let listedAt = 0;
-  /** One listing at a time. An overlapping one would roll the marker back to a value still in flight. */
-  let listing = false;
-  /**
-   * The newest write seen per session while a listing was in flight.
-   *
-   * Per session because the markers count settled opaque calls in ONE transcript: session A's
-   * marker says nothing about how many writes B has made, so comparing them is meaningless.
-   */
-  const queued = new Map<string, number>();
+  type Listing = {
+    /** The canvases the last listing saw, or `null` before the first one. */
+    listed: ReadonlySet<string> | null;
+    /** Settled opaque calls at the time of the last listing that LANDED. */
+    marker: number;
+    /** The newest write seen while a listing was in flight, with the workspace it belongs to. */
+    queued: { marker: number; root: string } | null;
+    inFlight: boolean;
+  };
+  const listings = new Map<string, Listing>();
+  const listingFor = (session: string): Listing => {
+    const existing = listings.get(session);
+    if (existing !== undefined) return existing;
+    const fresh: Listing = { listed: null, marker: 0, queued: null, inFlight: false };
+    listings.set(session, fresh);
+    return fresh;
+  };
+
   /**
    * `collectCanvases` walks every argument string by hand, which is what makes it correct on a
    * half-arrived JSON prefix — and it costs 0.16ms per canvas per sweep. The sweep runs on every
@@ -97,39 +104,38 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
   let opaqueAfter = -1;
 
   /** The canvases `collect.ts` cannot name, found by listing after a call that might have written one. */
-  const relist = (session: string, settledOpaque: number) => {
-    const root = cwd?.();
-    if (root === undefined || list === undefined) return;
+  const relist = (session: string, settledOpaque: number, root: string) => {
+    if (list === undefined) return;
+    const state = listingFor(session);
     // A write that lands mid-listing is not dropped: its own listing follows this one, and if the
-    // directory snapshot predates it the canvas is otherwise never opened at all.
-    if (listing) {
-      const seen = queued.get(session);
-      if (seen === undefined || settledOpaque > seen) queued.set(session, settledOpaque);
+    // directory snapshot predates it the canvas is otherwise never opened at all. The root travels
+    // with it, because by the time this drains the reader may be looking at another session.
+    if (state.inFlight) {
+      if (state.queued === null || settledOpaque > state.queued.marker) state.queued = { marker: settledOpaque, root };
       return;
     }
-    if (settledOpaque === listedAt) return;
-    listing = true;
+    if (settledOpaque === state.marker) return;
+    state.inFlight = true;
     const drain = () => {
-      const next = queued.entries().next().value as [string, number] | undefined;
-      if (next === undefined) return;
-      queued.delete(next[0]);
-      relist(next[0], next[1]);
+      const next = state.queued;
+      state.queued = null;
+      if (next !== null) relist(session, next.marker, next.root);
     };
     void list(root)
       .then((ids) => {
-        listing = false;
+        state.inFlight = false;
         // Only a listing that landed advances the marker. Rolling a failed one back to whatever
         // was there before is wrong too: with two writes in flight that value is another request's
         // uncommitted marker, and restoring it loses both writes to the next baseline.
-        listedAt = settledOpaque;
-        const known = listed;
+        state.marker = settledOpaque;
+        const known = state.listed;
         const fresh = known === null ? [] : ids.filter((id) => !known.has(id));
-        listed = new Set(ids);
+        state.listed = new Set(ids);
         for (const id of fresh) open(session, id);
         drain();
       })
       .catch((error: unknown) => {
-        listing = false;
+        state.inFlight = false;
         console.error("[dsh-generative-ui] could not list canvases", error);
         // Settling a promise schedules no sweep of its own, so a write queued behind this one
         // would wait for some unrelated mutation before it was ever listed.
@@ -158,7 +164,8 @@ export function createCanvasAutoOpen({ calls, sessionId, open, cwd, list }: Auto
       opened.set(mapKey, signature);
       open(session, id);
     }
-    relist(session, opaqueAfter);
+    const root = cwd?.();
+    if (root !== undefined) relist(session, opaqueAfter, root);
   };
 
   return { sweep };

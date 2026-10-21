@@ -16,13 +16,13 @@ const read = (id: string): ToolCallView => ({ name: "read", argsRaw: JSON.string
 const unrelated = (): ToolCallView => ({ name: "write", argsRaw: JSON.stringify({ path: "/home/me/proj/README.md", content: "hi" }), settled: true });
 
 /** Drives one auto-open over a growing transcript — the shape production has: calls arrive, they do not swap. */
-function harness(options: { list?: () => Promise<readonly string[]> } = {}) {
+function harness(options: { list?: (root: string) => Promise<readonly string[]>; cwd?: () => string | undefined; sessionId?: () => string | undefined } = {}) {
   let calls: readonly ToolCallView[] = [];
   const opens: string[] = [];
   const { sweep } = createCanvasAutoOpen({
     calls: () => calls,
-    sessionId: () => SID,
-    cwd: () => "/workspace",
+    sessionId: options.sessionId ?? (() => SID),
+    cwd: options.cwd ?? (() => "/workspace"),
     list: options.list ?? (async () => []),
     open: (session, id) => opens.push(`${session}/${id}`),
   });
@@ -327,4 +327,76 @@ test("a write queued behind a failed listing is still listed", async () => {
   } finally {
     console.error = silent;
   }
+});
+
+test("one session's completed marker does not block another's listing", async () => {
+  // The markers count settled opaque calls in one transcript. A's marker 1 says nothing about
+  // B's, so a shared `listedAt` swallowed B's listing whenever the two happened to share a number.
+  const release: (() => void)[] = [];
+  const opens: string[] = [];
+  let session = "a";
+  let calls: readonly ToolCallView[] = [];
+  let attempt = 0;
+  const { sweep } = createCanvasAutoOpen({
+    calls: () => calls,
+    sessionId: () => session,
+    cwd: () => "/workspace",
+    list: async () => {
+      attempt += 1;
+      await new Promise<void>((r) => release.push(r));
+      return attempt === 3 ? ["old", "b-new"] : ["old"];
+    },
+    open: (opened, id) => opens.push(`${opened}/${id}`),
+  });
+  calls = [runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`)];
+  sweep();
+  await drain();
+  session = "b";
+  calls = [runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`)];
+  sweep();
+  await drain();
+  // B lists while A is still in flight. With one shared marker it was queued and then dropped.
+  expect(attempt).toBe(2);
+  for (const done of release.splice(0)) done();
+  await drain();
+  for (const done of release.splice(0)) done();
+  await drain();
+  // B's first listing is its baseline; the write after it is the one that opens a tab.
+  calls = [...calls, runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`)];
+  sweep();
+  await drain();
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(opens).toEqual(["b/b-new"]);
+});
+
+test("a queued write lists the workspace it was queued against", async () => {
+  const release: (() => void)[] = [];
+  const roots: string[] = [];
+  let root = "/one";
+  let calls: readonly ToolCallView[] = [];
+  const { sweep } = createCanvasAutoOpen({
+    calls: () => calls,
+    sessionId: () => SID,
+    cwd: () => root,
+    list: async (where) => {
+      roots.push(where);
+      await new Promise<void>((r) => release.push(r));
+      return [];
+    },
+    open: () => {},
+  });
+  calls = [runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`)];
+  sweep();
+  await drain();
+  calls = [...calls, runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`)];
+  sweep();
+  await drain();
+  // The reader switches away after the write is queued; draining must still use the queued root.
+  root = "/two";
+  for (const done of release.splice(0)) done();
+  await drain();
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(roots).toEqual(["/one", "/one"]);
 });

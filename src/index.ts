@@ -310,7 +310,9 @@ export async function serveFs(ctx: FsCtx, liveWorkspaces: () => ReadonlySet<stri
     // of them silently runs the write under a stranger's access mode.
     const sessionId = url.searchParams.get("session");
     const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
-    if (session === undefined) return void res.writeHead(400).end();
+    // The pair has to belong together: `cwd` picks the allowlist entry, `session` picks the policy,
+    // and either one naming a different session is a request to act on one under another's rules.
+    if (session === undefined || session.header.cwd !== cwd) return void res.writeHead(400).end();
     await ctx.fs.writeText(target, content, undefined, undefined, ctx.sandboxPolicy.resolve({ session }));
     return json(200, { written: target.displayPath });
   } catch (error) {
@@ -364,7 +366,9 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
 
   const sessionId = url.searchParams.get("session");
   const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
-  if (session === undefined) return void res.writeHead(400).end();
+  // Same pairing rule as the fs route: a command runs under the policy of the session that owns
+  // this workspace, never under one that merely happens to be live.
+  if (session === undefined || session.header.cwd !== cwd) return void res.writeHead(400).end();
 
   let body = "";
   for await (const chunk of req) {

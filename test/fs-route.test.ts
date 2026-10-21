@@ -25,7 +25,12 @@ const ctxWith = (over: Record<string, unknown> = {}, calls: Call[] = []) => ({
     ...over,
   },
   sandboxPolicy: { resolve: (request?: { session?: unknown }) => ({ forSession: request?.session }) },
-  sessions: { list: () => [{ id: "s1" }, { id: "s2" }] },
+  sessions: {
+    list: () => [
+      { id: "s1", header: { cwd: "/w" } },
+      { id: "s2", header: { cwd: "/w" } },
+    ],
+  },
 });
 
 const call = async (query: string, opts: { method?: string; body?: string; ctx?: ReturnType<typeof ctxWith>; live?: Set<string> } = {}) => {
@@ -110,7 +115,7 @@ describe("writes", () => {
     const ctx = ctxWith({}, calls);
     const { status } = await call("cwd=%2Fw&path=a.txt&session=s2", { method: "POST", body: JSON.stringify({ content: "hi" }), ctx });
     expect(status).toBe(200);
-    expect(calls[0].args[4]).toEqual({ forSession: { id: "s2" } });
+    expect(calls[0].args[4]).toEqual({ forSession: { id: "s2", header: { cwd: "/w" } } });
   });
 
   test("a write with no session is refused rather than run under a default", async () => {
@@ -126,4 +131,19 @@ describe("writes", () => {
   test("an unsupported method is 405", async () => {
     expect((await call("cwd=%2Fw&path=a.txt", { method: "DELETE" })).status).toBe(405);
   });
+});
+
+test("a session that does not own the workspace cannot choose the policy for it", async () => {
+  const ctx = {
+    ...ctxWith(),
+    sessions: {
+      list: () => [
+        { id: "s1", header: { cwd: "/w" } },
+        { id: "s2", header: { cwd: "/elsewhere" } },
+      ],
+    },
+  } as never;
+  // `cwd` selects the allowlist entry and `session` selects the policy. Left independent, one
+  // request can read and write a workspace under another session's access mode.
+  expect((await call("cwd=%2Fw&path=a.txt&session=s2", { method: "POST", body: JSON.stringify({ content: "hi" }), ctx })).status).toBe(400);
 });

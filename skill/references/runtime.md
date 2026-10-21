@@ -28,9 +28,12 @@ conversation getting slower for reasons that look like someone else's fault.
 
 ```tsx
 useEffect(() => {
-  let id = requestAnimationFrame(function tick() { step(); id = requestAnimationFrame(tick) })
-  return () => cancelAnimationFrame(id)
-}, [])
+  let id = requestAnimationFrame(function tick() {
+    step();
+    id = requestAnimationFrame(tick);
+  });
+  return () => cancelAnimationFrame(id);
+}, []);
 ```
 
 The same goes for `setInterval` (`clearInterval`), listeners on `window` or `document`
@@ -46,14 +49,14 @@ the answer the reader is looking at gets overwritten by the one they replaced. M
 Bump a ref on entry and let a superseded run return:
 
 ```tsx
-const runId = useRef(0)
+const runId = useRef(0);
 const generate = async (topic: string) => {
-  const id = ++runId.current
+  const id = ++runId.current;
   for await (const chunk of streamText({ prompt: topic })) {
-    if (id !== runId.current) return   // a newer click owns the state now
-    setLines(chunk)
+    if (id !== runId.current) return; // a newer click owns the state now
+    setLines(chunk);
   }
-}
+};
 ```
 
 Inside a `useEffect` the same job is done by `let cancelled = false` and a cleanup that sets it —

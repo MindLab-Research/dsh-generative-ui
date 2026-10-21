@@ -6,17 +6,17 @@ that knowing the subject feels like the same thing as the data being fixed. It i
 > "I know Tokyo, so the attractions are fixed knowledge — I don't need `streamText` here."
 
 That sentence is from a real generation, and it produced five hardcoded itineraries. The
-error is not the knowledge claim; it is that *three-day Tokyo itineraries* is not a set of
+error is not the knowledge claim; it is that _three-day Tokyo itineraries_ is not a set of
 five. Writing them out samples the space and presents the sample as the whole. Ask **could I
-enumerate every answer**, not *do I know this topic*:
+enumerate every answer**, not _do I know this topic_:
 
-| | Closed — no model call | Open — `streamText` |
-| --- | --- | --- |
-| Converter | 100°C is one number | |
-| Timer | one formula | |
-| Itinerary | | any city, any length, any interest |
-| Recipe | | whatever they have in the fridge |
-| Names | | for a thing you have not been told about |
+|           | Closed — no model call | Open — `streamText`                      |
+| --------- | ---------------------- | ---------------------------------------- |
+| Converter | 100°C is one number    |                                          |
+| Timer     | one formula            |                                          |
+| Itinerary |                        | any city, any length, any interest       |
+| Recipe    |                        | whatever they have in the fridge         |
+| Names     |                        | for a thing you have not been told about |
 
 A closed answer has one right value per input. An open one has as many as the user has ideas,
 and hardcoding it produces a card that demos beautifully and dead-ends the moment they want
@@ -66,12 +66,12 @@ stops the generation itself, not just your reading of it.
 This combines cancellation, provisional parsing, and committing only a complete batch:
 
 ```tsx
-import { streamText } from "$dsh/ai"
-import { parse, Allow } from "partial-json"
+import { streamText } from "$dsh/ai";
+import { parse, Allow } from "partial-json";
 
 const running = useRef<AbortController | null>(null);
 const regenerate = async () => {
-  running.current?.abort();                 // the previous result is now stale
+  running.current?.abort(); // the previous result is now stale
   const ctrl = (running.current = new AbortController());
   let buffer = "";
   setError("");
@@ -81,21 +81,32 @@ const regenerate = async () => {
     for await (const chunk of streamText({ prompt, signal: ctrl.signal })) {
       if (ctrl.signal.aborted || running.current !== ctrl) return; // ignore a stopped or superseded request
       buffer += chunk;
-      try { setPreview(normalizeItems(parse(buffer, Allow.ALL)?.items ?? [])) } catch {} // incomplete frame only
+      try {
+        setPreview(normalizeItems(parse(buffer, Allow.ALL)?.items ?? []));
+      } catch {} // incomplete frame only
     }
     if (ctrl.signal.aborted || running.current !== ctrl) return;
     const failure = buffer.match(/(?:^|\n\n)\[([^\n]+)\]\s*$/);
     if (failure) throw new Error(failure[1]); // host appends [reason] even after text when a 200 stream fails
     const next = normalizeItems(JSON.parse(buffer).items);
     if (!next.length || (requestedCount && next.length < requestedCount)) throw new Error("The batch is incomplete");
-    setBatch(next);                          // persist only a complete success
+    setBatch(next); // persist only a complete success
   } catch (error) {
     if (running.current === ctrl && (error as Error).name !== "AbortError") setError(String(error));
   } finally {
-    if (running.current === ctrl) { setPreview([]); running.current = null } // reveal the previous batch on failure
+    if (running.current === ctrl) {
+      setPreview([]);
+      running.current = null;
+    } // reveal the previous batch on failure
   }
 };
-useEffect(() => () => { running.current?.abort(); running.current = null }, []);
+useEffect(
+  () => () => {
+    running.current?.abort();
+    running.current = null;
+  },
+  [],
+);
 ```
 
 Ask for JSON with the fields you render. `normalizeItems` filters empty entries, deduplicates, and

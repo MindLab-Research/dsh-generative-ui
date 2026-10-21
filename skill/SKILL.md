@@ -60,7 +60,7 @@ Two specific traps:
 - **Do not restate the reply as a card.** If the interface only repeats what the prose next to it already said, one of them is redundant, and it is the card.
 - **Do not decorate an answer.** A metric with an icon and a border is still just a number. Ship the number.
 
-**And a long answer is not automatically prose.** The trap above is a card whose body is one paragraph; the opposite trap is a wall of markdown that was a list of things to *do*. A recipe, a workout, a packing list, a set of steps — the reader works through those one item at a time, loses their place, and comes back to them. Ticking an item off is the whole interaction, and markdown cannot offer it. If you are about to write `- ` more than about six times and the items are actions rather than facts, that is the block, not prose.
+**And a long answer is not automatically prose.** The trap above is a card whose body is one paragraph; the opposite trap is a wall of markdown that was a list of things to _do_. A recipe, a workout, a packing list, a set of steps — the reader works through those one item at a time, loses their place, and comes back to them. Ticking an item off is the whole interaction, and markdown cannot offer it. If you are about to write `- ` more than about six times and the items are actions rather than facts, that is the block, not prose.
 
 Conversely: "visualise this", "show me a chart", "make it interactive", "let me try it" are unambiguous requests for the block. Build it directly — don't reach for `run_code` or an image; the fence renders in the browser.
 
@@ -68,9 +68,9 @@ Conversely: "visualise this", "show me a chart", "make it interactive", "let me 
 
 They are not two sizes of the same thing; they have different lifetimes.
 
-**Inline** is *one step of the conversation*. It lives in the message where it was said, it is read once, and it scrolls away. Use it when the UI is tied to what you are saying right now: the comparison you just described, the option set you need answered, a small live calculation.
+**Inline** is _one step of the conversation_. It lives in the message where it was said, it is read once, and it scrolls away. Use it when the UI is tied to what you are saying right now: the comparison you just described, the option set you need answered, a small live calculation.
 
-**Canvas** (`.dsh/ui4a/canvases/<id>.ui4a.tsx`) is *a place the user comes back to*. It stays in the panel across turns, keeps state, and can hold several views. Use it when the thing has substance — a tool, a dashboard, an editor, anything with more than one screen or worth reopening tomorrow.
+**Canvas** (`.dsh/ui4a/canvases/<id>.ui4a.tsx`) is _a place the user comes back to_. It stays in the panel across turns, keeps state, and can hold several views. Use it when the thing has substance — a tool, a dashboard, an editor, anything with more than one screen or worth reopening tomorrow.
 
 **The tell is not "would this be useful to keep".** That question is about the content, it answers
 yes for anything reference-shaped, and it is how a changelog, a cron explanation and a definition of
@@ -110,9 +110,9 @@ also emit an inline `ui4a/tsx` fence or an export/re-export fence for that file.
 the deliverable, and a second fence creates a duplicate surface or renders source instead of the
 saved panel.
 
-Measured: on `cron-read` — *"`*/17 3-5 * * 2` 这个 cron 到底几点跑？"*, a lookup with one right
+Measured: on `cron-read` — _"`*/17 3-5 * * 2` 这个 cron 到底几点跑？"_, a lookup with one right
 answer — models opened a canvas **5 times in one round and 6 in the next**, and one opened a canvas
-for *"什么是闭包？"*. Nobody asked for a file in any of them.
+for _"什么是闭包？"_. Nobody asked for a file in any of them.
 
 When it is genuinely borderline, inline is the cheaper mistake: it is one message, not a file the
 user now owns.
@@ -121,15 +121,18 @@ user now owns.
 
 "Build me a tool", "show me the data" — several plausible readings, no default. Guessing wastes a build; asking in prose makes the user type the answer back.
 
-Ask with an **inline** block instead: one short line saying what you need to know, then 2–4 concrete options as clickable cards, each wired to `sendMessage` so a click *is* the reply:
+Ask with an **inline** block instead: one short line saying what you need to know, then 2–4 concrete options as clickable cards, each wired to `sendMessage` so a click _is_ the reply:
 
 ```tsx
-import { sendMessage } from "$dsh/chat"
-import { usePersistedState } from "$dsh/state"
+import { sendMessage } from "$dsh/chat";
+import { usePersistedState } from "$dsh/state";
 
 export default function Pick() {
-  const [picked, setPicked] = usePersistedState<string | null>("ask:which-cloud-host", null)
-  const choose = (id: string) => { setPicked(id); sendMessage(id) }
+  const [picked, setPicked] = usePersistedState<string | null>("ask:which-cloud-host", null);
+  const choose = (id: string) => {
+    setPicked(id);
+    sendMessage(id);
+  };
   // the key names THIS question — two asks in one conversation must not share it
   // picked === null → the options; otherwise just the chosen one, still highlighted
 }
@@ -143,10 +146,17 @@ weightier than it is. Same `choose`, same key, one row:
 ```tsx
 <div className="flex flex-wrap gap-2">
   {OPTIONS.map((o) => (
-    <button type="button" key={o.id} onClick={() => choose(o.id)} aria-pressed={picked === o.id}
+    <button
+      type="button"
+      key={o.id}
+      onClick={() => choose(o.id)}
+      aria-pressed={picked === o.id}
       className="rounded-md border border-line px-3 py-1.5 text-sm hover:bg-hover
                  aria-pressed:bg-[var(--dsw-alias-button-primary-fill)] aria-pressed:text-[var(--dsw-alias-label-primary-foreground)] aria-pressed:border-transparent
-                 aria-pressed:hover:bg-[var(--dsw-alias-button-primary-fill)]">                    {/* or the selection vanishes under the pointer */}
+                 aria-pressed:hover:bg-[var(--dsw-alias-button-primary-fill)]"
+    >
+      {" "}
+      {/* or the selection vanishes under the pointer */}
       {o.label}
     </button>
   ))}
@@ -160,7 +170,7 @@ Rules for that move:
 
 - **Do it before you explore.** Listing the workspace tells you what is there, never what the user wants. Stalling in tool calls is not a step.
 - **Real options, not a form.** Each card is a thing you could go build right now. "Something else" belongs at the end as a plain text field, not as one of the cards.
-- **One ask per question, and their answer settles that question.** Take it and build: a detail they left open takes your sensible default, named in one line. A choice their answer just *opened* is a different question, and it takes this same move — they told you the language, so formal-or-casual is a question that did not exist a turn ago.
+- **One ask per question, and their answer settles that question.** Take it and build: a detail they left open takes your sensible default, named in one line. A choice their answer just _opened_ is a different question, and it takes this same move — they told you the language, so formal-or-casual is a question that did not exist a turn ago.
 
 Don't ask when the request already names the thing, when there is one obvious reading, or when building it is faster than asking about it. Plain conversational questions get plain answers.
 

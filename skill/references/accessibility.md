@@ -10,8 +10,9 @@
 
   `:focus-visible`, not `:focus` — it shows the ring for the keyboard and not for the mouse,
   which is the reason the ring was annoying in the first place.
+
 - **The rules below share one cause, and knowing it is worth more than the list.** A card gets
-  written as a *picture* of an interface — the slider looks right, the number reads right, the
+  written as a _picture_ of an interface — the slider looks right, the number reads right, the
   ring is visual noise so it goes. Every one of them is correct through a mouse and an eye, and
   broken through a keyboard or a screen reader. Measured: the two most common pairs of defects
   in 378 cards are a stripped focus ring beside an unlabelled slider (8 cards) and an unlabelled
@@ -97,20 +98,21 @@
   The thumb takes `bg-label`, which contrasts the TRACK and therefore inverts with the theme.
   Note what this spelling removes: the previous version of this rule taught the same overrides in
   a `<style>` block, and a card wrote `className="r"` on the input against a `.r
-  input[type=range]` selector — asking for an input *inside* the input. Not one declaration
+  input[type=range]` selector — asking for an input _inside_ the input. Not one declaration
   matched, the OS-blue track shipped, and the dead override block sat in the source looking
   correct. A bracketed selector is attached to the element it styles and cannot miss it.
 
   Then decide what the control means, because the three shapes are not interchangeable and you can
   tell them apart from what the number is:
 
-  - **Picking a value** (speed, font size, a threshold) — plain track, thumb marks *where you are*.
+  - **Picking a value** (speed, font size, a threshold) — plain track, thumb marks _where you are_.
     Filling the left half would claim the value accumulates, and 120ms is not an amount of anything.
   - **An adjustable amount** (budget, volume, progress you can scrub) — fill the left of the track,
     because its length IS the quantity. The fill moves with the value, so this is one of the few
     places a `style` object is right: put the gradient there and leave the rest in classes.
 
         style={ { background: `linear-gradient(to right, var(--dsw-alias-state-business-primary) ${pct}%, var(--dsw-alias-border-l2) ${pct}%)` } }
+
   - **An amount they cannot change** — fill only, and then it is not a slider at all. Two nested
     `<div>`s render identically and announce honestly; a `readOnly` range still says "slider" to a
     screen reader and invites a drag that does nothing.
@@ -149,6 +151,7 @@
   name, so an unlabelled one announces "combo box, 每天" and the reader never learns what it
   selects. Six corpus cards, and the same two fixes. The screen catches these; nothing said so
   until now, which is why they are still here after the slider rule landed.
+
 - **Selected state is not a colour.** A group of choices where the picked one differs only by `background` or `border` reads as three identical buttons to anything that is not looking at it — a screen reader, a keyboard user checking where they are, a browser's own find. Put the state on the element:
 
   ```tsx
@@ -230,7 +233,8 @@
   with a semantic icon/word, or a tested foreground/background pair. Check the actual font size,
   because a pair that passes for a heading can fail for a 10px badge.
 
-  This is about state that *persists* after the interaction. A key that lights while held, a row that highlights on hover — those are momentary feedback and want nothing announced; a state that is over before it is read is worse than none.
+  This is about state that _persists_ after the interaction. A key that lights while held, a row that highlights on hover — those are momentary feedback and want nothing announced; a state that is over before it is read is worse than none.
+
 - **Every visual change is continuous.** No jump cuts: enter from where the element is, and let exits finish.
 - **Treat reduced motion as a source gate, not a finishing touch.** Before sending, search every
   `className` for `animate-`, `transition-` (including `transition-transform`), and keyframe utilities and add

@@ -43,10 +43,16 @@ describe("readCanvasFile", () => {
     expect(await readCanvasFile("/w", "dice")).toBeNull();
   });
 
-  test("a network failure is null, not a throw", async () => {
+  test("a network failure is reported, not mistaken for a missing file", async () => {
     (globalThis as any).fetch = () => Promise.reject(new Error("offline"));
-    expect(await readCanvasFile("/w", "dice")).toBeNull();
+    await expect(readCanvasFile("/w", "dice")).rejects.toThrow("offline");
   });
+
+  for (const status of [403, 500])
+    test(`HTTP ${status} is reported`, async () => {
+      reply = () => new Response("", { status });
+      await expect(readCanvasFile("/w", "dice")).rejects.toThrow(`HTTP ${status}`);
+    });
 
   // The id reaches the server as a query parameter, and canvas ids are routinely non-ASCII.
   test("a non-ASCII id is encoded", async () => {
@@ -58,10 +64,14 @@ describe("readCanvasFile", () => {
 });
 
 describe("listCanvasIds", () => {
-  test("a failed listing is an empty array, so the launcher still renders", async () => {
+  test("a failed listing remains an error", async () => {
     reply = () => new Response("", { status: 500 });
-    expect(await listCanvasIds("/w")).toEqual([]);
+    await expect(listCanvasIds("/w")).rejects.toThrow("HTTP 500");
     (globalThis as any).fetch = () => Promise.reject(new Error("offline"));
+    await expect(listCanvasIds("/w")).rejects.toThrow("offline");
+  });
+  test("a successful empty listing is still empty", async () => {
+    reply = () => Response.json([]);
     expect(await listCanvasIds("/w")).toEqual([]);
   });
 });

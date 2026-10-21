@@ -21,6 +21,7 @@ const call = async (opts: { query?: string; body?: string; ctx?: any; live?: Set
   let status = 0,
     written = "";
   const res = {
+    on() {},
     writeHead(code: number) {
       status = code;
       return res;

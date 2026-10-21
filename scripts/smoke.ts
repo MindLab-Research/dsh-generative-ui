@@ -158,7 +158,11 @@ for (const source of blobs) {
   const body = source
     .split("\n")
     .filter((line) => !line.startsWith("import ") && !line.startsWith("export "))
-    .join("\n");
+    .join("\n")
+    // `import.meta.url` is the capability a shim reads for itself, and it is module-only grammar
+    // that `new Function` has no view of. Stand it in with a literal: the point of this parse is
+    // the rest of the body, not whether the module grammar is legal in a function body.
+    .replaceAll("import.meta.url", '"blob:smoke"');
   try {
     // Constructed for the parse, not the function: a syntax error throws here, and that is the
     // whole check.

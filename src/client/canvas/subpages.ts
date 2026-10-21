@@ -17,6 +17,7 @@ import { canvasPath } from "../../contract.ts";
 import { compiler } from "../runtime/GenUISurface.tsx";
 import type { Canvas } from "./collect.ts";
 import { readCanvasChild } from "./read.ts";
+import { localImports } from "../runtime/bindings.ts";
 /**
  * Matches the specifier of a static import or re-export; the second capture is the specifier.
  *
@@ -145,8 +146,17 @@ export const revokeAll = (urls: string[]): void => {
  * rewrite lands the original source is rendered, which fails exactly as it does today rather
  * than blanking a canvas that was working.
  */
-export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined) {
-  const [resolved, setResolved] = useState<{ key: string; code: string } | null>(null);
+type ResolvedSubPages = { cwd: string; id: string; source: string; code: string };
+
+/**
+ * Whether a rewrite is still the answer for what is being rendered.
+ *
+ * Matched by workspace and exact source, so equal-length edits never reuse an older rewrite.
+ */
+export const resolvedSubPageCode = (resolved: ResolvedSubPages | null, cwd: string | undefined, id: string, source: string) => (resolved !== null && resolved.cwd === cwd && resolved.id === id && resolved.source === source ? resolved.code : source);
+
+export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined, sessionId?: string) {
+  const [resolved, setResolved] = useState<ResolvedSubPages | null>(null);
   // Destructured so the effect depends on scalars: the caller rebuilds `canvas` on every
   // sweep, and depending on the object would re-run the whole resolve for an unchanged canvas.
   const id = canvas?.id;
@@ -154,26 +164,35 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined)
   const streaming = canvas?.streaming;
 
   useEffect(() => {
-    if (cwd === undefined || id === undefined || code === undefined) return;
-    if (!needsResolve(code, streaming)) return;
-    const key = `${id}:${code.length}`;
+    if (cwd === undefined || id === undefined || code === undefined || !needsResolve(code, streaming)) return;
     let live = true;
     const urls: string[] = [];
-    const compile = async (filename: string, source: string) => (await compiler().compile(source, { filename })).code;
-    void inlineSubPages(code, canvasPath(id), (specifier, from) => readCanvasChild(cwd, id, specifier, from), compile, urls).then((next) => {
-      // Resolved after teardown: nobody will ever render these, so revoke them here — the
-      // disposer already ran and cannot see urls the pass appended after it.
-      if (!live) return void revokeAll(urls);
-      setResolved({ key, code: next });
-    });
+    // Children compile against the owning session's import map, so they reach the same `$dsh/*`
+    // shims the card itself does.
+    const compile = async (filename: string, source: string) => (await compiler().compile(source, { filename, importMap: { imports: localImports(sessionId) } })).code;
+    void inlineSubPages(code, canvasPath(id), (specifier, from) => readCanvasChild(cwd, id, specifier, from), compile, urls)
+      .then((next) => {
+        // Resolved after teardown: nobody will ever render these, so revoke them here — the
+        // disposer already ran and cannot see urls the pass appended after it.
+        if (!live) return void revokeAll(urls);
+        setResolved({ cwd, id, source: code, code: next });
+      })
+      .catch((error: unknown) => {
+        revokeAll(urls);
+        if (live) console.error("[dsh-generative-ui] could not resolve canvas sub-pages", error);
+      });
     return () => {
       live = false;
-      // The surface holds the previous code, so its blobs stay reachable until it re-renders;
-      // revoking on the next resolve rather than here would leak one set per edit.
+      // This pass owns its blobs for exactly as long as its rewrite can answer — no longer. A
+      // rewrite whose state update was discarded (unmount before commit, or a later pass winning
+      // the same batch) therefore still releases them: ownership is the effect's, not the state's.
       revokeAll(urls);
+      // And it stops answering on the way out. The source can edit away and back (A -> B -> A), in
+      // which case the older rewrite still matches by source while its blobs are already gone.
+      setResolved(null);
     };
-  }, [cwd, id, code, streaming]);
+  }, [cwd, id, code, streaming, sessionId]);
 
   if (id === undefined || code === undefined) return "";
-  return resolved !== null && resolved.key === `${id}:${code.length}` ? resolved.code : code;
+  return resolvedSubPageCode(resolved, cwd, id, code);
 }

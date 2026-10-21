@@ -16,6 +16,10 @@ export const zh = {
   "guide.description": "浏览工作区里的 canvas",
   "empty.title": "还没有 canvas",
   "empty.body": "让模型写一个到 .dsh/ui4a/canvases/，它会出现在这里。",
+  "read.error": "无法读取画布",
+  "read.loading": "正在读取画布…",
+  "read.missing": "画布文件尚未生成，或已被移除。",
+  "read.retry": "重试",
 } as const;
 
 export type CanvasKey = keyof typeof zh;
@@ -25,6 +29,10 @@ export const en: Record<CanvasKey, string> = {
   "guide.description": "Browse the canvases in this workspace",
   "empty.title": "No canvases yet",
   "empty.body": "Ask the model to write one into .dsh/ui4a/canvases/ and it will show up here.",
+  "read.error": "Could not read canvases",
+  "read.loading": "Loading canvases…",
+  "read.missing": "The canvas file has not been written yet, or was removed.",
+  "read.retry": "Retry",
 };
 
 declare module "@deepseek-ai/dsh-client-ui-slots" {

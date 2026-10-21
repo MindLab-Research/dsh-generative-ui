@@ -25,7 +25,12 @@ const ctxWith = (over: Record<string, unknown> = {}, calls: Call[] = []) => ({
     ...over,
   },
   sandboxPolicy: { resolve: (request?: { session?: unknown }) => ({ forSession: request?.session }) },
-  sessions: { list: () => [{ id: "s1" }, { id: "s2" }] },
+  sessions: {
+    list: () => [
+      { id: "s1", header: { cwd: "/w" } },
+      { id: "s2", header: { cwd: "/w" } },
+    ],
+  },
 });
 
 const call = async (query: string, opts: { method?: string; body?: string; ctx?: ReturnType<typeof ctxWith>; live?: Set<string> } = {}) => {
@@ -54,7 +59,7 @@ const call = async (query: string, opts: { method?: string; body?: string; ctx?:
 
 describe("reads", () => {
   test("a listing forwards only the three contract fields", async () => {
-    const { status, json } = await call("cwd=%2Fw&path=.&list=1");
+    const { status, json } = await call("cwd=%2Fw&path=.&list=1&session=s1");
     expect(status).toBe(200);
     // The host also returns `target` and a `version` cache key. Neither is contract, and
     // `target` is an absolute host path — forwarding it would leak the filesystem layout.
@@ -64,19 +69,19 @@ describe("reads", () => {
   // `readText` decodes UTF-8, so a .mid or .png comes back as U+FFFD — silently corrupt rather
   // than refused. The bytes path exists so a card can have the actual bytes.
   test("?bytes reads bytes, not decoded text", async () => {
-    const { json } = await call("cwd=%2Fw&path=a.mid&bytes=1");
+    const { json } = await call("cwd=%2Fw&path=a.mid&bytes=1&session=s1");
     expect(json.base64).toBe(Buffer.from([0xff, 0x00, 0x80]).toString("base64"));
     expect(json.byteLength).toBe(3);
   });
 
   test("a plain read answers text", async () => {
-    expect((await call("cwd=%2Fw&path=a.txt")).json).toEqual({ content: "text body" });
+    expect((await call("cwd=%2Fw&path=a.txt&session=s1")).json).toEqual({ content: "text body" });
   });
 });
 
 describe("the fence", () => {
   test("a workspace this session does not own is refused", async () => {
-    expect((await call("cwd=%2Fw&path=a.txt", { live: new Set() })).status).toBe(403);
+    expect((await call("cwd=%2Fw&path=a.txt&session=s1", { live: new Set() })).status).toBe(403);
   });
 
   test("a missing path is a 400 before any filesystem call", async () => {
@@ -92,13 +97,13 @@ describe("the fence", () => {
         throw Object.assign(new Error("no"), { code: "FS_SANDBOX_DENIED" });
       },
     });
-    expect((await call("cwd=%2Fw&path=a.txt", { ctx: denied })).status).toBe(403);
+    expect((await call("cwd=%2Fw&path=a.txt&session=s1", { ctx: denied })).status).toBe(403);
     const missing = ctxWith({
       resolve: async () => {
         throw Object.assign(new Error("nope"), { code: "ENOENT" });
       },
     });
-    expect((await call("cwd=%2Fw&path=a.txt", { ctx: missing })).status).toBe(404);
+    expect((await call("cwd=%2Fw&path=a.txt&session=s1", { ctx: missing })).status).toBe(404);
   });
 });
 
@@ -110,7 +115,7 @@ describe("writes", () => {
     const ctx = ctxWith({}, calls);
     const { status } = await call("cwd=%2Fw&path=a.txt&session=s2", { method: "POST", body: JSON.stringify({ content: "hi" }), ctx });
     expect(status).toBe(200);
-    expect(calls[0].args[4]).toEqual({ forSession: { id: "s2" } });
+    expect(calls[0].args[4]).toEqual({ forSession: { id: "s2", header: { cwd: "/w" } } });
   });
 
   test("a write with no session is refused rather than run under a default", async () => {
@@ -124,6 +129,38 @@ describe("writes", () => {
   });
 
   test("an unsupported method is 405", async () => {
-    expect((await call("cwd=%2Fw&path=a.txt", { method: "DELETE" })).status).toBe(405);
+    expect((await call("cwd=%2Fw&path=a.txt&session=s1", { method: "DELETE" })).status).toBe(405);
   });
+});
+
+test("a session that does not own the workspace cannot choose the policy for it", async () => {
+  const ctx = {
+    ...ctxWith(),
+    sessions: {
+      list: () => [
+        { id: "s1", header: { cwd: "/w" } },
+        { id: "s2", header: { cwd: "/elsewhere" } },
+      ],
+    },
+  } as never;
+  // `cwd` selects the allowlist entry and `session` selects the policy. Left independent, one
+  // request can read and write a workspace under another session's access mode.
+  expect((await call("cwd=%2Fw&path=a.txt&session=s2", { method: "POST", body: JSON.stringify({ content: "hi" }), ctx })).status).toBe(400);
+});
+
+test("reads are paired with the session that owns the workspace too", async () => {
+  const ctx = {
+    ...ctxWith(),
+    sessions: {
+      list: () => [
+        { id: "s1", header: { cwd: "/w" } },
+        { id: "s2", header: { cwd: "/elsewhere" } },
+      ],
+    },
+  } as never;
+  // A GET used to reach `readText`/`listDir` before any session was looked at, so a page that
+  // knew another session's workspace could read it. The pair has to be settled first.
+  expect((await call("cwd=%2Fw&path=a.txt&session=s2", { ctx })).status).toBe(400);
+  expect((await call("cwd=%2Fw&path=a.txt&list=1&session=s2", { ctx })).status).toBe(400);
+  expect((await call("cwd=%2Fw&path=a.txt&bytes=1&session=s2", { ctx })).status).toBe(400);
 });

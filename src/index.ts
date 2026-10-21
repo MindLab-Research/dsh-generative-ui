@@ -194,8 +194,13 @@ export async function serveCanvas(liveWorkspaces: () => ReadonlySet<string>, req
           const found = canvasIdOf(`${CANVAS_DIR}/${name}`);
           return found === null ? [] : [found];
         }),
-      () => [],
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") return [];
+        res.writeHead(500).end();
+        return null;
+      },
     );
+    if (ids === null) return;
     res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     return void res.end(JSON.stringify(ids));
   }
@@ -222,9 +227,9 @@ export async function serveCanvas(liveWorkspaces: () => ReadonlySet<string>, req
     const code = await readFile(join(cwd, canvasPath(id)), "utf8");
     res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
     res.end(code);
-  } catch {
+  } catch (error) {
     // A canvas whose write is still streaming has no file yet; the client keeps its own copy.
-    res.writeHead(404).end();
+    res.writeHead((error as NodeJS.ErrnoException).code === "ENOENT" ? 404 : 500).end();
   }
 }
 
@@ -261,6 +266,12 @@ export async function serveFs(ctx: FsCtx, liveWorkspaces: () => ReadonlySet<stri
   const path = url.searchParams.get("path");
   if (cwd === null || path === null || path === "") return void res.writeHead(400).end();
   if (!liveWorkspaces().has(cwd)) return void res.writeHead(403).end();
+  // Before ANY read as well as before a write. `cwd` selects the allowlist entry and `session`
+  // selects the policy; left independent, a GET with someone else's workspace reads it and a POST
+  // writes it under another session's access mode. Reads carry `session` too.
+  const sessionId = url.searchParams.get("session");
+  const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
+  if (session === undefined || session.header.cwd !== cwd) return void res.writeHead(400).end();
 
   const json = (status: number, body: unknown): void => {
     res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
@@ -305,12 +316,8 @@ export async function serveFs(ctx: FsCtx, liveWorkspaces: () => ReadonlySet<stri
       return void res.writeHead(400).end();
     }
     if (typeof content !== "string") return void res.writeHead(400).end();
-    // The session's policy, not ours: the composer's access mode is what decides. Addressed
-    // by id, not found by cwd — several sessions share one workspace, and picking the first
-    // of them silently runs the write under a stranger's access mode.
-    const sessionId = url.searchParams.get("session");
-    const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
-    if (session === undefined) return void res.writeHead(400).end();
+    // The session's policy, not ours: the composer's access mode is what decides. The pair was
+    // validated above, before anything could be read or written.
     await ctx.fs.writeText(target, content, undefined, undefined, ctx.sandboxPolicy.resolve({ session }));
     return json(200, { written: target.displayPath });
   } catch (error) {
@@ -364,7 +371,9 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
 
   const sessionId = url.searchParams.get("session");
   const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
-  if (session === undefined) return void res.writeHead(400).end();
+  // Same pairing rule as the fs route: a command runs under the policy of the session that owns
+  // this workspace, never under one that merely happens to be live.
+  if (session === undefined || session.header.cwd !== cwd) return void res.writeHead(400).end();
 
   let body = "";
   for await (const chunk of req) {
@@ -465,8 +474,11 @@ export async function serveWebSearch(ctx: WebCtx, liveWorkspaces: () => Readonly
   try {
     // Same reason the exec route does it: a card that searches as the reader types has no other
     // way to cancel, and the seam forwards the signal to the provider.
+    if (res.destroyed) return;
     const controller = new AbortController();
-    req.on("close", () => controller.abort());
+    res.on("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
     const result = await ctx.web.search({ query, maxResults: maxResults ?? SEARCH_MAX_RESULTS }, controller.signal);
     return json(200, { content: result.content, sources: result.sources, truncated: result.truncated });
   } catch (error) {
@@ -528,8 +540,11 @@ export async function serveAi(ctx: LlmCtx, liveWorkspaces: () => ReadonlySet<str
   const selection = ctx.agentDefaultModel.currentSelection();
   // Abort the model call when the reader navigates away or the card unmounts; without this
   // a closed tab leaves a generation running and billing.
+  if (res.destroyed) return;
   const controller = new AbortController();
-  req.on("close", () => controller.abort());
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
 
   res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-accel-buffering": "no" });
   try {

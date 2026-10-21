@@ -107,34 +107,119 @@ test("the binding blobs are built once and revoked on release", () => {
   expect(bindingImports()).not.toBe(first);
 });
 
-// The teardown returned by `registerUi4aHost` must not unbind a host that replaced it.
-test("releasing a stale host does not unbind the current one", () => {
-  const stale = hostWith("/a");
-  release = hostWith("/b");
-  stale();
-  // The guard throws synchronously, before any request: asserting through the promise instead
-  // makes the test depend on whatever `fetch` happens to be installed.
-  globalThis.fetch = (async () => new Response("{}")) as typeof fetch;
-  expect(() => bind().fs.readFile("x")).not.toThrow();
+test("session shims are distinct and carry no secret in their source", async () => {
+  const a = bindingImports("a");
+  const b = bindingImports("b");
+  expect(bindingImports("a")).toBe(a);
+  expect(a["$dsh/fs"]).not.toBe(b["$dsh/fs"]);
+  const aSource = await (await fetch(a["$dsh/fs"])).text();
+  const bSource = await (await fetch(b["$dsh/fs"])).text();
+  // The capability is the shim's own `import.meta.url`, read in the shim. Nothing is compiled in,
+  // so intercepting the text of one reveals no more than the card already had.
+  expect(aSource).toContain("bindOwner(import.meta.url)");
+  expect(bSource).toContain("bindOwner(import.meta.url)");
+  // No literal argument: that is what would put a capability in a string a card can read.
+  expect(aSource).not.toMatch(/bindOwner\((["'`])/);
+  expect(bSource).not.toMatch(/bindOwner\((["'`])/);
+  // …and no session id travels in either body.
+  expect(aSource).not.toContain('"a"');
+  expect(bSource).not.toContain('"b"');
+  const internal = aSource.match(/from "(blob:[^"]+)"/)![1];
+  expect(bSource).toContain(internal);
+  expect((await fetch(internal)).ok).toBe(true);
+  // The internal module is not advertised: `$dsh/internal` resolves for no generated card.
+  expect((await import("../src/client/runtime/bindings")).localImports("a")).not.toHaveProperty("$dsh/internal");
 });
 
-// `$dsh/internal` used to be registered inside `registerUi4aHost`, so a surface that came up
-// before any host — a preview, a harness, the first frame of a session, any profile without
-// `conversation` — got capability blobs importing an empty module. The first mount reported
-// `Unresolvable imports` and every one after it rendered silently blank. Nothing in `bind`
-// depends on the host *value*, so nothing about it belongs behind that call.
-test("capability modules resolve without a host registered", async () => {
-  const { bindingImports, bind } = await import("../src/client/runtime/bindings");
-  const imports = bindingImports();
-  const groups = Object.keys(bind());
-  expect(groups.length).toBeGreaterThan(0);
-  for (const group of groups) {
-    const url = imports[`$dsh/${group}`];
-    expect(url).toBeDefined();
-    const source = await (await fetch(url)).text();
-    // Each blob re-exports from the `$dsh/internal` blob; an unregistered one is an empty module.
-    const internalUrl = source.match(/from "(blob:[^"]+)"/)?.[1];
-    expect(internalUrl).toBeDefined();
-    expect(await (await fetch(internalUrl!)).text()).toContain("bind");
+test("a capability is the shim URL itself, and cannot be forged", async () => {
+  const { bindOwner, bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
+  release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
+  const url = bindingImports("victim")["$dsh/fs"];
+  expect(() => bindOwner("blob:not-a-shim")).toThrow("no such capability");
+  expect(() => bindOwner("victim")).toThrow("no such capability");
+  const urls: string[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL) => {
+    urls.push(new URL(String(input), "http://local"));
+    return Response.json({ content: "ok" });
+  }) as typeof fetch;
+  await bindOwner(url).fs.readFile("x");
+  expect(urls.at(-1)!.searchParams.get("session")).toBe("victim");
+});
+
+test("replacing Map.prototype cannot mint a capability for another session", async () => {
+  const { bindOwner, bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
+  release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
+  const capability = bindingImports("victim")["$dsh/fs"];
+  const realHas = Map.prototype.has;
+  const realGet = Map.prototype.get;
+  Map.prototype.has = () => true;
+  Map.prototype.get = () => "victim";
+  try {
+    // The lookup is a null-prototype table, so neither `in` nor `[]` dispatches what a card can
+    // replace. If it did, this would hand back the victim's capabilities instead of throwing.
+    expect(() => bindOwner("forged-token")).toThrow("no such capability");
+    expect(() => bindOwner(capability)).not.toThrow();
+  } finally {
+    Map.prototype.has = realHas;
+    Map.prototype.get = realGet;
   }
+});
+
+test("entropy survives a reload even after a card replaced the realm primitives", async () => {
+  const first = await import("../src/client/runtime/bindings");
+  const capabilityA = first.bindingImports("owner-a")["$dsh/fs"];
+
+  const realUUID = globalThis.crypto.randomUUID;
+  (globalThis.crypto as any).randomUUID = () => "known";
+  try {
+    const second = await import(`../src/client/runtime/bindings.ts?entropy=${Math.random()}`);
+    const capabilityB = second.bindingImports("owner-b")["$dsh/fs"];
+    // A reload must reuse the entropy captured before generated code ran, not whatever it left
+    // in the realm: a constant here would make every later capability — and the bridge key — known.
+    expect(capabilityB).not.toBe("known");
+    expect(capabilityB).not.toBe(capabilityA);
+  } finally {
+    (globalThis.crypto as any).randomUUID = realUUID;
+  }
+});
+
+test("shim construction does not run through anything a card can replace", async () => {
+  const { bindingImports, registerUi4aHost } = await import("../src/client/runtime/bindings");
+  release = registerUi4aHost({ cwd: (owner) => owner, sessionId: () => "selected", send() {} });
+  const stolen: unknown[] = [];
+  const realKeys = Object.keys;
+  const realMap = Array.prototype.map;
+  const realJoin = Array.prototype.join;
+  (Object as any).keys = (value: unknown) => {
+    stolen.push(value);
+    return realKeys(value);
+  };
+  (Array.prototype as any).map = function (fn: unknown) {
+    stolen.push(this);
+    return realMap.call(this, fn);
+  };
+  (Array.prototype as any).join = function (sep: unknown) {
+    stolen.push(this);
+    return realJoin.call(this, sep);
+  };
+  try {
+    const source = await (await fetch(bindingImports("mine")["$dsh/fs"])).text();
+    expect(source).toContain("bindOwner(import.meta.url)");
+    // Nothing that reached a replaceable call was a live capability object. If it were, the
+    // wrapper could retain `readFile` and use it against whichever session is selected.
+    expect(stolen.every((value) => typeof value !== "object" || value === null || Array.isArray(value) || !("readFile" in (value as object)))).toBe(true);
+  } finally {
+    Object.keys = realKeys;
+    (Array.prototype as any).map = realMap;
+    (Array.prototype as any).join = realJoin;
+  }
+});
+
+test("an older entropy holder fails closed instead of minting broken shims", () => {
+  const { intrinsicsReady } = require("../src/client/runtime/bindings.ts") as { intrinsicsReady: (holder: Record<string, unknown>) => boolean };
+  // The parent build's holder has only entropy and the two Object helpers. Capturing the rest at
+  // upgrade time would mean capturing whatever a card left in the realm; refusing is the honest
+  // answer, and one page reload fixes it.
+  expect(intrinsicsReady({ uuid: () => "x", random: Math.random, define: Object.defineProperty, create: Object.create })).toBe(false);
+  expect(intrinsicsReady({ objectURL: () => "blob:x", blob: Blob, entries: Object.entries, keys: Object.keys, values: Object.values })).toBe(true);
 });

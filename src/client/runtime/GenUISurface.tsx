@@ -11,6 +11,8 @@ import { localImports } from "./bindings.ts";
 import { UI4A_ROOT_CLASS, ensureUnoStyles } from "./uno.ts";
 
 export type GenUISurfaceProps = {
+  /** The owning session, independent of the currently selected conversation. */
+  sessionId?: string;
   /** Full source when settled; the growing prefix while streaming. */
   code: string;
   /** True while `code` is still a prefix, so partial frames get normalized before compiling. */
@@ -303,7 +305,11 @@ export const unbundleFetchedImports = (imports: Record<string, string>): Record<
 
 export const bustFetchedImports = (imports: Record<string, string>, attempt: number): Record<string, string> => Object.fromEntries(Object.entries(imports).map(([key, url]) => [key, url.startsWith("https://esm.sh/") ? `${url}${url.includes("?") ? "&" : "?"}ui4a-retry=${attempt}` : url]));
 
-export function GenUISurface({ code, streaming = false, preserveState = true, onError, onRendered, className }: GenUISurfaceProps) {
+export function GenUISurface(props: GenUISurfaceProps) {
+  return <SessionSurface key={props.sessionId} {...props} />;
+}
+
+function SessionSurface({ code, streaming = false, preserveState = true, onError, onRendered, className, sessionId }: GenUISurfaceProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   // State, not a ref: `create` is async, so readiness must be able to trigger the
   // render effect. With a ref, the first pass sees null and nothing ever re-runs it.
@@ -347,7 +353,7 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
   const retryRef = useLatest(() => {
     if (renderer === null || code === "") return;
     const attempt = retriesRef.current;
-    void mergeFallbackImports(localImports(), code).then((imports) => {
+    void mergeFallbackImports(localImports(sessionId), code).then((imports) => {
       // Only the fetched esm.sh entries need busting; the local blob URLs are already fresh.
       // From the second attempt the bundled build is dropped as well: if the first failure was a
       // bundle-side 500 (see `unbundleFetchedImports`) no amount of cache-busting can clear it.
@@ -365,7 +371,7 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
     let attached: GenUIRenderer | null = null;
     void GenUIRenderer.create(host, {
       compiler: compiler(),
-      importmap: { imports: localImports() },
+      importmap: { imports: localImports(sessionId) },
       preserveStateOnUpdate: preserveStateRef.current,
       callbacks: {
         onError: (error, phase) => {
@@ -440,7 +446,7 @@ export function GenUISurface({ code, streaming = false, preserveState = true, on
     if (signature !== importedRef.current) {
       importedRef.current = signature;
       // A later frame's probe can settle first; without this the map reverts to an older import set.
-      void mergeFallbackImports(localImports(), code).then((imports) => {
+      void mergeFallbackImports(localImports(sessionId), code).then((imports) => {
         const settle = probeOutcome(signature, importedRef.current, streamingRef.current, deliveredRef.current, code);
         if (settle === "stale") return;
         renderer.setImportMap({ imports });

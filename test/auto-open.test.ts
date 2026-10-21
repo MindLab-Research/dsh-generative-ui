@@ -16,13 +16,13 @@ const read = (id: string): ToolCallView => ({ name: "read", argsRaw: JSON.string
 const unrelated = (): ToolCallView => ({ name: "write", argsRaw: JSON.stringify({ path: "/home/me/proj/README.md", content: "hi" }), settled: true });
 
 /** Drives one auto-open over a growing transcript — the shape production has: calls arrive, they do not swap. */
-function harness(options: { list?: () => Promise<readonly string[]> } = {}) {
+function harness(options: { list?: (root: string) => Promise<readonly string[]>; cwd?: () => string | undefined; sessionId?: () => string | undefined } = {}) {
   let calls: readonly ToolCallView[] = [];
   const opens: string[] = [];
   const { sweep } = createCanvasAutoOpen({
     calls: () => calls,
-    sessionId: () => SID,
-    cwd: () => "/workspace",
+    sessionId: options.sessionId ?? (() => SID),
+    cwd: options.cwd ?? (() => "/workspace"),
     list: options.list ?? (async () => []),
     open: (session, id) => opens.push(`${session}/${id}`),
   });
@@ -181,4 +181,222 @@ test("ordinary shell work does not pay for a listing", async () => {
   h.push({ name: "run_code", argsRaw: JSON.stringify({ command: "cat package.json" }), settled: true });
   await drain();
   expect(listings).toBe(0);
+});
+
+test("a failed listing is retried, so the next canvas is not swallowed by the baseline", async () => {
+  // The marker used to advance before the listing landed. A rejection therefore left it
+  // advanced and `listed` null: the next successful listing was consumed as the baseline,
+  // so the canvas that appeared after the failure was never opened.
+  let fail = true;
+  let onDisk = ["old"];
+  let listings = 0;
+  const h = harness({
+    list: async () => {
+      listings += 1;
+      if (fail) throw new Error("offline");
+      return onDisk;
+    },
+  });
+  const silent = console.error;
+  console.error = () => {};
+  try {
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+    await drain();
+    expect(listings).toBe(1);
+
+    fail = false;
+    onDisk = ["old", "first"];
+    // No new call: the same settled write must be able to retry its listing.
+    h.sweep();
+    await drain();
+    expect(listings).toBe(2);
+    expect(h.opens).toEqual([]);
+
+    onDisk = ["old", "first", "second"];
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+    await drain();
+    expect(h.opens).toEqual(["s1/second"]);
+  } finally {
+    console.error = silent;
+  }
+});
+
+test("two in-flight listings cannot roll the marker back", async () => {
+  // The first failure used to leave its marker behind for the second request to capture as
+  // `previous`; when the two rejected in order, the second restored it and both writes were
+  // consumed by the next baseline.
+  let release: (() => void)[] = [];
+  let fail = true;
+  const onDisk = ["old", "first", "second"];
+  const h = harness({
+    list: async () => {
+      await new Promise<void>((r) => release.push(r));
+      if (fail) throw new Error("offline");
+      return onDisk;
+    },
+  });
+  const silent = console.error;
+  console.error = () => {};
+  try {
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+    await drain();
+    // Only one listing is in flight; the second call waits for a later sweep.
+    expect(release).toHaveLength(1);
+    fail = true;
+    for (const done of release.splice(0)) done();
+    await drain();
+    expect(h.opens).toEqual([]);
+
+    fail = false;
+    h.sweep();
+    await drain();
+    for (const done of release.splice(0)) done();
+    await drain();
+    // The retry is still a baseline (nothing was listed before it), so it opens nothing — and it
+    // must not be skipped or consumed by a rolled-back marker.
+    expect(h.opens).toEqual([]);
+
+    // The next write is the one that tells the story: its listing must see the baseline and open
+    // only what appeared after it.
+    onDisk.push("third");
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(extra)`));
+    await drain();
+    for (const done of release.splice(0)) done();
+    await drain();
+    expect(h.opens).toEqual(["s1/third"]);
+  } finally {
+    console.error = silent;
+  }
+});
+
+test("a write that lands mid-listing is listed by its own listing", async () => {
+  // Dropping the second sweep left its canvas unlisted whenever the first directory snapshot
+  // predates it — and with no later transcript mutation it was never opened at all.
+  const snapshots = [
+    ["old", "first"],
+    ["old", "first", "second"],
+  ];
+  const release: (() => void)[] = [];
+  const h = harness({
+    list: async () => {
+      await new Promise<void>((r) => release.push(r));
+      return snapshots.shift()!;
+    },
+  });
+  h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+  await drain();
+  h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+  await drain();
+  // The first listing resolves from a snapshot taken before the second write landed.
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(h.opens).toEqual([]);
+  // …and its own listing runs immediately, rather than waiting for an unrelated mutation.
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(h.opens).toEqual(["s1/second"]);
+});
+
+test("a write queued behind a failed listing is still listed", async () => {
+  // Settling the first promise schedules no sweep of its own: without draining here the queued
+  // write waits for some unrelated mutation before anyone looks for its canvas.
+  const release: (() => void)[] = [];
+  let attempt = 0;
+  const h = harness({
+    list: async () => {
+      attempt += 1;
+      await new Promise<void>((r) => release.push(r));
+      if (attempt === 1) throw new Error("offline");
+      return ["old", "first", "second"];
+    },
+  });
+  const silent = console.error;
+  console.error = () => {};
+  try {
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`));
+    await drain();
+    h.push(runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`));
+    await drain();
+    for (const done of release.splice(0)) done();
+    await drain();
+    // The failure drains the queue into a second listing; that one lands and opens the newcomer.
+    for (const done of release.splice(0)) done();
+    await drain();
+    expect(attempt).toBe(2);
+  } finally {
+    console.error = silent;
+  }
+});
+
+test("one session's completed marker does not block another's listing", async () => {
+  // The markers count settled opaque calls in one transcript. A's marker 1 says nothing about
+  // B's, so a shared `listedAt` swallowed B's listing whenever the two happened to share a number.
+  const release: (() => void)[] = [];
+  const opens: string[] = [];
+  let session = "a";
+  let calls: readonly ToolCallView[] = [];
+  let attempt = 0;
+  const { sweep } = createCanvasAutoOpen({
+    calls: () => calls,
+    sessionId: () => session,
+    cwd: () => "/workspace",
+    list: async () => {
+      attempt += 1;
+      await new Promise<void>((r) => release.push(r));
+      return attempt === 3 ? ["old", "b-new"] : ["old"];
+    },
+    open: (opened, id) => opens.push(`${opened}/${id}`),
+  });
+  calls = [runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`)];
+  sweep();
+  await drain();
+  session = "b";
+  calls = [runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`)];
+  sweep();
+  await drain();
+  // B lists while A is still in flight. With one shared marker it was queued and then dropped.
+  expect(attempt).toBe(2);
+  for (const done of release.splice(0)) done();
+  await drain();
+  for (const done of release.splice(0)) done();
+  await drain();
+  // B's first listing is its baseline; the write after it is the one that opens a tab.
+  calls = [...calls, runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`)];
+  sweep();
+  await drain();
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(opens).toEqual(["b/b-new"]);
+});
+
+test("a queued write lists the workspace it was queued against", async () => {
+  const release: (() => void)[] = [];
+  const roots: string[] = [];
+  let root = "/one";
+  let calls: readonly ToolCallView[] = [];
+  const { sweep } = createCanvasAutoOpen({
+    calls: () => calls,
+    sessionId: () => SID,
+    cwd: () => root,
+    list: async (where) => {
+      roots.push(where);
+      await new Promise<void>((r) => release.push(r));
+      return [];
+    },
+    open: () => {},
+  });
+  calls = [runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(src)`)];
+  sweep();
+  await drain();
+  calls = [...calls, runCode(`p = base / 'canvases' / f'{name}.ui4a.tsx'; p.write_text(more)`)];
+  sweep();
+  await drain();
+  // The reader switches away after the write is queued; draining must still use the queued root.
+  root = "/two";
+  for (const done of release.splice(0)) done();
+  await drain();
+  for (const done of release.splice(0)) done();
+  await drain();
+  expect(roots).toEqual(["/one", "/one"]);
 });

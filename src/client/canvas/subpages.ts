@@ -17,6 +17,7 @@ import { canvasPath } from "../../contract.ts";
 import { compiler } from "../runtime/GenUISurface.tsx";
 import type { Canvas } from "./collect.ts";
 import { readCanvasChild } from "./read.ts";
+import { localImports } from "../runtime/bindings.ts";
 /**
  * Matches the specifier of a static import or re-export; the second capture is the specifier.
  *
@@ -145,7 +146,7 @@ export const revokeAll = (urls: string[]): void => {
  * rewrite lands the original source is rendered, which fails exactly as it does today rather
  * than blanking a canvas that was working.
  */
-export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined) {
+export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined, sessionId?: string) {
   const [resolved, setResolved] = useState<{ key: string; code: string } | null>(null);
   // Destructured so the effect depends on scalars: the caller rebuilds `canvas` on every
   // sweep, and depending on the object would re-run the whole resolve for an unchanged canvas.
@@ -156,10 +157,10 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined)
   useEffect(() => {
     if (cwd === undefined || id === undefined || code === undefined) return;
     if (!needsResolve(code, streaming)) return;
-    const key = `${id}:${code.length}`;
+    const key = `${sessionId}:${id}:${code.length}`;
     let live = true;
     const urls: string[] = [];
-    const compile = async (filename: string, source: string) => (await compiler().compile(source, { filename })).code;
+    const compile = async (filename: string, source: string) => (await compiler().compile(source, { filename, importMap: { imports: localImports(sessionId) } })).code;
     void inlineSubPages(code, canvasPath(id), (specifier, from) => readCanvasChild(cwd, id, specifier, from), compile, urls).then((next) => {
       // Resolved after teardown: nobody will ever render these, so revoke them here — the
       // disposer already ran and cannot see urls the pass appended after it.
@@ -172,8 +173,8 @@ export function useSubPages(cwd: string | undefined, canvas: Canvas | undefined)
       // revoking on the next resolve rather than here would leak one set per edit.
       revokeAll(urls);
     };
-  }, [cwd, id, code, streaming]);
+  }, [cwd, id, code, streaming, sessionId]);
 
   if (id === undefined || code === undefined) return "";
-  return resolved !== null && resolved.key === `${id}:${code.length}` ? resolved.code : code;
+  return resolved !== null && resolved.key === `${sessionId}:${id}:${code.length}` ? resolved.code : code;
 }

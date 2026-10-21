@@ -86,6 +86,7 @@ const out = await page.evaluate(
       segments: () => segments,
       t: (key) => key,
       subscribeLocale: () => () => {},
+      owner: () => "s1",
       render: ({ code, streaming, last }) =>
         React.createElement(GenUISurface, {
           code,

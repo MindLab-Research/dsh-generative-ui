@@ -17,7 +17,7 @@ const applyWithSessions = (current: string | undefined, scope: (id: string) => u
   const stub = (): unknown => new Proxy(() => stub(), { get: () => stub(), apply: () => stub() });
   const base: Record<string, unknown> = {
     uiSession: { adapter: { current: { getSnapshot: () => ({ key: current }) } } },
-    sessions: { list: { getSnapshot: () => ({ byId: { s1: { cwd: "/workspace" } } }) }, scope },
+    sessions: { list: { getSnapshot: () => ({ byId: { s1: { cwd: "/workspace" }, s2: { cwd: "/other" } } }) }, scope },
     get: (name: string) => (name === "uiSession" ? base.uiSession : undefined),
     effect: (run: () => unknown, label?: string) => {
       if (label?.includes("canvas column")) return; // needs a DOM; not the subject
@@ -48,15 +48,7 @@ const applyWithSessions = (current: string | undefined, scope: (id: string) => u
 test("with no session open, sending says so rather than failing silently", () => {
   releaseBindings();
   const { errors } = applyWithSessions(undefined, () => undefined);
-  const realError = console.error;
-  const seen: string[] = [];
-  console.error = (...args: unknown[]) => void seen.push(args.join(" "));
-  try {
-    bind().chat.sendMessage("hi");
-  } finally {
-    console.error = realError;
-  }
-  expect(seen.join(" ")).toContain("no session to send into");
+  expect(() => bind().chat.sendMessage("hi")).toThrow("owning session is unavailable");
   expect(errors).toEqual([]);
   restoreGlobals();
 });
@@ -64,15 +56,7 @@ test("with no session open, sending says so rather than failing silently", () =>
 test("a session id whose scope has gone is the same case", () => {
   releaseBindings();
   applyWithSessions("s1", () => undefined);
-  const realError = console.error;
-  const seen: string[] = [];
-  console.error = (...args: unknown[]) => void seen.push(args.join(" "));
-  try {
-    bind().chat.sendMessage("hi");
-  } finally {
-    console.error = realError;
-  }
-  expect(seen.join(" ")).toContain("no session to send into");
+  expect(() => bind().chat.sendMessage("hi")).toThrow("owning session is unavailable");
   restoreGlobals();
 });
 
@@ -92,5 +76,25 @@ test("with a session, the text reaches conversation.send", () => {
   }));
   bind().chat.sendMessage("你好");
   expect(sent).toEqual(["你好"]);
+  restoreGlobals();
+});
+
+test("the client host addresses a canvas owner instead of the selected session", () => {
+  releaseBindings();
+  const addressed: string[] = [];
+  applyWithSessions("s2", (id) => ({
+    inject: (_want: readonly string[], callback: (ctx: unknown) => void) =>
+      callback({
+        conversation: {
+          send: async () => {
+            addressed.push(id);
+          },
+        },
+      }),
+  }));
+  bind("s1").chat.sendMessage("hi");
+  expect(addressed).toEqual(["s1"]);
+  expect(() => bind("missing").chat.sendMessage("hi")).toThrow("owning session is unavailable");
+  expect(addressed).toEqual(["s1"]);
   restoreGlobals();
 });

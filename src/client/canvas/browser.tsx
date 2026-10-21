@@ -11,6 +11,7 @@ import type { CSSProperties } from "react";
 import type { PropsRuntime, TranslateNS } from "@deepseek-ai/dsh-client-ui-slots";
 import { canvasAddress } from "./auto-open.ts";
 import { listCanvasIds } from "./read.ts";
+import { CanvasReadStatus } from "./read-status.tsx";
 
 export type CanvasBrowserInjected = {
   /** The workspace root a given session reads under. */
@@ -39,22 +40,31 @@ export function CanvasBrowser({ useTabInfo, sessionId, cwdOf, t }: CanvasBrowser
   const { tab } = useTabInfo();
   const cwd = cwdOf(String(sessionId));
   const [ids, setIds] = useState<readonly string[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     if (cwd === undefined) return;
     let live = true;
-    void listCanvasIds(cwd).then((found) => {
-      if (live) setIds(found);
-    });
+    setIds(null);
+    setError(null);
+    void listCanvasIds(cwd)
+      .then((found) => {
+        if (live) setIds(found);
+      })
+      .catch((reason: unknown) => {
+        if (live) setError(reason);
+      });
     return () => {
       live = false;
     };
     // Keyed on the workspace, not on the tab's revision: browsing is a listing, and re-listing on
     // every navigation would refetch what has not changed.
-  }, [cwd]);
+  }, [cwd, retry]);
 
   if (cwd === undefined) return null;
-  if (ids === null) return null;
+  if (error !== null) return <CanvasReadStatus t={t} error={error} retry={() => setRetry((n) => n + 1)} />;
+  if (ids === null) return <CanvasReadStatus t={t} />;
 
   if (ids.length === 0) {
     return (

@@ -18,6 +18,8 @@ The rendering stack is `partial-tsx` + `partial-react` + `@esm.sh/tsx`, the same
 
 ## 0. Toolchain
 
+`bun run lint` scans the maintained `src`, `test`, `scripts`, `eval`, `website`, and `types` directories explicitly. Local worktrees and sibling checkouts nested at the repository root must not change its diagnostics.
+
 **This package uses bun** (`bun install` / `bun run build`). dsh's pnpm only governs the profile directory — `dsh plugin --profile web add link:<path>` is dsh forwarding to pnpm, and it does not care how we install our own deps as long as `lib/*.js` exists.
 
 `package.json`'s `prepare: bun scripts/build.ts` cannot be removed: installing from git gets you source with no `lib/`, and the plugin then silently fails to load.
@@ -258,6 +260,7 @@ Details you have to get right:
 - **Hide it when the card paints, not when the claim is made.** Compiling is not the same as having something to look at: mid-stream the default export usually exists while the body is still an empty shell, so hiding at claim time leaves a blank gap that fills in with a pop — with the source sitting right there the whole time. The signal is non-empty text or an `svg` in the mount node (icons and charts carry no text); a wrapper div with layout classes is not. Checked at most once per frame and torn down the moment it fires, because a streaming card mutates thousands of times and `textContent` walks the whole subtree. A card that never paints therefore keeps showing its source, which is the right fallback rather than a bug.
 - **…but only once the card has had a moment to paint without it.** The source preview is a shiki-highlighted `CodeBlock` with `lang="tsx"`, and shiki tokenizes synchronously inside React's render. Measured 2026-10-14 in a real `dsh web`, switching back to a session holding two settled 7–8KB recharts cards: one **310ms** long task, all of it `findNextMatchSync`, landing right after the claim — while the same cards paint **20–25ms** after mount on a warm renderer. The preview meant to cover the wait was the wait, and it also held up the second card's claim behind it. So the preview is rendered only if the card has not painted `PREVIEW_DELAY_MS` after the claim: a warm card never shows its source at all, and a cold one (first wasm init plus a first esm.sh fetch, ~2.6s) still gets it. The host's block is then hidden by whichever of the two takes its place — the preview, or the card — never at claim time, so the delay costs no blank gap of its own.
 - **Coalesce the MutationObserver into one frame.** A streaming reply fires dozens of mutations per second, and one sweep per mutation is the textbook way to burn the main thread.
+- **A card is also stale when its session changed, not only when its text did.** React reuses a `.md-code-block` across a session switch, so both "nothing to do" checks in `sweep` must include the owning session — otherwise an unchanged card keeps the capability shims of the conversation it was claimed under and acts on a session the reader has left.
 
 ## 3.6 How the canvas tab works
 
@@ -363,26 +366,35 @@ has something to resolve against and `box-sizing: border-box` keeps that 100% in
 
 ## 3.65 `$dsh/*`: what generated code can call back into
 
-The playground gives generated code four capability modules under `$ui4a/`. Here the prefix
+The playground gives generated code capability modules under `$ui4a/`. Here the prefix
 is **`$dsh/`**: what these expose is the harness — its conversation, its model, its
 filesystem — and none of it belongs to the ui4a rendering contract that the fence language
-and the canvas paths define. A card that imports one only runs inside dsh. `contract.ts`
+and the canvas paths define. Host-backed calls require dsh; `$dsh/state` is local-only. `contract.ts`
 owns the prefix; nothing else should spell it out.
 
 | Module | Here | Why |
 | --- | --- | --- |
 | `$dsh/chat` | **implemented** | `ctx.conversation.send(text)` is a public client service |
 | `$dsh/fs` | **implemented** | Forwards to the host's `ctx.fs` carrying the session's `ctx.sandboxPolicy`. `readdir` gives `{name, type, size}` (the host had all three; we used to forward only the name, so a card could not draw a tree without probing) and `readBytes` exists because `readFile` UTF-8-decodes — a `.mid` or a wav read as text is silently corrupt |
-| `$dsh/state` | **declined** | it would be a naming convention over `$dsh/fs`, which a card can already call directly; private UI state belongs in `localStorage` and the skill teaches that |
-| `$dsh/ai` | **implemented** | not through a client gateway — there is none — but through a route on our Node half onto `ctx.llm.stream()`, on the session's own model selection, so the card never sees a key |
+| `$dsh/state` | **implemented** | `usePersistedState` stores private UI state in `localStorage`; it needs no host filesystem or session service |
+| `$dsh/ai` | **implemented** | not through a client gateway — there is none — but through a route on our Node half onto `ctx.llm.stream()`, using `agentDefaultModel.currentSelection()`, so the card never sees a key |
 | `$dsh/exec` | **implemented**, ours | not in the playground's set under that name — its `bash` lives inside `$ui4a/fs`. Split out here because running a command is not reading a file, and because the two carry different risks. `ctx.shell` takes the same `sandboxPolicy` `$dsh/fs` resolves, so it opens no door the model's own bash tool has not |
+| `$dsh/web` | **implemented** | `search` forwards to the host's web provider; it does not expose the host's page-fetch capability |
 
 The mechanism, ported from `ui4a-playground/src/runtime/bindings.ts`: the real implementation
 is ordinary TypeScript in our bundle, registered under `$dsh/internal`, and each
 `$dsh/<group>` is a few-line blob shim that imports it and re-exports that group's members.
 The indirection exists because **a blob URL cannot carry a query string** — anything the
-module needs to know about its caller has to be compiled into the body. The playground binds
-per surface for that reason; we have one global host, so one shim set is enough.
+module needs to know about its caller has to be compiled into the body. Shims are cached per
+owning session, and surfaces (including compiled sub-pages) use that session's import map.
+The shared host resolves the named session's current workspace and policy on every call; it
+must never fall back to the selected session when the owner disappears. React remains shared.
+
+What a shim carries is an **opaque handle**, not a session id, and `$dsh/internal` is a private
+blob that no import map names — so a card that reads its own shim learns its own handle and
+nothing else, and `bindOwner` refuses any handle this module did not mint. Both halves matter:
+the handle stops caller-controlled session selection, and keeping the module out of the map stops
+it being invited into generated code at all.
 
 **`conversation` is scope-addressed, and the scope is a fresh context.** Reading it off the
 plugin's own context rejects with `requires a session scope — address one via
@@ -465,9 +477,44 @@ HOLE (an input, a well) because the border there carries the shape anyway — wh
 
 Data visualization is the stated exception — chart series need their own hues to be distinguishable — and **a thing's own identity is the same case**, which the wording did not originally cover. Measured 2026-08-23 on the three cards in `test/cards`: 12-22 token uses each, and the 24 literal hexes are all `TILE_COLORS` in 2048 (the game's own palette) and the black and white of piano keys. `metro` has zero. So the rule holds where it should: chrome takes tokens, the subject keeps its colours.
 
+## 3.68 What `$dsh/*` does and does not defend against
+
+Generated code runs **in the host's realm**, with the same reach to `globalThis`, the built-in
+prototypes and the DOM as the plugin's own client half. That makes a boundary drawn *inside* this
+realm a fight against an unbounded list: the shim body is built with `Array.prototype.join`,
+`JSON.stringify`, `String.prototype.replace`, and any intrinsic used after a card runs can be
+turned on us.
+
+The design therefore keeps the capability **out of every string**, and keeps the minting
+intrinsics **out of the realm's hands**:
+
+- A shim's capability is **its own `import.meta.url`**, read in the shim itself. Nothing is
+  compiled into the body, so intercepting the text of one reveals nothing.
+- `URL.createObjectURL` and `Blob` are captured at first module load (with the entropy holder),
+  so the URL only becomes visible where we decide — not to a wrapper a card installed earlier.
+- **No realm-controlled call touches the capability surface or the shim source.** The shims are
+  enumerated and assembled with the captured `Object.entries`/`keys`/`values` and index loops and
+  `+`; a swapped-in `Object.keys` would otherwise be handed `bind()`'s unowned surface, and a
+  swapped-in `join`/`map` is code injection into another surface's module.
+- The holder is **fail-closed across an upgrade**: a build whose holder predates the minting
+  intrinsics refuses to mint rather than recapturing them mid-page. The capture point *is* the
+  property; it can only happen before generated code runs.
+- `$dsh/internal` is a private blob no import map names; the bridge it reads is sealed under an
+  unpredictable key.
+
+Routes enforce the other half: `session` and `cwd` have to name the same session, so one request
+cannot read or run in a workspace under another session's access mode.
+
+What is still not defended: generated code and the plugin share a realm, so anything the plugin
+does that is observable *after* a card has run is fair game. There is no secret a same-origin
+page can hold and its own scripts cannot read, which is why the remaining answer is architectural
+— give generated code its own realm, or move the capability check into the route layer behind a
+token minted outside this realm. #82 carries that.
+
 ## 4. Known traps
 
 - **AI and search cancellation follows the response, just like exec.** Consuming a POST body does not mean the reader left. Check `res.destroyed` before starting provider work, and abort only when the response closes before `writableEnded`.
+- **An empty canvas listing is a result, not a fallback for failed reads.** Missing files may return 404 while a write lands, and a missing canvas directory is an empty listing. Network, permission and server failures remain errors: the browser and canvas body show localized feedback with a retry action. A retry drops the retained body before refetching — `body` can still hold the source of a revision whose read failed, and rendering that while the retry is pending executes code the file no longer has. The auto-open listing's progress marker likewise advances only on a listing that landed, or a rejection consumes the next successful listing as the baseline and the canvas it found is never opened.
 
 - **Intermediate streaming frames are supposed to fail compilation**, `No default export found` most often — partial-react explicitly treats these as transient and keeps the last good frame. That semantics must not leak to callers; `GenUISurface` filters them out while streaming, or the UI flashes red on every character the model types.
 - **`GenUIRenderer.create` is async**, so the renderer must live in state, not a ref: in a ref, the first render's effect sees `null` and bails, and since `code` no longer changes it never re-runs — a surface that mounted and stays blank forever.

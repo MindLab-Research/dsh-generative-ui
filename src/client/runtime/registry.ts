@@ -14,6 +14,11 @@ const REGISTRY_KEY = "__DSH_GENERATIVE_UI_MODULES__";
 type Registry = Record<string, Record<string, unknown>>;
 
 const registry: Registry = ((globalThis as Record<string, unknown>)[REGISTRY_KEY] ??= {}) as Registry;
+// Captured at module load, before any generated code runs: a card that wrapped the realm's
+// `URL.createObjectURL` would otherwise see every blob this module mints — including the
+// capability shims, whose URLs are the capability.
+const objectURL = URL.createObjectURL.bind(URL);
+const BlobCtor = Blob;
 const urls = new Map<string, string>();
 
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
@@ -51,7 +56,7 @@ export function registerModules(modules: Record<string, Record<string, unknown>>
 export function moduleUrl(specifier: string): string {
   const cached = urls.get(specifier);
   if (cached !== undefined) return cached;
-  const url = URL.createObjectURL(new Blob([buildModuleSource(specifier)], { type: "text/javascript" }));
+  const url = objectURL(new BlobCtor([buildModuleSource(specifier)], { type: "text/javascript" }));
   urls.set(specifier, url);
   return url;
 }

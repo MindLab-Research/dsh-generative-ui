@@ -474,6 +474,38 @@ HOLE (an input, a well) because the border there carries the shape anyway — wh
 
 Data visualization is the stated exception — chart series need their own hues to be distinguishable — and **a thing's own identity is the same case**, which the wording did not originally cover. Measured 2026-08-23 on the three cards in `test/cards`: 12-22 token uses each, and the 24 literal hexes are all `TILE_COLORS` in 2048 (the game's own palette) and the black and white of piano keys. `metro` has zero. So the rule holds where it should: chrome takes tokens, the subject keeps its colours.
 
+## 3.68 What `$dsh/*` does and does not defend against
+
+Generated code runs **in the host's realm**, with the same reach to `globalThis`, the built-in
+prototypes and the DOM as the plugin's own client half. It can rewrite `Object.entries`,
+`URL.createObjectURL`, `Blob`, `Array.prototype.join`, `String.prototype.replace` — anything —
+*before* whichever plugin code path runs next.
+
+That makes a capability boundary drawn inside this realm **unbounded work**: the shim body is
+built from strings, the handle it carries is a bearer token, and any intrinsic used after a card
+runs can be turned into a way to read or mint one. Sealing a property, capturing one entropy
+source, using a null-prototype table — each closes the vector named and leaves the class open.
+
+What this module does defend, and deliberately:
+
+- Handles are minted from entropy captured at first module load, not from whatever the realm holds
+  later, and are unguessable.
+- `$dsh/internal` is a private blob that no import map names, so a card is not invited to name
+  another owner's binder.
+- The bridge is sealed under a key the card cannot predict.
+
+What it does **not** defend, and cannot from here:
+
+- A card that intercepts blob creation or module-source construction can read another surface's
+  handle and act as its owner.
+- None of this is a boundary at all while `/dsh-generative-ui/*` accepts any live session id from
+  any page — an attacker skips `$dsh/*` entirely and calls the routes.
+
+So the realm work is **defence in depth**. The authorization boundary is the route layer, and the
+only changes that close the class are a separate realm for generated code, or server-validated
+owner tokens issued outside the realm. Until one of those lands, treat further "an intrinsic is
+replaceable" reports as the same open class rather than as individual defects.
+
 ## 4. Known traps
 
 - **Intermediate streaming frames are supposed to fail compilation**, `No default export found` most often — partial-react explicitly treats these as transient and keeps the last good frame. That semantics must not leak to callers; `GenUISurface` filters them out while streaming, or the UI flashes red on every character the model types.

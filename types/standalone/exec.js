@@ -2,6 +2,6 @@
 // Stands in for $dsh/exec outside dsh, where the harness these forward to does not exist.
 export async function bash(...args) {
   console.warn("[$dsh/exec] bash() did nothing: this page is not running inside dsh, so there is no harness to reach.", ...args);
-  return { stdout: "", stderr: "", exitCode: 0, truncated: { stdout: false, stderr: false }, timedOut: false };
+  return { stdout: "", stderr: "", exitCode: 0, signal: null, truncated: { stdout: false, stderr: false }, timedOut: false };
 }
 export default { bash };

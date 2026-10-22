@@ -19,6 +19,7 @@ test("a command result carries every field a card reads", async () => {
   const result = await bash("git log --format=%s");
   expect(result.stdout.split("\n").filter(Boolean)).toEqual([]);
   expect(result.exitCode).toBe(0);
+  expect(result.signal).toBeNull();
   expect(result.truncated.stdout).toBe(false);
   expect(result.timedOut).toBe(false);
 });

@@ -1,7 +1,7 @@
 ## Running a command
 
 `bash(command)` from `$dsh/exec` runs one command in the workspace and resolves
-with `{stdout, stderr, exitCode, truncated, timedOut}`. It runs under the session's own sandbox
+with `{stdout, stderr, exitCode, signal, truncated, timedOut}`. It runs under the session's own sandbox
 mode, so it opens nothing your own bash tool has not already opened.
 
 **Fetch the first screen from a `useEffect(…, [])`.** Defining the loader and never calling it renders your skeleton forever — measured, on a card whose `load` appeared exactly once in the file, at its own definition. It compiled, it painted, and a browser showed `加载中…` before a click, after a click, and after a remount. The whole shape:
@@ -56,6 +56,11 @@ useEffect(() => {
 **A non-zero exit resolves.** Check `exitCode` and show what the command said —
 `git status` failing outside a repo is a thing the card should display, not an
 exception to swallow. Only a failure to run at all rejects.
+
+`exitCode: null` means the executor reported no exit code. `signal` carries a terminating signal
+such as `"SIGTERM"`, or `null` when none was reported. Read `timedOut` independently: a timeout
+can happen before a process starts and report no signal, and a signal can terminate a command
+without a timeout.
 
 This is the shortest path to anything the filesystem alone cannot answer: history
 (`git log`), state (`git status`, `git diff --stat`),

@@ -37,7 +37,7 @@ const EMPTY_RESULT: Record<string, string> = {
   // exact crash the table exists to prevent, missed because the table was written from the two
   // members that had been added at the time and never revisited when `bash` and `readBytes`
   // arrived. Anything unlisted silently returns undefined, so a new member starts out broken.
-  bash: '{ stdout: "", stderr: "", exitCode: 0, truncated: { stdout: false, stderr: false }, timedOut: false }',
+  bash: '{ stdout: "", stderr: "", exitCode: 0, signal: null, truncated: { stdout: false, stderr: false }, timedOut: false }',
   // `sources` must be an ARRAY: every card that searches maps over it, and the whole point of a
   // quiet stub is that an exported page renders rather than throwing on `.map` of undefined.
   search: "{ sources: [], truncated: false }",

@@ -128,7 +128,7 @@ describe("running", () => {
     expect(seen[0].sandboxPolicy).toEqual({ forSession: { id: "s2", header: { cwd: "/w" } } });
     expect(seen[0].workdir).toBe("/w");
     // The card is on the user's page waiting on a fetch, so an unbounded command is a hang.
-    expect(seen[0].timeoutMs).toBeGreaterThan(0);
+    expect(seen[0].timeoutMs).toBe(15_000);
     expect(seen[0]).toHaveProperty("onExpiry", "kill");
   });
 
@@ -244,6 +244,78 @@ describe("running", () => {
     expect(status).toBe(500);
     expect(json.error).toBe("shell exploded");
   });
+});
+
+describe("command timeouts", () => {
+  for (const shape of ["run", "execute"] as const) {
+    for (const timeoutMs of [1, 120_000, 300_000]) {
+      test(`${shape} receives the requested ${timeoutMs} ms budget`, async () => {
+        const seen: Spec[] = [];
+        const ctx = ctxWith({}, seen);
+        let executions = 0;
+        const run = async (spec: Spec) => {
+          executions++;
+          expect(spec).toBe(seen[0]);
+          return { exitCode: 0, stdout: stream(), stderr: stream() };
+        };
+        Object.assign(ctx.shell, shape === "run" ? { run } : { execute: async (spec: Spec) => ({ result: () => run(spec) }) });
+        const { status } = await call("cwd=%2Fw&session=s1", { body: JSON.stringify({ command: "ls", timeoutMs }), ctx });
+        expect(status).toBe(200);
+        expect(executions).toBe(1);
+        expect(seen[0].timeoutMs).toBe(timeoutMs);
+        expect(seen[0]).toHaveProperty("onExpiry", "kill");
+      });
+    }
+  }
+
+  for (const timeoutMs of [0, -1, 1.5, null, "120000", true, {}, [], Number.MAX_SAFE_INTEGER + 1]) {
+    test(`invalid timeout ${JSON.stringify(timeoutMs)} is refused before resolving a command`, async () => {
+      const seen: Spec[] = [];
+      const { status, json } = await call("cwd=%2Fw&session=s1", { body: JSON.stringify({ command: "ls", timeoutMs }), ctx: ctxWith({}, seen) });
+      expect(status).toBe(400);
+      expect(json).toMatchObject({ code: "EXEC_INVALID_TIMEOUT", denied: false });
+      expect(seen).toEqual([]);
+    });
+  }
+
+  test("an overflowing JSON number is refused rather than handed to a timer", async () => {
+    const seen: Spec[] = [];
+    const { status, json } = await call("cwd=%2Fw&session=s1", { body: '{"command":"ls","timeoutMs":1e400}', ctx: ctxWith({}, seen) });
+    expect(status).toBe(400);
+    expect(json).toMatchObject({ code: "EXEC_INVALID_TIMEOUT", denied: false });
+    expect(seen).toEqual([]);
+  });
+
+  test("a request above the card cap is refused, never clamped", async () => {
+    const seen: Spec[] = [];
+    const { status, json } = await call("cwd=%2Fw&session=s1", { body: JSON.stringify({ command: "ls", timeoutMs: 300_001 }), ctx: ctxWith({}, seen) });
+    expect(status).toBe(403);
+    expect(json).toMatchObject({ code: "EXEC_TIMEOUT_EXCEEDED", denied: true });
+    expect(seen).toEqual([]);
+  });
+
+  for (const shape of ["run", "execute"] as const) {
+    test(`a lower executor cap refuses an explicit request before ${shape}`, async () => {
+      const ctx = ctxWith();
+      let executions = 0;
+      const run = async () => {
+        executions++;
+        return { exitCode: 0, stdout: stream(), stderr: stream() };
+      };
+      Object.assign(ctx.shell, {
+        resolve: (request: Spec) => ({ ...request, timeoutMs: Math.min(request.timeoutMs!, 5_000) }),
+        ...(shape === "run" ? { run } : { execute: async () => ({ result: run }) }),
+      });
+      const refused = await call("cwd=%2Fw&session=s1", { body: JSON.stringify({ command: "ls", timeoutMs: 10_000 }), ctx });
+      expect(refused.status).toBe(403);
+      expect(refused.json).toMatchObject({ code: "EXEC_TIMEOUT_EXCEEDED", denied: true });
+      expect(executions).toBe(0);
+      // Existing callers keep the previous request/default/cap behavior when they omit it.
+      const unchanged = await call("cwd=%2Fw&session=s1", { body, ctx });
+      expect(unchanged.status).toBe(200);
+      expect(executions).toBe(1);
+    });
+  }
 });
 
 test("a session that does not own the workspace cannot run there", async () => {

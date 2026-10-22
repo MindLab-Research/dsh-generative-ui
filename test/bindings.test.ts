@@ -59,6 +59,38 @@ test("a rejected fs or exec request surfaces the route's reason", async () => {
   await expect(bind().exec.bash("ls")).rejects.toThrow("read-only session");
 });
 
+test("exec sends an optional timeout alongside the command and keeps cancellation on fetch", async () => {
+  release = hostWith("/tmp");
+  const signal = new AbortController().signal;
+  const requests: RequestInit[] = [];
+  const result = { stdout: "out", stderr: "", exitCode: 0, truncated: { stdout: false, stderr: false }, timedOut: false };
+  globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit) => {
+    expect(new URL(String(input), "http://x").pathname).toBe(EXEC_PATH);
+    requests.push(init);
+    return Response.json(result);
+  }) as typeof fetch;
+  await expect(bind().exec.bash("bun test", { timeoutMs: 120_000, signal })).resolves.toEqual(result);
+  expect(JSON.parse(requests[0].body as string)).toEqual({ command: "bun test", timeoutMs: 120_000 });
+  expect(requests[0].signal).toBe(signal);
+  await bind().exec.bash("ls");
+  expect(JSON.parse(requests[1].body as string)).toEqual({ command: "ls" });
+});
+
+test("timeout refusals reach the card as structured fields", async () => {
+  release = hostWith("/tmp");
+  for (const [timeoutMs, status, code, denied] of [
+    [300_001, 403, "EXEC_TIMEOUT_EXCEEDED", true],
+    [0, 400, "EXEC_INVALID_TIMEOUT", false],
+  ] as const) {
+    globalThis.fetch = (async () => Response.json({ error: "budget unavailable", code, denied }, { status })) as typeof fetch;
+    const error = await bind()
+      .exec.bash("ls", { timeoutMs })
+      .catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ code, denied });
+  }
+});
+
 /**
  * The reason has to be a FIELD, not only a sentence.
  *

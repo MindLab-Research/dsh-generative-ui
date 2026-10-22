@@ -6,6 +6,8 @@ Keep the legacy `settings.installSection` hookup only where that service still e
 
 The shell route uses `execute(spec).result()` on new hosts and `run(spec)` on old hosts, with explicit `onExpiry: "kill"`. Keep the session sandbox policy and per-stream output contract. Cancellation follows response-socket closure, not request-body completion; a response that is already destroyed when the body finishes starts no command at all, since there is nobody left to read the output. Both model requests and repair notices use the producer-owned `dsh-generative-ui` message source; they are not human input.
 
+`$dsh/exec.bash(command, { timeoutMs })` accepts a positive integer timeout up to 300,000 ms; omission retains the 15,000 ms default. A requested timeout above either the card limit or the executor's own resolved limit is refused before execution with `code: "EXEC_TIMEOUT_EXCEEDED"` and `denied: true`, never silently shortened. Invalid timeout values carry `code: "EXEC_INVALID_TIMEOUT"`. The public declaration and the command guidance must state the default, cap and `timedOut` result semantics together.
+
 **This CLAUDE.md is the design doc, and `docs/` holds its evidence.** Change this file first, then the code — where they disagree, this file wins and the drift is a bug. The files under `docs/` carry the measurements and narratives behind its rules; where they disagree with this file, this file wins there too.
 
 Everything here is written to be read before you act. Evidence, history and per-topic reference live in `docs/` — see the index at the bottom.

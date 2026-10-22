@@ -6,13 +6,18 @@
  * catch), that truncation is reported per stream, and that a disconnected caller kills the
  * command rather than leaving it running.
  */
-import { describe, expect, test } from "bun:test";
+import { restoreGlobals } from "./globals.ts";
+import { afterEach, describe, expect, test } from "bun:test";
+import { Context } from "@deepseek-ai/cordis";
 import { serveExec } from "../src/index.ts";
 
 type Spec = { command: string; workdir?: string; timeoutMs?: number; sandboxPolicy?: unknown; signal?: AbortSignal };
 const stream = (text = "", truncated = false) => ({ text, truncated });
 
-const ctxWith = (result: Record<string, unknown> = {}, seen: Spec[] = []) => ({
+afterEach(restoreGlobals);
+
+const ctxWith = (result: Record<string, unknown> = {}, seen: Spec[] = [], records: Record<string, unknown>[] = []) => ({
+  logger: { info: (record: Record<string, unknown>) => void records.push(record) },
   shell: {
     resolve: (request: Spec) => {
       seen.push(request);
@@ -46,6 +51,7 @@ const call = async (query: string, opts: { method?: string; body?: string; ctx?:
     },
     end(chunk?: string) {
       body = chunk ?? "";
+      res.writableEnded = true;
       return res;
     },
   };
@@ -97,6 +103,120 @@ describe("the fence", () => {
 });
 
 describe("running", () => {
+  for (const shape of ["run", "execute"] as const) {
+    test(`a silent command leaves attributed start and finish records in the host logger (${shape})`, async () => {
+      const host = new Context();
+      const command = "printf ''\n# nothing for the card to display";
+      const ctx = { ...ctxWith(), logger: host.logger };
+      const run = async () => {
+        expect(host.logger.buffer).toHaveLength(1);
+        expect(host.logger.buffer[0].args[0]).toMatchObject({ phase: "start", command, session: "s2", workspace: "/w" });
+        return { exitCode: 0, stdout: stream(), stderr: stream() };
+      };
+      if (shape === "run") ctx.shell.run = run;
+      else Object.assign(ctx.shell, { execute: async () => ({ result: run }) });
+      const { status, json } = await call("cwd=%2Fw&session=s2", { body: JSON.stringify({ command }), ctx });
+      expect(status).toBe(200);
+      expect(json.stdout).toBe("");
+      expect(json.stderr).toBe("");
+      const records = host.logger.buffer.map((message) => message.args[0]);
+      expect(records).toHaveLength(2);
+      const [start, finish] = records;
+      expect(start.executionId).toBeString();
+      expect(finish).toMatchObject({
+        ...start,
+        phase: "finish",
+        httpStatus: 200,
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        aborted: false,
+        disconnected: false,
+        error: null,
+      });
+      expect(Number.isFinite(finish.durationMs)).toBe(true);
+      expect(finish.durationMs).toBeGreaterThanOrEqual(0);
+      expect(finish).not.toHaveProperty("stdout");
+      expect(finish).not.toHaveProperty("stderr");
+    });
+  }
+
+  test("separate runs have separate ids even for the same command and session", async () => {
+    const records: Record<string, unknown>[] = [];
+    const ctx = ctxWith({}, [], records);
+    await Promise.all([call("cwd=%2Fw&session=s1", { body, ctx }), call("cwd=%2Fw&session=s1", { body, ctx })]);
+    const starts = records.filter((record) => record.phase === "start");
+    const finishes = records.filter((record) => record.phase === "finish");
+    expect(starts).toHaveLength(2);
+    expect(finishes).toHaveLength(2);
+    expect(starts[0].executionId).not.toBe(starts[1].executionId);
+    expect(finishes.map((record) => record.executionId).toSorted()).toEqual(starts.map((record) => record.executionId).toSorted());
+  });
+
+  for (const phase of ["start", "finish"] as const) {
+    test(`a failing host exporter at ${phase} retains the command outcome and a console record`, async () => {
+      const host = new Context();
+      host.logger.exporter({
+        export(message) {
+          if (message.args[0]?.phase === phase) throw new Error("log sink unavailable");
+        },
+      });
+      const fallback: string[] = [];
+      // Replace the console object, not a method on the original captured by restoreGlobals.
+      globalThis.console = { ...console, info: (message: string) => void fallback.push(message) };
+      let executions = 0;
+      const ctx = {
+        ...ctxWith(),
+        logger: host.logger,
+        shell: {
+          resolve: (request: Spec) => request,
+          run: async () => {
+            executions++;
+            return { exitCode: 7, stdout: stream("out"), stderr: stream("err") };
+          },
+        },
+      };
+      const { status, json } = await call("cwd=%2Fw&session=s1", { body, ctx });
+      expect(executions).toBe(1);
+      expect(status).toBe(200);
+      expect(json).toMatchObject({ stdout: "out", stderr: "err", exitCode: 7 });
+      expect(host.logger.buffer).toHaveLength(2);
+      expect(host.logger.buffer[1].args[0]).toMatchObject({ httpStatus: 200, error: null });
+      expect(fallback).toHaveLength(1);
+      expect(JSON.parse(fallback[0])).toEqual(host.logger.buffer.find((message) => message.args[0].phase === phase)!.args[0]);
+    });
+  }
+
+  for (const result of [
+    { exitCode: 2, signal: null, timedOut: false },
+    { exitCode: null, signal: "SIGKILL", timedOut: true },
+    { exitCode: null, signal: null, timedOut: true },
+  ]) {
+    test(`the finish record retains exit ${result.exitCode}, signal ${result.signal} and timeout ${result.timedOut}`, async () => {
+      const records: Record<string, unknown>[] = [];
+      await call("cwd=%2Fw&session=s1", { body, ctx: ctxWith(result, [], records) });
+      expect(records).toHaveLength(2);
+      expect(records[1]).toMatchObject({ ...result, phase: "finish", httpStatus: 200, error: null });
+    });
+  }
+
+  for (const stage of ["resolve", "run", "execute", "result"] as const) {
+    test(`an infrastructure failure in ${stage} still finishes the host record`, async () => {
+      const records: Record<string, unknown>[] = [];
+      const ctx = ctxWith({}, [], records);
+      const fail = () => {
+        throw new Error(`${stage} failed`);
+      };
+      if (stage === "resolve") ctx.shell.resolve = fail;
+      else if (stage === "run") ctx.shell.run = fail;
+      else Object.assign(ctx.shell, { execute: stage === "execute" ? fail : async () => ({ result: fail }) });
+      const { status } = await call("cwd=%2Fw&session=s1", { body, ctx });
+      expect(status).toBe(500);
+      expect(records).toHaveLength(2);
+      expect(records[1]).toMatchObject({ phase: "finish", executionId: records[0].executionId, httpStatus: 500, exitCode: null, error: `${stage} failed` });
+    });
+  }
+
   test("new hosts use execute(spec).result() without calling legacy run", async () => {
     const seen: Spec[] = [];
     const ctx = ctxWith({}, seen);
@@ -161,12 +281,13 @@ describe("running", () => {
     // finishes the whole handler before anything can disconnect, which is how the first
     // version of this test failed while the code was correct.
     const seen: Spec[] = [];
+    const records: Record<string, unknown>[] = [];
     let release!: () => void, reachedRun!: () => void;
     const started = new Promise<void>((r) => {
       reachedRun = r;
     });
     const slow = {
-      ...ctxWith({}, seen),
+      ...ctxWith({}, seen, records),
       shell: {
         resolve: (r: Spec) => {
           seen.push(r);
@@ -177,7 +298,7 @@ describe("running", () => {
           await new Promise<void>((r) => {
             release = r;
           });
-          return { exitCode: 0, stdout: stream(), stderr: stream() };
+          return { exitCode: null, signal: "SIGTERM", aborted: true, stdout: stream(), stderr: stream() };
         },
       },
     };
@@ -191,14 +312,17 @@ describe("running", () => {
       },
     });
     expect(seen[0].signal?.aborted).toBe(true);
+    expect(records).toHaveLength(2);
+    expect(records[1]).toMatchObject({ phase: "finish", exitCode: null, signal: "SIGTERM", aborted: true, disconnected: true, error: null });
   });
 
   // A destroyed response must prevent execution, not just abort it on a later close event.
   for (const shape of ["run", "execute"] as const) {
     test(`a response destroyed during body consumption starts no command (${shape})`, async () => {
       const seen: Spec[] = [];
+      const records: Record<string, unknown>[] = [];
       let executions = 0;
-      const ctx: any = ctxWith({}, seen);
+      const ctx: any = ctxWith({}, seen, records);
       ctx.shell = {
         resolve: (r: Spec) => {
           seen.push(r);
@@ -224,6 +348,7 @@ describe("running", () => {
       const { status, json } = await call("cwd=%2Fw&session=s1", { body, ctx, destroyDuringBody: true });
       expect(seen).toEqual([]);
       expect(executions).toBe(0);
+      expect(records).toEqual([]);
       // Nothing is written either: the socket is gone, so there is no status to report to anyone.
       expect(status).toBe(0);
       expect(json).toBeNull();

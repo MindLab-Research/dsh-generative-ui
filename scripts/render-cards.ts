@@ -34,6 +34,11 @@ const cards = cardsIn(dir);
  */
 const LITERAL: Record<string, string> = {
   react: "https://esm.sh/react@18",
+  // Not decoration: packages fetched from esm.sh arrive as compiled JS whose `import "react-dom"`
+  // survives verbatim (`react-aria-components` alone carries 13 of them), and a bare specifier this
+  // map lacks kills the whole module graph — a blank card with nothing in the console, which reads
+  // exactly like broken code.
+  "react-dom": "https://esm.sh/react-dom@18",
   "react-dom/client": "https://esm.sh/react-dom@18/client",
   "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime",
   "lucide-react": "https://esm.sh/lucide-react@0.400.0?external=react",
@@ -51,6 +56,11 @@ const LITERAL: Record<string, string> = {
   "$dsh/exec": "/shim/exec",
   "$dsh/chat": "/shim/chat",
   "$ui4a/chat": "/shim/chat",
+  // Both prefixes on purpose. `$ui4a/*` only feeds the pre-rename corpus cards; `$dsh/*` is what the
+  // current prompt teaches, and a missing entry does not fail quietly — `mergeFallbackImports` reads
+  // it as an npm package and resolves `https://esm.sh/$dsh/state?bundle&…`, which kills every card
+  // that persists state.
+  "$dsh/state": "/shim/state",
   "$ui4a/state": "/shim/state",
 };
 // One card at a time, accumulating. `mergeFallbackImports` parses ONE module's source — over a

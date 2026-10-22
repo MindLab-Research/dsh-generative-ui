@@ -270,8 +270,8 @@ async function execRequest(cwd: string, sessionId: string, command: string, sign
   // Aborting really kills the command: the route watches premature response-socket closure,
   // so dropping the request is what a polling card needs to not stack runs on a slow one.
   const response = await fetch(`${EXEC_PATH}?${query}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }), signal });
-  const body = (await response.json().catch(() => ({}))) as Ui4aExecResult & { error?: string };
-  if (!response.ok) throw new Error(`[dsh-generative-ui] $dsh/exec: ${body.error ?? response.statusText}`);
+  const body = (await response.json().catch(() => ({}))) as Ui4aExecResult & { error?: string; code?: string; denied?: boolean };
+  if (!response.ok) throw Object.assign(new Error(`[dsh-generative-ui] $dsh/exec: ${body.error ?? response.statusText}`), { code: body.code, denied: body.denied === true });
   return body;
 }
 

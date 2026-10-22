@@ -75,24 +75,38 @@ const call = async (query: string, opts: { method?: string; body?: string; ctx?:
 const body = JSON.stringify({ command: "ls" });
 
 describe("the fence", () => {
+  test("a missing workspace has its own reason", async () => {
+    expect(await call("session=s1", { body })).toMatchObject({ status: 400, json: { code: "EXEC_WORKSPACE_REQUIRED", denied: false } });
+  });
+
   test("a workspace this session does not own is refused", async () => {
-    expect((await call("cwd=%2Fw&session=s1", { body, live: new Set() })).status).toBe(403);
+    expect(await call("cwd=%2Fw&session=s1", { body, live: new Set() })).toMatchObject({ status: 403, json: { code: "EXEC_WORKSPACE_DENIED", denied: true } });
   });
 
   test("only POST runs a command", async () => {
-    expect((await call("cwd=%2Fw&session=s1", { method: "GET", body })).status).toBe(405);
+    expect(await call("cwd=%2Fw&session=s1", { method: "GET", body })).toMatchObject({ status: 405, json: { code: "EXEC_METHOD_NOT_ALLOWED", denied: false } });
   });
 
   // Addressed by id: several sessions share a workspace, and picking the first would run a
   // stranger's access mode.
   test("an unknown session is refused rather than defaulted", async () => {
-    expect((await call("cwd=%2Fw", { body })).status).toBe(400);
-    expect((await call("cwd=%2Fw&session=nope", { body })).status).toBe(400);
+    expect(await call("cwd=%2Fw", { body })).toMatchObject({ status: 400, json: { code: "EXEC_SESSION_INVALID", denied: true } });
+    expect(await call("cwd=%2Fw&session=nope", { body })).toMatchObject({ status: 400, json: { code: "EXEC_SESSION_INVALID", denied: true } });
   });
 
   test("an empty or unparseable command is refused", async () => {
-    expect((await call("cwd=%2Fw&session=s1", { body: JSON.stringify({ command: "" }) })).status).toBe(400);
-    expect((await call("cwd=%2Fw&session=s1", { body: "not json" })).status).toBe(400);
+    for (const command of ["", 12, null, undefined]) {
+      expect(await call("cwd=%2Fw&session=s1", { body: JSON.stringify({ command }) })).toMatchObject({ status: 400, json: { code: "EXEC_INVALID_COMMAND", denied: false } });
+    }
+    expect(await call("cwd=%2Fw&session=s1", { body: "null" })).toMatchObject({ status: 400, json: { code: "EXEC_INVALID_COMMAND", denied: false } });
+    expect(await call("cwd=%2Fw&session=s1", { body: "not json" })).toMatchObject({ status: 400, json: { code: "EXEC_INVALID_JSON", denied: false } });
+  });
+
+  test("an oversized request has a reason and never reaches the shell", async () => {
+    const seen: Spec[] = [];
+    const result = await call("cwd=%2Fw&session=s1", { body: JSON.stringify({ command: "x".repeat(64 * 1024) }), ctx: ctxWith({}, seen) });
+    expect(result).toMatchObject({ status: 413, json: { code: "EXEC_BODY_TOO_LARGE", denied: false } });
+    expect(seen).toEqual([]);
   });
 });
 
@@ -230,7 +244,7 @@ describe("running", () => {
     });
   }
 
-  test("a shell that throws is a 500 with the message, not a crash", async () => {
+  test("an uncoded execution failure has a structured reason", async () => {
     const broken = {
       ...ctxWith(),
       shell: {
@@ -242,7 +256,15 @@ describe("running", () => {
     };
     const { status, json } = await call("cwd=%2Fw&session=s1", { body, ctx: broken });
     expect(status).toBe(500);
-    expect(json.error).toBe("shell exploded");
+    expect(json).toMatchObject({ code: "EXEC_FAILED", denied: false });
+  });
+
+  test("execution failures preserve host codes without treating every failure as a denial", async () => {
+    const ctx = ctxWith();
+    ctx.shell.run = async () => {
+      throw Object.assign(new Error("Could not start the shell"), { code: "ENOENT" });
+    };
+    expect(await call("cwd=%2Fw&session=s1", { body, ctx })).toMatchObject({ status: 500, json: { code: "ENOENT", denied: false } });
   });
 });
 
@@ -256,5 +278,5 @@ test("a session that does not own the workspace cannot run there", async () => {
       ],
     },
   } as never;
-  expect((await call("cwd=%2Fw&session=s2", { body, ctx })).status).toBe(400);
+  expect(await call("cwd=%2Fw&session=s2", { body, ctx })).toMatchObject({ status: 400, json: { code: "EXEC_SESSION_INVALID", denied: true } });
 });

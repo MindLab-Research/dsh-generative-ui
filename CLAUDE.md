@@ -381,6 +381,13 @@ owns the prefix; nothing else should spell it out.
 | `$dsh/exec` | **implemented**, ours | not in the playground's set under that name — its `bash` lives inside `$ui4a/fs`. Split out here because running a command is not reading a file, and because the two carry different risks. `ctx.shell` takes the same `sandboxPolicy` `$dsh/fs` resolves, so it opens no door the model's own bash tool has not |
 | `$dsh/web` | **implemented** | `search` forwards to the host's web provider; it does not expose the host's page-fetch capability |
 
+**`$dsh/exec` refusals carry their reason across the route boundary.** Every route rejection
+returns a stable `code` and a `denied` flag alongside its display message. Workspace/session
+ownership refusals set `denied: true`; malformed requests and execution failures do not. The
+binding forwards these fields without deriving a reason from HTTP status or message text.
+Executor error codes are preserved when provided, with `EXEC_FAILED` as the uncoded fallback;
+non-zero command exits remain successful responses carrying `exitCode`.
+
 The mechanism, ported from `ui4a-playground/src/runtime/bindings.ts`: the real implementation
 is ordinary TypeScript in our bundle, registered under `$dsh/internal`, and each
 `$dsh/<group>` is a few-line blob shim that imports it and re-exports that group's members.

@@ -30,28 +30,39 @@ rule immediately below — check `exitCode` — is followed by 18 of 19. The dif
 of them names a field you can see and the other describes a shape. So, the shape:
 
 ```tsx
+import { bash, isAbortError } from "$dsh/exec";
+
 useEffect(() => {
-  const ctrl = new AbortController();
+  let current: AbortController | undefined;
   const tick = async () => {
     // A canvas nobody is looking at should not be shelling out every two seconds.
     if (document.hidden) return;
+    current?.abort();
+    const ctrl = new AbortController();
+    current = ctrl;
     try {
       const { stdout, exitCode } = await bash("git status --porcelain", { signal: ctrl.signal });
-      setStatus({ stdout, exitCode });
+      if (current === ctrl && !ctrl.signal.aborted) setStatus({ stdout, exitCode });
     } catch (error) {
       // The abort is the expected path here, not a failure: every re-run causes one.
-      if ((error as Error).name === "AbortError") return;
+      if (isAbortError(error)) return;
       throw error;
     }
   };
   void tick();
   const timer = setInterval(tick, 2000);
   return () => {
-    ctrl.abort();
+    current?.abort();
     clearInterval(timer);
   };
 }, []);
 ```
+
+Cancellation rejects with `aborted: true`. `isAbortError(error)` also recognizes it through
+`new Error("refresh failed", { cause: error })`, so a helper can add context without turning a
+normal re-run into a visible failure. Preserve `cause` when wrapping; a new error that discards
+the original cannot retain its cancellation information. Aborting after a call resolved does
+not change that completed result.
 
 **A non-zero exit resolves.** Check `exitCode` and show what the command said —
 `git status` failing outside a repo is a thing the card should display, not an

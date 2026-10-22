@@ -13,6 +13,7 @@ import { AI_STREAM_PATH, EXEC_PATH, FS_PATH, WEB_SEARCH_PATH } from "../../contr
 import { capabilityModule } from "../../contract.ts";
 import { registerRuntimeModules } from "./register.ts";
 import { usePersistedState } from "./state.ts";
+import { isAbortError } from "./exec-abort.ts";
 
 /** What the plugin's client half lends to generated code. Registered once, at apply. */
 export type Ui4aHost = {
@@ -197,6 +198,7 @@ export function bind(sessionId?: string) {
       if (workspace === undefined) throw new Error("[dsh-generative-ui] $dsh/exec needs a session workspace");
       return execRequest(workspace, sessionId ?? host.sessionId(), command, options?.signal);
     },
+    isAbortError,
   };
 
   const web = {
@@ -269,10 +271,25 @@ async function execRequest(cwd: string, sessionId: string, command: string, sign
   const query = `cwd=${encodeURIComponent(cwd)}&session=${encodeURIComponent(sessionId)}`;
   // Aborting really kills the command: the route watches premature response-socket closure,
   // so dropping the request is what a polling card needs to not stack runs on a slow one.
-  const response = await fetch(`${EXEC_PATH}?${query}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }), signal });
-  const body = (await response.json().catch(() => ({}))) as Ui4aExecResult & { error?: string };
-  if (!response.ok) throw new Error(`[dsh-generative-ui] $dsh/exec: ${body.error ?? response.statusText}`);
-  return body;
+  try {
+    signal?.throwIfAborted();
+    const response = await fetch(`${EXEC_PATH}?${query}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }), signal });
+    const body = (await response.json().catch((error: unknown) => {
+      // An abort while reading a 200 body must not become a successful, empty result.
+      // Only a failed HTTP response may fall back to its status when its body is not JSON.
+      if (response.ok || signal?.aborted) throw error;
+      return {};
+    })) as Ui4aExecResult & { error?: string };
+    signal?.throwIfAborted();
+    if (!response.ok) throw new Error(`[dsh-generative-ui] $dsh/exec: ${body.error ?? response.statusText}`);
+    return body;
+  } catch (error) {
+    // `abort(reason)` may reject fetch with any value, including an ordinary Error. The
+    // caller's signal is the authority, not the rejection's name or message. Keep the old
+    // name for existing cards, and give new ones a field that survives cause wrapping.
+    if (signal?.aborted) throw Object.assign(new Error("[dsh-generative-ui] $dsh/exec: command aborted", { cause: error }), { name: "AbortError", aborted: true });
+    throw error;
+  }
 }
 
 /** One entry of a directory listing. `size` is absent for directories. */

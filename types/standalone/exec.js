@@ -4,4 +4,23 @@ export async function bash(...args) {
   console.warn("[$dsh/exec] bash() did nothing: this page is not running inside dsh, so there is no harness to reach.", ...args);
   return { stdout: "", stderr: "", exitCode: 0, truncated: { stdout: false, stderr: false }, timedOut: false };
 }
-export default { bash };
+// src/client/runtime/exec-abort.ts
+function isAbortError(error) {
+  const seen = new Set;
+  while (typeof error === "object" && error !== null && !seen.has(error)) {
+    seen.add(error);
+    try {
+      if ("aborted" in error && error.aborted === true)
+        return true;
+      error = "cause" in error ? error.cause : undefined;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+export {
+  isAbortError
+};
+
+export default { bash, isAbortError };

@@ -23,6 +23,15 @@ test("a command result carries every field a card reads", async () => {
   expect(result.timedOut).toBe(false);
 });
 
+test("the standalone cancellation classifier is the real synchronous helper", async () => {
+  const { isAbortError } = await load("exec");
+  expect(isAbortError(new Error("wrapped", { cause: { aborted: true } }))).toBe(true);
+  expect(isAbortError(new Error("ordinary failure"))).toBe(false);
+  const cycle = new Error("cycle");
+  cycle.cause = cycle;
+  expect(isAbortError(cycle)).toBe(false);
+});
+
 test("file reads return their own empty value, not undefined", async () => {
   const { readFile, readdir, readBytes, writeFile } = await load("fs");
   expect(await readFile("a.txt")).toBe("");

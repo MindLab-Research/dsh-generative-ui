@@ -149,7 +149,7 @@ afterEach(() => {
     }
 });
 
-const start = async (segments: () => any[], locale = { t: (key: string) => key, subscribeLocale: (_refresh: () => void) => () => {}, owner: () => "s1" }) => {
+const start = async (segments: () => any[], locale = { t: (key: string) => key, subscribeLocale: (_refresh: () => void) => () => {}, owner: () => "s1" }, fences?: () => any) => {
   mock.module("react-dom/client", () => ({
     createRoot: (node: any) => ({
       render: (el: any) => {
@@ -165,6 +165,7 @@ const start = async (segments: () => any[], locale = { t: (key: string) => key, 
   const { scheduleSweep } = await import("../src/client/runtime/observe.ts");
   const stop = claimInlineFences({
     segments,
+    fences,
     render: ({ code, streaming, last }: any) => {
       renderedLast.push(last);
       return { props: { code, streaming } };
@@ -346,7 +347,9 @@ test("a block that stops being this card's is released and made visible again", 
 // scrolling out of the loaded window must leave the last good frame standing.
 test("a segment falling out of the snapshot keeps the card that was already rendered", async () => {
   const block = makeBlock("export default () =>");
-  let segments = [segment("export default () => <div />")];
+  // Still growing on purpose: a prefix only ever belongs to an unfinished segment now, and the
+  // state this test protects is the ordinary one — a card streaming while the window moves.
+  let segments = [segment("export default () => <div />", false)];
   const { stop, again } = await start(() => segments);
   expect(painted).toHaveLength(1);
   segments = [];
@@ -692,4 +695,122 @@ test("a session switch re-renders an unchanged card", async () => {
   expect(painted).toHaveLength(2);
   // And nothing else changed hands: the same code, still not streaming.
   expect(painted[1]).toEqual({ code, streaming: false });
+});
+
+/**
+ * A settled segment belongs to the block that equals it, never to a shorter block that merely
+ * opens the same way.
+ *
+ * Measured on a real session: the newest card never claimed while every older one rendered. The
+ * model had pasted a 162-character excerpt of that card into its own prose; `sweep` walks the DOM in
+ * order, so the excerpt met the card's 8,156-character segment first, took it as a prefix match and
+ * reserved it — leaving the real block with nothing, every sweep, forever. Deleting just that
+ * excerpt in the live page made the card claim on the very next sweep.
+ */
+test("a settled segment is not handed to a shorter block that prefixes it", async () => {
+  const full = "export default () => <div>card</div>";
+  makeBlock("export default () =>");
+  makeBlock(full);
+  await start(() => [segment(full)]);
+  expect(painted.map((entry: any) => entry.code)).toEqual([full]);
+  expect(blocks[0].attrs["data-ui4a-claimed"]).toBeUndefined();
+  expect(blocks[1].attrs["data-ui4a-claimed"]).toBe("");
+});
+
+/**
+ * The fence a block came from decides whether it is a card at all.
+ *
+ * Measured on a real session: a 162-character ```tsx excerpt the model pasted into prose held an
+ * 8 KB card out of the transcript, because content matching let it take the card's segment. The
+ * host writes the message's identity onto the transcript (`data-chat-node-key`, the same string
+ * `chatNode()` returns as `key`), and inside that message the excerpt is provably the first fence —
+ * a ```tsx one — while the card is the second.
+ */
+test("a plain tsx block is vetoed even when it prefixes a card", async () => {
+  const card = "export default () => <div>card</div>";
+  const excerpt = card.slice(0, 18);
+  const excerptBlock = makeBlock(excerpt);
+  const cardBlock = makeBlock(card);
+  const owner = {
+    getAttribute: (name: string) => (name === "data-chat-node-key" ? "k1" : null),
+    querySelectorAll: () => [excerptBlock, cardBlock],
+  };
+  for (const block of [excerptBlock, cardBlock]) block.closest = (selector: string) => (selector.includes("data-chat-node-key") ? owner : null);
+  await start(
+    () => [segment(card)],
+    undefined,
+    () =>
+      new Map([
+        [
+          "k1",
+          [
+            { lang: "tsx", code: excerpt, complete: true },
+            { lang: "ui4a/tsx", code: card, complete: true },
+          ],
+        ],
+      ]),
+  );
+  expect(painted.map((entry: any) => entry.code)).toEqual([card]);
+  expect(excerptBlock.attrs["data-ui4a-claimed"]).toBeUndefined();
+  expect(cardBlock.attrs["data-ui4a-claimed"]).toBe("");
+});
+
+// React reuses `.md-code-block` nodes positionally, so a claimed node can come back holding a
+// plain sample. The veto has to run on live claims too, or that block stays hidden behind a card
+// it no longer owns.
+test("a claim whose fence turns out to be a plain sample is released", async () => {
+  const card = "export default () => <div>card</div>";
+  const block = makeBlock(card);
+  let lang = "ui4a/tsx";
+  const owner = { getAttribute: () => "k1", querySelectorAll: () => [block] };
+  block.closest = (selector: string) => (selector.includes("data-chat-node-key") ? owner : null);
+  const { stop, again } = await start(
+    () => [segment(card)],
+    undefined,
+    () => new Map([["k1", [{ lang, code: card, complete: true }]]]),
+  );
+  expect(painted).toHaveLength(1);
+  lang = "tsx";
+  again();
+  expect(unmounts).toBe(1);
+  expect(block.attrs["data-ui4a-claimed"]).toBeUndefined();
+  expect(block.style.display).toBe("");
+  stop();
+});
+
+// Two fences that both describe this text mean the transcript is ambiguous, and guessing there
+// is what the veto exists to prevent. Fail open: the ordinary content match decides.
+test("an ambiguous fence list does not veto", async () => {
+  const card = "export default () => <div>card</div>";
+  const block = makeBlock(card);
+  block.closest = (selector: string) => (selector.includes("data-chat-node-key") ? { getAttribute: () => "k1" } : null);
+  await start(
+    () => [segment(card)],
+    undefined,
+    () =>
+      new Map([
+        [
+          "k1",
+          [
+            { lang: "tsx", code: card, complete: true },
+            { lang: "ui4a/tsx", code: card, complete: true },
+          ],
+        ],
+      ]),
+  );
+  expect(painted.map((entry: any) => entry.code)).toEqual([card]);
+});
+
+// The veto fails open on purpose: an unknown message key or a fence list that does not line up
+// leaves today's content matching in place instead of hiding a card.
+test("without a fence to point at the block is matched by content as before", async () => {
+  const card = "export default () => <div>card</div>";
+  const block = makeBlock(card);
+  block.closest = (selector: string) => (selector.includes("data-chat-node-key") ? { getAttribute: () => "unknown", querySelectorAll: () => [block] } : null);
+  await start(
+    () => [segment(card)],
+    undefined,
+    () => new Map([["k1", [{ lang: "tsx", code: "something else", complete: true }]]]),
+  );
+  expect(painted.map((entry: any) => entry.code)).toEqual([card]);
 });

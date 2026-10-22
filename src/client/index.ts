@@ -27,7 +27,7 @@ import { dropSharedCompiler } from "./runtime/GenUISurface.tsx";
 import { disposeRegistry } from "./runtime/registry.ts";
 import { registerUi4aHost, releaseBindings, localImports } from "./runtime/bindings.ts";
 import { claimInlineFences } from "./runtime/inline-fence.ts";
-import { parseUi4aSegments, type Ui4aSegment } from "./runtime/segments.ts";
+import { parseFences, parseUi4aSegments, type Fence, type Ui4aSegment } from "./runtime/segments.ts";
 import { warmCompiler } from "./runtime/compiler.ts";
 import { chatNodes, perNode, selectedSessionId, type ChatNodeView } from "./session.ts";
 import { CANVAS_BROWSER_ID, CANVAS_TAB_ID, canvasBrowserDefinition, canvasTabDefinition } from "./canvas/definition.ts";
@@ -68,6 +68,29 @@ export function apply(ctx: ClientContext): void {
     (node) => parseUi4aSegments(textOf(node)),
   );
   const segments = (): readonly Ui4aSegment[] => segmentsOf(chatNodes(ctx)).flat();
+
+  /**
+   * Every fence of every message, keyed by the identity the transcript DOM carries.
+   *
+   * This is what lets a block be turned away because it is an ordinary ```tsx sample rather than
+   * an `ui4a/tsx` card — content alone cannot tell them apart when the sample opens the same way.
+   * Cached per message and text length, so a streaming reply re-parses only the message that grew.
+   * Empty when the host exposes no node key: callers then keep their content-match behaviour.
+   */
+  const fencesOf = perNode(
+    (node) => `${node.key ?? node.anchorSeq}:${textOf(node).length}`,
+    (node) => parseFences(textOf(node)),
+  );
+  const fencesByKey = (): ReadonlyMap<string, readonly Fence[]> => {
+    const nodes = chatNodes(ctx);
+    const parsed = fencesOf(nodes);
+    const byKey = new Map<string, readonly Fence[]>();
+    for (let index = 0; index < nodes.length; index += 1) {
+      const key = nodes[index]?.key;
+      if (key !== undefined) byKey.set(key, parsed[index] ?? []);
+    }
+    return byKey;
+  };
 
   /**
    * Every tool call in the current session, in log order — the canvas source.
@@ -276,6 +299,7 @@ export function apply(ctx: ClientContext): void {
     () =>
       claimInlineFences({
         segments,
+        fences: fencesByKey,
         t: ctx.locale.bind("common"),
         subscribeLocale: (refresh) => ctx.locale.subscribe(refresh),
         // A settled card is skipped only while it is still the one it was claimed for: a session

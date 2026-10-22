@@ -25,12 +25,14 @@ import { createElement } from "react";
 import { CodeBlock } from "@deepseek-ai/dsh-client-ui-primitives";
 import type { ReactElement } from "react";
 import { FENCE_LANG } from "../../contract.ts";
-import { parseUi4aSegments, type Ui4aSegment } from "./segments.ts";
+import { parseUi4aSegments, type Fence, type Ui4aSegment } from "./segments.ts";
 import { observeTranscript } from "./observe.ts";
 
 const CLAIMED = "data-ui4a-claimed";
 const MOUNT = "data-ui4a-mount";
 const PREVIEW = "data-ui4a-preview";
+/** The message a block belongs to. Private to the host, but it is the same string `ChatNodeView.key` carries. */
+const NODE_KEY = "data-chat-node-key";
 
 /** Unmounting a root during React's own commit throws; defer it like every other teardown here. */
 const dropPreview = (claim: { preview: Preview | null }) => {
@@ -120,13 +122,24 @@ export const sameCode = (a: string, b: string) => a.trimEnd() === b.trimEnd();
 /**
  * The segment a rendered block belongs to.
  *
- * Mid-stream the block shows a prefix of its segment; once settled the two are equal.
+ * Mid-stream the block shows a prefix of its segment; once settled the two are equal. So a PREFIX
+ * only ever belongs to a segment that is still growing: a settled segment that opens with a shorter
+ * block is not that block's card.
+ *
+ * Measured in a real session, where the newest card kept showing its source while every older card
+ * rendered: the model had pasted a 162-character excerpt of that card into its own prose, the sweep
+ * met the excerpt first (DOM order) and handed it the card's 8,156-character segment, and `taken`
+ * then kept the real block from ever matching — a 6 KB card starved by a snippet of itself. Exact
+ * match is tried across the whole list first, so a settled card still wins over a growing one that
+ * happens to share its opening.
  */
-export const matchSegment = (segments: readonly Ui4aSegment[], rendered: string) => segments.find((segment) => sameCode(segment.code, rendered) || segment.code.startsWith(rendered));
+export const matchSegment = (segments: readonly Ui4aSegment[], rendered: string) => segments.find((segment) => sameCode(segment.code, rendered)) ?? segments.find((segment) => !segment.complete && segment.code.startsWith(rendered));
 
 export type InlineFenceOptions = {
   /** Every ui4a segment currently in the transcript, in document order. */
   segments: () => readonly Ui4aSegment[];
+  /** 每条消息的 fence 列表，按宿主写进 DOM 的 node key 索引；缺省或查不到时退回纯内容匹配。 */
+  fences?: () => ReadonlyMap<string, readonly Fence[]>;
   /** `last` answers whether this card is still the transcript's newest — asked at report time, not render time. */
   render: (props: { code: string; streaming: boolean; last: () => boolean }) => ReactElement;
   /** 在预览渲染时读取当前语言，而不是捕获挂载时的翻译。 */
@@ -182,7 +195,7 @@ export const isLastSegment = (segments: readonly Ui4aSegment[], code: string): b
  */
 const NEAR_VIEWPORT = "100% 0px";
 
-export function claimInlineFences({ segments, render, t, subscribeLocale, owner, subscribeOwner, scope }: InlineFenceOptions): () => void {
+export function claimInlineFences({ segments, fences, render, t, subscribeLocale, owner, subscribeOwner, scope }: InlineFenceOptions): () => void {
   const claims = new Map<HTMLElement, Claim>();
   const root = scope ?? document.body;
 
@@ -256,6 +269,31 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, owner,
 
   const sweep = () => {
     const current = segments();
+    // Per sweep, so a streaming frame reuses one walk of each message's blocks. Two entries at most
+    // in practice (the message being written, and whichever one the reader scrolled to).
+    const byKey = fences?.();
+    /**
+     * A veto, never a decision: true when this block's own message says it is not a card.
+     *
+     * Positional on purpose NOT: numbering blocks against fences assumes the two enumerate the
+     * same things, and they do not — a `~~~` sample or an indented code block reaches the same
+     * `.md-code-block` wrapper without being a fence in this list, shifting every index after it,
+     * and the block this guard exists for is exactly the one that would slip through. Content is
+     * what both sides already agree on: an exact match decides, otherwise a unique prefix survives,
+     * and anything ambiguous lets the ordinary content match through.
+     */
+    const isForeignFence = (block: HTMLElement, code: string) => {
+      if (byKey === undefined || code === "") return false;
+      const key = block.closest(`[${NODE_KEY}]`)?.getAttribute(NODE_KEY);
+      if (key === undefined || key === null) return false;
+      const fences = byKey.get(key);
+      if (fences === undefined) return false;
+      const exact = fences.filter((fence) => sameCode(fence.code, code));
+      const candidates = exact.length > 0 ? exact : fences.filter((fence) => fence.code.startsWith(code));
+      if (candidates.length !== 1) return false;
+      const [only] = candidates;
+      return only !== undefined && only.lang !== FENCE_LANG;
+    };
     // Dead claims first, because the reservation below is built from what claims hold. A block
     // the host's markdown re-render replaced is gone but its claim is not, and releasing it in
     // the loop *after* the claim loop let it reserve its segment for one more sweep — long
@@ -286,6 +324,7 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, owner,
       if (block.closest(`[${PREVIEW}]`) !== null || block.closest(`[${MOUNT}]`) !== null) continue;
       const code = codeOf(block);
       if (code === "") continue;
+      if (isForeignFence(block, code)) continue;
       // A streaming block's rendered text is a prefix of its segment; a settled one equals it.
       const segment = matchSegment(
         current.filter((candidate) => !taken.has(candidate.code)),
@@ -373,6 +412,14 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, owner,
         continue;
       }
       const rendered = codeOf(claim.block);
+      // A claim is not permanent. React reuses `.md-code-block` nodes positionally, so the node we
+      // hid can come back holding a plain ```tsx sample; the language veto has to run on claims too,
+      // or that block stays hidden behind a card it does not own. Before the skip below, because an
+      // unchanged block's text is exactly the case this guard exists for.
+      if (rendered !== "" && isForeignFence(claim.block, rendered)) {
+        release(claim, true);
+        continue;
+      }
       // The block's own text is what locates its segment, so an unchanged block cannot
       // have changed its match — skip the scan rather than re-run it every frame.
       //

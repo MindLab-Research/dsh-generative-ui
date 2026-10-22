@@ -693,3 +693,32 @@ test("a session switch re-renders an unchanged card", async () => {
   // And nothing else changed hands: the same code, still not streaming.
   expect(painted[1]).toEqual({ code, streaming: false });
 });
+
+/**
+ * `ui4a:trace` exists because "the newest card never claims" has two causes that look identical
+ * from outside: the snapshot has no segment for it, or it has one whose text differs. Only the list
+ * the failing block was matched against tells them apart, and only the reader's own console has it.
+ */
+test("ui4a:trace prints the segments an unmatched block was compared against", async () => {
+  const logged: any[][] = [];
+  (globalThis as any).console = { ...console, debug: (...args: any[]) => logged.push(args) };
+  (globalThis as any).localStorage = { getItem: (key: string) => (key === "ui4a:trace" ? "1" : null) };
+  const blockCode = "export default () => <div>fresh</div>";
+  const segmentCode = "export default () => <div>old</div>";
+  makeBlock(blockCode);
+  await start(() => [segment(segmentCode)]);
+  expect(painted).toEqual([]);
+  expect(logged).toHaveLength(1);
+  expect(logged[0][0]).toBe("[dsh-generative-ui] no segment for a rendered block");
+  expect(logged[0][1].block).toEqual({ chars: blockCode.length, head: blockCode });
+  expect(logged[0][1].segments).toEqual([{ chars: segmentCode.length, complete: true, taken: false, head: segmentCode }]);
+});
+
+test("nothing is printed when ui4a:trace is off", async () => {
+  const logged: any[][] = [];
+  (globalThis as any).console = { ...console, debug: (...args: any[]) => logged.push(args) };
+  (globalThis as any).localStorage = { getItem: () => null };
+  makeBlock("export default () => <div>fresh</div>");
+  await start(() => [segment("export default () => <div>old</div>")]);
+  expect(logged).toEqual([]);
+});

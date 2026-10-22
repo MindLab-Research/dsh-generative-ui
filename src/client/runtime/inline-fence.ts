@@ -124,6 +124,36 @@ export const sameCode = (a: string, b: string) => a.trimEnd() === b.trimEnd();
  */
 export const matchSegment = (segments: readonly Ui4aSegment[], rendered: string) => segments.find((segment) => sameCode(segment.code, rendered) || segment.code.startsWith(rendered));
 
+/**
+ * `localStorage.setItem("ui4a:trace", "1")` then reload, and every block that finds no segment
+ * prints the list it was matched against.
+ *
+ * Written for the report where the newest card kept its source on screen while older cards
+ * rendered: `matchSegment` answers "segment missing from the snapshot" and "segment present with
+ * different text" with the same `undefined`, and nothing in the UI tells them apart. Read once per
+ * mount rather than per sweep — this runs on every frame of a streaming reply — and deduped on
+ * state, so a card that never matches prints once instead of sixty times a second.
+ */
+const makeTrace = () => {
+  let enabled = false;
+  try {
+    enabled = globalThis.localStorage?.getItem("ui4a:trace") === "1";
+  } catch {
+    enabled = false; // private mode throws on read, and a trace must not take the sweep down
+  }
+  if (!enabled) return undefined;
+  let last = "";
+  return (code: string, current: readonly Ui4aSegment[], taken: ReadonlySet<string>) => {
+    const signature = `${current.length}:${code.length}:${taken.size}`;
+    if (signature === last) return;
+    last = signature;
+    console.debug("[dsh-generative-ui] no segment for a rendered block", {
+      block: { chars: code.length, head: code.slice(0, 48) },
+      segments: current.map((segment) => ({ chars: segment.code.length, complete: segment.complete, taken: taken.has(segment.code), head: segment.code.slice(0, 48) })),
+    });
+  };
+};
+
 export type InlineFenceOptions = {
   /** Every ui4a segment currently in the transcript, in document order. */
   segments: () => readonly Ui4aSegment[];
@@ -183,6 +213,7 @@ export const isLastSegment = (segments: readonly Ui4aSegment[], code: string): b
 const NEAR_VIEWPORT = "100% 0px";
 
 export function claimInlineFences({ segments, render, t, subscribeLocale, owner, subscribeOwner, scope }: InlineFenceOptions): () => void {
+  const trace = makeTrace();
   const claims = new Map<HTMLElement, Claim>();
   const root = scope ?? document.body;
 
@@ -291,7 +322,10 @@ export function claimInlineFences({ segments, render, t, subscribeLocale, owner,
         current.filter((candidate) => !taken.has(candidate.code)),
         code,
       );
-      if (segment === undefined) continue;
+      if (segment === undefined) {
+        trace?.(code, current, taken);
+        continue;
+      }
       // A DEFERRED block still owns its segment. Deferring means "do not mount this yet", not
       // "this segment is free" — and the card that gets parked is by definition a settled one far
       // off screen, which in a live transcript is the oldest card while the reader sits at the

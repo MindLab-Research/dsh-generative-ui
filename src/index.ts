@@ -10,6 +10,7 @@
  */
 
 import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -326,8 +327,9 @@ export async function serveFs(ctx: FsCtx, liveWorkspaces: () => ReadonlySet<stri
 }
 
 /** Context shape for the shell route. `resolve` fills the executor's own defaults and caps. */
-type ExecResult = { exitCode: number | null; signal?: string | null; timedOut?: boolean; stdout: { text: string; truncated: boolean }; stderr: { text: string; truncated: boolean } };
+type ExecResult = { exitCode: number | null; signal?: string | null; timedOut?: boolean; aborted?: boolean; stdout: { text: string; truncated: boolean }; stderr: { text: string; truncated: boolean } };
 type ExecCtx = {
+  logger: { info: (record: Record<string, unknown>) => void };
   shell: {
     resolve: (request: { command: string; workdir?: string; timeoutMs?: number; onExpiry?: "kill"; sandboxPolicy?: unknown; signal?: AbortSignal }) => unknown;
   } & ({ execute: (spec: unknown) => Promise<{ result: () => Promise<ExecResult> }> } | { run: (spec: unknown) => Promise<ExecResult> });
@@ -388,24 +390,44 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
   }
   if (typeof command !== "string" || command === "") return void res.writeHead(400).end();
 
+  let responseStatus: number | null = null;
+  let failure: string | null = null;
   const json = (status: number, value: unknown): void => {
+    // A refusal can return directly without throwing through the execution catch.
+    responseStatus = status;
+    if (status >= 400 && typeof value === "object" && value !== null && "error" in value && typeof value.error === "string") failure = value.error;
     res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
     res.end(JSON.stringify(value));
   };
+  // Kill the command when the caller goes away. A card that runs one command per keystroke
+  // has no other way to cancel — `bash()` returns a promise, not a handle — so without this
+  // a fast typist leaves a queue of doomed ripgreps competing for the machine.
+  // Body consumption may finish with an already-destroyed response, before `close` fires.
+  // Do not start a command for it; no await separates this check from listener registration.
+  if (res.destroyed) return;
+  const controller = new AbortController();
+  // A completed request body is not a closed response socket.
+  res.on("close", () => {
+    if (!res.writableEnded) controller.abort();
+  });
+  const record = { event: "dsh-generative-ui/exec", executionId: randomUUID(), session: sessionId, workspace: cwd, command };
+  const started = performance.now();
+  const log = (entry: Record<string, unknown>): void => {
+    try {
+      ctx.logger.info(entry);
+    } catch {
+      // Cordis may already have buffered this record before another exporter throws. A
+      // broken sink must not prevent execution or replace its result; retain a console copy.
+      console.info(JSON.stringify(entry));
+    }
+  };
+  // A host-owned record exists before any shell work, even if the card renders nothing or
+  // disconnects before completion. The host controls log export and retention.
+  log({ ...record, phase: "start" });
+  let result: ExecResult | undefined;
   try {
-    // Kill the command when the caller goes away. A card that runs one command per keystroke
-    // has no other way to cancel — `bash()` returns a promise, not a handle — so without this
-    // a fast typist leaves a queue of doomed ripgreps competing for the machine.
-    // Body consumption may finish with an already-destroyed response, before `close` fires.
-    // Do not start a command for it; no await separates this check from listener registration.
-    if (res.destroyed) return;
-    const controller = new AbortController();
-    // A completed request body is not a closed response socket.
-    res.on("close", () => {
-      if (!res.writableEnded) controller.abort();
-    });
     const spec = ctx.shell.resolve({ command, workdir: cwd, timeoutMs: EXEC_TIMEOUT_MS, onExpiry: "kill", sandboxPolicy: ctx.sandboxPolicy.resolve({ session }), signal: controller.signal });
-    const result = "execute" in ctx.shell ? await (await ctx.shell.execute(spec)).result() : await ctx.shell.run(spec);
+    result = "execute" in ctx.shell ? await (await ctx.shell.execute(spec)).result() : await ctx.shell.run(spec);
     return json(200, {
       stdout: result.stdout.text,
       stderr: result.stderr.text,
@@ -417,7 +439,21 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
       timedOut: result.timedOut === true,
     });
   } catch (error) {
-    return json(500, { error: error instanceof Error ? error.message : String(error) });
+    failure = error instanceof Error ? error.message : String(error);
+    return json(500, { error: failure });
+  } finally {
+    log({
+      ...record,
+      phase: "finish",
+      httpStatus: responseStatus,
+      durationMs: performance.now() - started,
+      exitCode: result?.exitCode ?? null,
+      signal: result?.signal ?? null,
+      timedOut: result?.timedOut === true,
+      aborted: result?.aborted === true,
+      disconnected: controller.signal.aborted,
+      error: failure,
+    });
   }
 }
 

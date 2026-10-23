@@ -57,6 +57,14 @@ useEffect(() => {
 `git status` failing outside a repo is a thing the card should display, not an
 exception to swallow. Only a failure to run at all rejects.
 
+**A route rejection has fields to branch on.** Treat the caught value as an `ExecError`
+from `$dsh/exec`: `denied === true` marks a policy refusal, such as a workspace/session
+ownership check.
+`code` carries the route's reason, such as `EXEC_BODY_TOO_LARGE` for an oversized request
+or `EXEC_FAILED` for an uncoded execution failure. Host error codes pass through, so keep
+a fallback for an unfamiliar or absent code. Display `message`; do not parse it to decide
+what happened.
+
 This is the shortest path to anything the filesystem alone cannot answer: history
 (`git log`), state (`git status`, `git diff --stat`),
 search at speed (`rg -n pattern`), sizes (`du -sh *`). A whole test suite usually will

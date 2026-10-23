@@ -88,11 +88,36 @@ test("a denial is told from an outage by a field, not by the message", async () 
   expect(missing.code).toBe("ENOENT");
 });
 
+test("exec forwards the route's reason and denial field without interpreting HTTP status", async () => {
+  release = hostWith("/tmp");
+  for (const [status, code, denied] of [
+    [403, "EXEC_WORKSPACE_DENIED", true],
+    [400, "EXEC_SESSION_INVALID", true],
+    [413, "EXEC_BODY_TOO_LARGE", false],
+    [500, "EXEC_FAILED", false],
+    // An open code set: the client must not maintain a second status-to-reason table.
+    [403, "HOST_FUTURE_REASON", false],
+  ] as const) {
+    globalThis.fetch = (async () => Response.json({ error: "The wording can change", code, denied }, { status })) as typeof fetch;
+    const error = await bind()
+      .exec.bash("ls")
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).toMatchObject({ code, denied });
+  }
+});
+
 // `statusText` is the fallback when the route dies before writing a body at all.
 test("a denial with no body still names something", async () => {
   release = hostWith("/tmp");
   globalThis.fetch = (async () => new Response("<html>", { status: 502, statusText: "Bad Gateway" })) as typeof fetch;
   await expect(bind().fs.readFile("a.txt")).rejects.toThrow("Bad Gateway");
+  const error = await bind()
+    .exec.bash("ls")
+    .catch((e: unknown) => e);
+  expect(error).toBeInstanceOf(Error);
+  expect(error).toMatchObject({ code: undefined, denied: false });
+  expect((error as Error).message).toContain("Bad Gateway");
 });
 
 /**

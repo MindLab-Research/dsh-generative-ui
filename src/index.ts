@@ -364,34 +364,37 @@ const EXEC_TIMEOUT_MS = 15_000;
  */
 /** Exported for `test/exec-route.test.ts`. */
 export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<string>, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const json = (status: number, value: unknown): void => {
+    res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    res.end(JSON.stringify(value));
+  };
+  // Codes belong to the reason, not the status: several distinct refusals are HTTP 400.
+  const refused = (status: number, code: string, error: string, denied = false): void => json(status, { error, code, denied });
   const url = new URL(req.url ?? "/", "http://x");
   const cwd = url.searchParams.get("cwd");
-  if (cwd === null || !liveWorkspaces().has(cwd)) return void res.writeHead(cwd === null ? 400 : 403).end();
-  if (req.method !== "POST") return void res.writeHead(405).end();
+  if (cwd === null) return refused(400, "EXEC_WORKSPACE_REQUIRED", "A workspace is required");
+  if (!liveWorkspaces().has(cwd)) return refused(403, "EXEC_WORKSPACE_DENIED", "The workspace is not live", true);
+  if (req.method !== "POST") return refused(405, "EXEC_METHOD_NOT_ALLOWED", "Commands require POST");
 
   const sessionId = url.searchParams.get("session");
   const session = sessionId === null ? undefined : ctx.sessions.list().find((entry) => entry.id === sessionId);
   // Same pairing rule as the fs route: a command runs under the policy of the session that owns
   // this workspace, never under one that merely happens to be live.
-  if (session === undefined || session.header.cwd !== cwd) return void res.writeHead(400).end();
+  if (session === undefined || session.header.cwd !== cwd) return refused(400, "EXEC_SESSION_INVALID", "The session does not own this workspace", true);
 
   let body = "";
   for await (const chunk of req) {
     body += chunk as string;
-    if (body.length > MAX_BODY) return void res.writeHead(413).end();
+    if (body.length > MAX_BODY) return refused(413, "EXEC_BODY_TOO_LARGE", "The command request is too large");
   }
-  let command: string;
+  let command: unknown;
   try {
-    ({ command } = JSON.parse(body) as { command: string });
+    command = (JSON.parse(body) as { command?: unknown } | null)?.command;
   } catch {
-    return void res.writeHead(400).end();
+    return refused(400, "EXEC_INVALID_JSON", "The command request must be JSON");
   }
-  if (typeof command !== "string" || command === "") return void res.writeHead(400).end();
+  if (typeof command !== "string" || command === "") return refused(400, "EXEC_INVALID_COMMAND", "A non-empty command is required");
 
-  const json = (status: number, value: unknown): void => {
-    res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-    res.end(JSON.stringify(value));
-  };
   try {
     // Kill the command when the caller goes away. A card that runs one command per keystroke
     // has no other way to cancel — `bash()` returns a promise, not a handle — so without this
@@ -417,7 +420,8 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
       timedOut: result.timedOut === true,
     });
   } catch (error) {
-    return json(500, { error: error instanceof Error ? error.message : String(error) });
+    const code = (error as { code?: unknown } | null)?.code;
+    return refused(500, typeof code === "string" && code !== "" ? code : "EXEC_FAILED", error instanceof Error ? error.message : String(error));
   }
 }
 

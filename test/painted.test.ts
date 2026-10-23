@@ -37,9 +37,14 @@ describe("isPaintedText", () => {
  * they are equal, modulo the one trailing newline CodeBlock trims for display. Getting this
  * wrong shows the reader a different card than the one they are looking at — and with two cards
  * in one reply, a prefix match against the wrong one is entirely possible.
+ *
+ * A prefix therefore only belongs to a segment that is STILL GROWING: a settled segment that opens
+ * with a shorter block is not that block's card. Measured in a real session, where a 162-character
+ * excerpt pasted into prose took a finished card's 8 KB segment in DOM order and kept the card from
+ * ever claiming.
  */
 describe("matchSegment", () => {
-  const seg = (code: string) => ({ code, complete: true });
+  const seg = (code: string, complete = true) => ({ code, complete });
 
   test("a settled block matches its own segment", () => {
     const segments = [seg("export default function A() {}\n"), seg("export default function B() {}\n")];
@@ -47,15 +52,29 @@ describe("matchSegment", () => {
   });
 
   test("a mid-stream prefix matches the segment it is a prefix of", () => {
-    const segments = [seg("export default function Counter() { return <div /> }")];
+    const segments = [seg("export default function Counter() { return <div /> }", false)];
     expect(matchSegment(segments, "export default function Coun")).toBe(segments[0]);
+  });
+
+  test("a settled segment is not handed to a shorter block that prefixes it", () => {
+    const segments = [seg("export default function Counter() { return <div /> }")];
+    expect(matchSegment(segments, "export default function Coun")).toBeUndefined();
   });
 
   // Document order decides ties: two cards that begin identically are indistinguishable until
   // the stream diverges, and the first is the one the reader is looking at.
   test("an ambiguous prefix takes the first segment", () => {
-    const segments = [seg('import { useState } from "react"\nconst A = 1'), seg('import { useState } from "react"\nconst B = 2')];
+    const segments = [seg('import { useState } from "react"\nconst A = 1', false), seg('import { useState } from "react"\nconst B = 2', false)];
     expect(matchSegment(segments, 'import { useState } from "react"\n')).toBe(segments[0]);
+  });
+
+  // Exact match is searched across the whole list before any prefix, so a finished card wins over
+  // an unfinished one that happens to open the same way.
+  test("an exact match beats an earlier prefix match", () => {
+    // The first is longer and still growing, so it answers `startsWith`; only the second is this
+    // block's own card.
+    const segments = [seg("export default () => <div>a</div>\n// and more", false), seg("export default () => <div>a</div>", true)];
+    expect(matchSegment(segments, "export default () => <div>a</div>")).toBe(segments[1]);
   });
 
   test("a block belonging to no segment matches nothing", () => {

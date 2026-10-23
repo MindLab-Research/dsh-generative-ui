@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseUi4aSegments as p } from "../src/client/runtime/segments.ts";
+import { parseFences, parseUi4aSegments as p } from "../src/client/runtime/segments.ts";
 test("standard", () => {
   const [b] = p("说明\n\n````ui4a/tsx\nexport default function A() {}\n````\n收尾");
   expect(b.code).toBe("export default function A() {}\n");
@@ -110,4 +110,41 @@ test("leaked markup dropped from a closed fence too", () => {
   const [b] = p("````ui4a/tsx\nexport default () => <div />\n</parameter>\n</invoke>\n````");
   expect(b.complete).toBe(true);
   expect(b.code).toBe("export default () => <div />");
+});
+
+// `parseFences` exists to answer "which fence, and in what language" for EVERY block — the ui4a
+// parser only recognises its own language, so it cannot tell a card from a sample that opens the
+// same way, which is how a 162-character excerpt held an 8 KB card out of a real transcript.
+test("parseFences lists every fence with its language, in order", () => {
+  const text = '说明\n\n````ui4a/tsx\nexport default () => <div />\n````\n\n```tsx\nimport NumberFlow from "x";\n```\n';
+  expect(parseFences(text).map((fence) => [fence.lang, fence.code.trimEnd(), fence.complete])).toEqual([
+    ["ui4a/tsx", "export default () => <div />", true],
+    ["tsx", 'import NumberFlow from "x";', true],
+  ]);
+});
+
+// CommonMark renders `~~~` as a code block in the same wrapper, so leaving it out of this list
+// shifts every index after it — and the block this map exists to veto is exactly the one that
+// slips through.
+test("parseFences sees tilde fences too", () => {
+  const text = "~~~tsx\nconst a = 1\n~~~\n\n````ui4a/tsx\nexport default () => <div />\n````\n";
+  expect(parseFences(text).map((fence) => [fence.lang, fence.code.trimEnd()])).toEqual([
+    ["tsx", "const a = 1"],
+    ["ui4a/tsx", "export default () => <div />"],
+  ]);
+});
+
+// A `~~~` line inside an unterminated backtick fence is a nested Markdown example, not this
+// card's closer. Accepting it truncates the card mid-stream — and permanently when the model
+// never writes the real closer.
+test("a tilde line does not close a backtick fence", () => {
+  const [card] = p("````ui4a/tsx\nexport default () => <div />\n~~~\nconst a = 1");
+  expect(card.complete).toBe(false);
+  expect(card.code).toContain("~~~");
+});
+
+// A streaming reply leaves the last fence open; its language still has to be known.
+test("parseFences marks an unterminated fence incomplete", () => {
+  const [fence] = parseFences("```tsx\nconst a = 1");
+  expect(fence).toEqual({ lang: "tsx", code: "const a = 1", complete: false });
 });

@@ -9,7 +9,13 @@ import type { Context as ClientContext } from "@deepseek-ai/cordis";
 import type { ISessions } from "@deepseek-ai/dsh-api-session-controller/client";
 import type {} from "@deepseek-ai/dsh-client-ui-session/client";
 
-export type ChatNodeView = { readonly kind: string; readonly data: unknown; readonly anchorSeq: number };
+/**
+ * `key` is the identity the host also writes onto the transcript DOM as `data-chat-node-key`
+ * (`chatNode()` returns `key: context.key` and the flow item carries the same string). Optional
+ * because older hosts may not expose it; every caller treats a missing key as "no anchor", never
+ * as a mismatch.
+ */
+export type ChatNodeView = { readonly key?: string; readonly kind: string; readonly data: unknown; readonly anchorSeq: number };
 
 type SessionId = Parameters<ISessions["binding"]>[0];
 

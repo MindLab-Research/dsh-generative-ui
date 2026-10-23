@@ -118,7 +118,7 @@ describe("running", () => {
     const { status, json } = await call("cwd=%2Fw&session=s2", { body, ctx });
     expect(status).toBe(200);
     expect(results).toBe(1);
-    expect(json).toEqual({ stdout: "out", stderr: "err", exitCode: 7, truncated: { stdout: true, stderr: false }, timedOut: false });
+    expect(json).toEqual({ stdout: "out", stderr: "err", exitCode: 7, signal: null, truncated: { stdout: true, stderr: false }, timedOut: false });
     expect(seen[0]).toHaveProperty("onExpiry", "kill");
   });
 
@@ -152,7 +152,25 @@ describe("running", () => {
     const { status, json } = await call("cwd=%2Fw&session=s1", { body, ctx: ctxWith({ timedOut: true, exitCode: null }) });
     expect(status).toBe(200);
     expect(json.timedOut).toBe(true);
+    expect(json.signal).toBeNull();
   });
+
+  for (const shape of ["run", "execute"] as const) {
+    for (const result of [
+      { exitCode: null, signal: "SIGTERM", timedOut: false },
+      { exitCode: null, signal: "SIGKILL", timedOut: true },
+      { exitCode: 0, signal: null, timedOut: false },
+      { exitCode: null, timedOut: true },
+    ]) {
+      test(`${shape} forwards the reported signal ${result.signal ?? "(none)"} with timedOut=${result.timedOut}`, async () => {
+        const ctx = ctxWith(result);
+        if (shape === "execute") Object.assign(ctx.shell, { execute: async () => ({ result: ctx.shell.run }) });
+        const { status, json } = await call("cwd=%2Fw&session=s1", { body, ctx });
+        expect(status).toBe(200);
+        expect(json).toMatchObject({ exitCode: result.exitCode, signal: result.signal ?? null, timedOut: result.timedOut });
+      });
+    }
+  }
 
   // A card that runs one command per keystroke has no other way to cancel, so without this a
   // fast typist leaves a queue of doomed ripgreps competing for the machine.

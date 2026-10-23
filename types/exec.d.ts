@@ -1,7 +1,17 @@
 /** `$dsh/exec` — one command in the workspace, under the session's own sandbox mode. */
 declare module "$dsh/exec" {
   /** What a command left behind. `truncated` means output was cut, not that it failed. */
-  export type ExecResult = { stdout: string; stderr: string; exitCode: number | null; truncated: { stdout: boolean; stderr: boolean }; timedOut: boolean };
+  export type ExecResult = {
+    stdout: string;
+    stderr: string;
+    /** The process's exit code, or null when the executor reported no exit code. */
+    exitCode: number | null;
+    /** The terminating signal (for example, "SIGTERM"), or null when none was reported. */
+    signal: string | null;
+    truncated: { stdout: boolean; stderr: boolean };
+    /** Independent of signal: a timeout before process creation can have signal: null. */
+    timedOut: boolean;
+  };
   /**
    * Runs `command` and resolves with its output.
    *

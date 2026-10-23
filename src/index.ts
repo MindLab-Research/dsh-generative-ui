@@ -410,6 +410,7 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
       stdout: result.stdout.text,
       stderr: result.stderr.text,
       exitCode: result.exitCode,
+      signal: result.signal ?? null,
       // Per stream, not merged: a card that parses stdout needs to know whether *stdout* was
       // cut, and one boolean for both makes a full stdout look unreliable whenever a noisy
       // stderr overflowed.

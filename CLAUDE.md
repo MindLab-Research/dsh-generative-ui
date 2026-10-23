@@ -6,6 +6,8 @@ Keep the legacy `settings.installSection` hookup only where that service still e
 
 The shell route uses `execute(spec).result()` on new hosts and `run(spec)` on old hosts, with explicit `onExpiry: "kill"`. Keep the session sandbox policy and per-stream output contract. Cancellation follows response-socket closure, not request-body completion; a response that is already destroyed when the body finishes starts no command at all, since there is nobody left to read the output. Both model requests and repair notices use the producer-owned `dsh-generative-ui` message source; they are not human input.
 
+Client-side command cancellation keeps rejecting, with `aborted: true`; it never resolves as empty output. `$dsh/exec` exposes `isAbortError(error)` to recognize that field through `cause` wrappers without matching error names. Normalize cancellation from the supplied signal, including custom abort reasons and cancellation during response-body reads. A completed result remains completed if its signal is aborted later. Standalone exports retain the real, synchronous classifier.
+
 **This CLAUDE.md is the design doc, and `docs/` holds its evidence.** Change this file first, then the code — where they disagree, this file wins and the drift is a bug. The files under `docs/` carry the measurements and narratives behind its rules; where they disagree with this file, this file wins there too.
 
 Everything here is written to be read before you act. Evidence, history and per-topic reference live in `docs/` — see the index at the bottom.

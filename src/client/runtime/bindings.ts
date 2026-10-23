@@ -191,11 +191,11 @@ export function bind(sessionId?: string) {
      * something a card wants to show, not an outage. Only a failure to run at all rejects.
      * The session's own sandbox mode applies, so this is no wider than the model's own bash.
      */
-    bash: (command: string, options?: { signal?: AbortSignal }): Promise<Ui4aExecResult> => {
+    bash: (command: string, options?: { signal?: AbortSignal; timeoutMs?: number }): Promise<Ui4aExecResult> => {
       if (host === null) throw new Error("[dsh-generative-ui] no host bound");
       const workspace = host.cwd(sessionId);
       if (workspace === undefined) throw new Error("[dsh-generative-ui] $dsh/exec needs a session workspace");
-      return execRequest(workspace, sessionId ?? host.sessionId(), command, options?.signal);
+      return execRequest(workspace, sessionId ?? host.sessionId(), command, options?.signal, options?.timeoutMs);
     },
   };
 
@@ -265,13 +265,13 @@ async function request<T>(method: "GET" | "POST", path: string, content?: string
 export type Ui4aExecResult = { stdout: string; stderr: string; exitCode: number | null; truncated: { stdout: boolean; stderr: boolean }; timedOut: boolean };
 
 /** Talks to the exec route. Separate from `request` because the shape and the failure mode differ. */
-async function execRequest(cwd: string, sessionId: string, command: string, signal?: AbortSignal): Promise<Ui4aExecResult> {
+async function execRequest(cwd: string, sessionId: string, command: string, signal?: AbortSignal, timeoutMs?: number): Promise<Ui4aExecResult> {
   const query = `cwd=${encodeURIComponent(cwd)}&session=${encodeURIComponent(sessionId)}`;
   // Aborting really kills the command: the route watches premature response-socket closure,
   // so dropping the request is what a polling card needs to not stack runs on a slow one.
-  const response = await fetch(`${EXEC_PATH}?${query}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command }), signal });
-  const body = (await response.json().catch(() => ({}))) as Ui4aExecResult & { error?: string };
-  if (!response.ok) throw new Error(`[dsh-generative-ui] $dsh/exec: ${body.error ?? response.statusText}`);
+  const response = await fetch(`${EXEC_PATH}?${query}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ command, ...(timeoutMs === undefined ? {} : { timeoutMs }) }), signal });
+  const body = (await response.json().catch(() => ({}))) as Ui4aExecResult & { error?: string; code?: string; denied?: boolean };
+  if (!response.ok) throw Object.assign(new Error(`[dsh-generative-ui] $dsh/exec: ${body.error ?? response.statusText}`), { code: body.code, denied: body.denied === true });
   return body;
 }
 

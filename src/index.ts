@@ -73,8 +73,8 @@ export const SETTINGS_NAMESPACE = name;
  *
  * What it is NOT: an escape from the fence. The route resolves `ctx.sandboxPolicy` for the session
  * and hands it to `ctx.shell`, so a card's command opens nothing the agent's own bash has not
- * already opened, in a workdir pinned to a live session's workspace, killed after 15s and on the
- * reader closing the page.
+ * already opened, in a workdir pinned to a live session's workspace, killed at its bounded
+ * timeout (15s by default) and on the reader closing the page.
  *
  * What it IS: the approval layer does not reach here. `approval.request()` needs an open turn and
  * an agent, and a card fires on a reader's keystroke long after its turn ended — so the per-command
@@ -329,14 +329,16 @@ export async function serveFs(ctx: FsCtx, liveWorkspaces: () => ReadonlySet<stri
 type ExecResult = { exitCode: number | null; signal?: string | null; timedOut?: boolean; stdout: { text: string; truncated: boolean }; stderr: { text: string; truncated: boolean } };
 type ExecCtx = {
   shell: {
-    resolve: (request: { command: string; workdir?: string; timeoutMs?: number; onExpiry?: "kill"; sandboxPolicy?: unknown; signal?: AbortSignal }) => unknown;
+    resolve: (request: { command: string; workdir?: string; timeoutMs?: number; onExpiry?: "kill"; sandboxPolicy?: unknown; signal?: AbortSignal }) => { timeoutMs: number };
   } & ({ execute: (spec: unknown) => Promise<{ result: () => Promise<ExecResult> }> } | { run: (spec: unknown) => Promise<ExecResult> });
   sandboxPolicy: { resolve: (request?: { session?: unknown }) => unknown };
   sessions: { list: () => readonly { id?: string; header: { cwd?: string } }[] };
 };
 
-/** Longest a card's command may run. The card is on the user's page, waiting on a fetch. */
+/** Keep ordinary interactions short; a card can explicitly budget more for a test run. */
 const EXEC_TIMEOUT_MS = 15_000;
+/** Card requests remain bounded, even when the executor permits a longer run. */
+const EXEC_MAX_TIMEOUT_MS = 300_000;
 
 /**
  * Runs one command on behalf of a generated card.
@@ -364,6 +366,10 @@ const EXEC_TIMEOUT_MS = 15_000;
  */
 /** Exported for `test/exec-route.test.ts`. */
 export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<string>, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const json = (status: number, value: unknown): void => {
+    res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    res.end(JSON.stringify(value));
+  };
   const url = new URL(req.url ?? "/", "http://x");
   const cwd = url.searchParams.get("cwd");
   if (cwd === null || !liveWorkspaces().has(cwd)) return void res.writeHead(cwd === null ? 400 : 403).end();
@@ -381,17 +387,15 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
     if (body.length > MAX_BODY) return void res.writeHead(413).end();
   }
   let command: string;
+  let timeoutMs: unknown;
   try {
-    ({ command } = JSON.parse(body) as { command: string });
+    ({ command, timeoutMs } = JSON.parse(body) as { command: string; timeoutMs?: unknown });
   } catch {
     return void res.writeHead(400).end();
   }
   if (typeof command !== "string" || command === "") return void res.writeHead(400).end();
-
-  const json = (status: number, value: unknown): void => {
-    res.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-    res.end(JSON.stringify(value));
-  };
+  if (timeoutMs !== undefined && (typeof timeoutMs !== "number" || !Number.isSafeInteger(timeoutMs) || timeoutMs <= 0)) return json(400, { error: "timeoutMs must be a positive integer", code: "EXEC_INVALID_TIMEOUT", denied: false });
+  if (timeoutMs !== undefined && timeoutMs > EXEC_MAX_TIMEOUT_MS) return json(403, { error: `timeoutMs exceeds the ${EXEC_MAX_TIMEOUT_MS} ms card limit`, code: "EXEC_TIMEOUT_EXCEEDED", denied: true });
   try {
     // Kill the command when the caller goes away. A card that runs one command per keystroke
     // has no other way to cancel — `bash()` returns a promise, not a handle — so without this
@@ -404,7 +408,10 @@ export async function serveExec(ctx: ExecCtx, liveWorkspaces: () => ReadonlySet<
     res.on("close", () => {
       if (!res.writableEnded) controller.abort();
     });
-    const spec = ctx.shell.resolve({ command, workdir: cwd, timeoutMs: EXEC_TIMEOUT_MS, onExpiry: "kill", sandboxPolicy: ctx.sandboxPolicy.resolve({ session }), signal: controller.signal });
+    const spec = ctx.shell.resolve({ command, workdir: cwd, timeoutMs: timeoutMs ?? EXEC_TIMEOUT_MS, onExpiry: "kill", sandboxPolicy: ctx.sandboxPolicy.resolve({ session }), signal: controller.signal });
+    // The executor caps overrides too. A card asking for a longer run must learn that its
+    // request was refused, not discover a silently shortened budget when the command is killed.
+    if (timeoutMs !== undefined && spec.timeoutMs < timeoutMs) return json(403, { error: `timeoutMs exceeds the ${spec.timeoutMs} ms executor limit`, code: "EXEC_TIMEOUT_EXCEEDED", denied: true });
     const result = "execute" in ctx.shell ? await (await ctx.shell.execute(spec)).result() : await ctx.shell.run(spec);
     return json(200, {
       stdout: result.stdout.text,

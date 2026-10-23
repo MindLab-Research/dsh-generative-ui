@@ -59,9 +59,9 @@ exception to swallow. Only a failure to run at all rejects.
 
 This is the shortest path to anything the filesystem alone cannot answer: history
 (`git log`), state (`git status`, `git diff --stat`),
-search at speed (`rg -n pattern`), sizes (`du -sh *`). A whole test suite usually will
-not fit in 15 seconds — one file's tests might, and `timedOut` is the honest thing to show when
-it does not. Prefer one
+search at speed (`rg -n pattern`), sizes (`du -sh *`). For a test run or a larger search,
+request a longer budget: `bash("bun test", { timeoutMs: 120_000, signal: ctrl.signal })`.
+Check `timedOut` even with a longer budget. Prefer one
 command over many `readFile` calls: a card that walks a tree with twenty round trips is slower and
 more code than one `ls -R`.
 
@@ -85,8 +85,12 @@ one thing the card was for. Reserve `sendMessage` for what the card genuinely ca
 running the destructive command, or a change big enough that the user wants you to think about
 it first.
 
-Two limits worth designing around. Commands are killed after **15 seconds**, so nothing that
-watches, serves, or waits. And the card is on the user's page — a command runs while they
+Two limits worth designing around. Commands are killed after **15 seconds by default**.
+`timeoutMs` accepts a positive integer up to **300,000 ms (5 minutes)**, subject to any lower
+limit configured by the host executor. An over-limit request rejects before running with
+`code: "EXEC_TIMEOUT_EXCEEDED"` and `denied: true`; other invalid values reject with
+`code: "EXEC_INVALID_TIMEOUT"` and `denied: false`. The budget is never silently shortened.
+Do not run anything that watches, serves, or waits indefinitely. And the card is on the user's page — a command runs while they
 look at a spinner, so keep it to one round trip per interaction rather than one per row.
 
 **A timeout is not an empty result, and the two arrive as the same value.** A killed command

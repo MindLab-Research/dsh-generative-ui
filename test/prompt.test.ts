@@ -111,6 +111,8 @@ const SKILL_RULES = [
   ["keyboard-reachable controls", '<button type="button" aria-label="复制" onClick={copy}>'],
   ["a superseded async run returns", "if (id !== runId.current) return"],
   ["the shared cause behind the control rules", "treating its controls as decoration"],
+  ["calling a repeated piece instead of rendering it", '<ol>{row(1, "Ferry Building", photos[0])}'],
+  ["a map in a child React never renders", 'box = el.appendChild(document.createElement("div"))'],
   ["the checker leads back to the live panel", "write the canvas and look at the panel"],
 ] as const;
 

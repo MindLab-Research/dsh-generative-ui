@@ -589,8 +589,9 @@ The general rules. The eval- and wave-specific ones — guards, freezes, in-flig
 - **Commit each verified step rather than batching.** The working copy is not the durable artefact;
   a macOS TCC grant for `~/Desktop` disappeared mid-session and recovery was `git clone`.
 - **Anything you have done twice while intending not to needs a mechanism.** Two red pushes became
-  `.git/hooks/pre-push`; three commits with a failing record audit became `pre-commit`. Install
-  both with `scripts/hooks/install.sh` — `.git/hooks` is not versioned.
+  a pre-push check and three commits with a failing record audit became `pre-commit`; both live in
+  the one `pre-commit` now, because a slow commit was chosen over a slow push. Install with
+  `scripts/hooks/install.sh` — `.git/hooks` is not versioned.
 - **Name and close what you start.** A `dsh web` outlived its session by a day; seven
   `surface-harness.ts` processes pushed load average to 51 and made a timing test fail on its own
   timeout. A 200 on the port you asked for is not proof your server started.

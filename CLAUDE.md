@@ -436,6 +436,17 @@ turn the user never sees; `ctx.conversation.send` always writes their message in
 transcript. So a card's click has to read as something the user would have said — `我选 红`,
 not a JSON payload.
 
+**Commands leave host records independently of the card.** `serveExec` writes structured
+`dsh-generative-ui/exec` start and finish records through the host's `ctx.logger.info`, with a
+shared execution id, session, workspace and exact command. The finish record adds elapsed
+milliseconds, HTTP status, exit code, signal, timeout/cancellation facts and any response or
+infrastructure error. The start record precedes shell resolution, so a failed or interrupted run still
+has a trace. A response already destroyed before execution starts creates no execution record.
+An exporter that throws falls back to a JSON console record without changing the command's outcome.
+These are host logs, with retention controlled by the host's exporters; they are not conversation
+messages or a new approval step. Output streams are not copied into the logs. Cards should still
+show the command beside its result for the reader currently looking at it.
+
 ## 3.7 Colors: name the tokens, in the spelling the model will write
 
 Generated UI doesn't know the host is dark by default and will paint white cards onto a dark app.

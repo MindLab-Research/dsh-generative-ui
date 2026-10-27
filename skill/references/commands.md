@@ -73,7 +73,15 @@ more code than one `ls -R`.
 **A card's commands are invisible in a way yours are not.** When you run a command, it is in
 the transcript before it runs, attributed, and the user can see it. When a card runs one, it is
 inside code they did not read, behind a button whose label they trust, and it can fire on mount
-with no click at all. The sandbox is the same; their ability to notice is not. So:
+with no click at all. The sandbox is the same; their ability to notice is not.
+
+The host independently records each command through its logger: look for
+`event: "dsh-generative-ui/exec"`. A `start` record names the session, workspace and exact command;
+the matching `finish` record adds `httpStatus`, the exit code, elapsed `durationMs`, signal, timeout,
+cancellation/disconnection and any execution error. Match the pair by `executionId`. The records
+exist even when the card renders no command or output, and the start survives a run that never
+finishes. Their retention follows the host's log exporters. They do not replace showing the
+command to the reader:
 
 - **Nothing destructive, ever** — no `rm`, no `git clean`, no `git reset --hard`, no
   `checkout` that discards, no `kill`, no package installs. A card observes; when something
